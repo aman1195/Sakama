@@ -32,6 +32,28 @@ fix(sync): resolve duplicate intake on reconnect
 - **Green CI required**: analyze, format, test, and the **licence check**.
 - Run the **`licence-guard`** agent if the PR adds a dependency, vendors code, or touches food data.
 
+### Approvals: a documented deviation
+
+`.github/rulesets/main.json` sets `required_approving_review_count: 0`. This is **deliberate and it is a
+deviation**, recorded here rather than left as a surprise:
+
+- Sakama has **one human contributor**, and GitHub does not let you approve your own PR. Requiring one
+  approval would block every merge and get admin-bypassed within a day, which is worse than not requiring it:
+  it trains everyone to route around the gate.
+- Repository rulesets are **plan-gated** anyway (GitHub Pro or a public repo), so on the current free private
+  plan the ruleset **cannot be applied at all**. See `.github/scripts/apply-branch-protection.sh`.
+
+So today `main` is protected by exactly two things, and you should know which:
+
+1. `.claude/hooks/block-push-to-main.py` (blocks a push to main from Claude Code)
+2. The CI checks, which run on every PR
+
+**When a second engineer joins, or the plan is upgraded, raise this to 1 and turn on
+`require_code_owner_review`.** Until then, [.github/CODEOWNERS](.github/CODEOWNERS) documents ownership of the
+legally load-bearing files; it does not enforce it. Also add `guard-tests` to the required status checks at
+that point — it is deliberately not listed today, because a required check whose workflow is not yet on `main`
+deadlocks every PR.
+
 ## Security & secrets
 
 - **No secrets in the repo.** Ever. Use `.env` (gitignored) + compile-time obfuscation.

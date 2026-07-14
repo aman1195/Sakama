@@ -1,4 +1,14 @@
 # Enforces DEVELOPER_STANDARDS.md: branch naming + conventional commit PR titles.
+#
+# Dependabot is EXEMPT from the branch check. Its branches are always
+# `dependabot/<ecosystem>/<path>/<pkg>-<version>` and that prefix cannot be
+# configured. Since `title-and-branch` is a required status check, enforcing it
+# against Dependabot made every dependency PR permanently unmergeable — which is
+# exactly what happened to #2 (chore(deps): bump actions/checkout from 4 to 7).
+#
+# Its TITLE is still checked: dependabot.yml sets `commit-message.prefix: chore`,
+# so Dependabot now opens PRs titled `chore(deps): bump ...`, which is already
+# conventional. If that config is ever removed, this check catches it.
 name: PR hygiene
 
 on:
@@ -18,9 +28,15 @@ jobs:
           echo "$TITLE" | grep -qE '^(feat|fix|chore|docs|refactor|test|perf|ci|build|style)(\([a-z0-9._-]+\))?!?: .+' \
             || { echo "::error::PR title must be conventional, e.g. 'feat(photosnap): add confirm sheet'. Got: $TITLE"; exit 1; }
           echo "✅ title ok"
+
       - name: Branch name must follow DEVELOPER_STANDARDS
+        if: github.actor != 'dependabot[bot]'
         env: {BRANCH: "${{ github.head_ref }}"}
         run: |
-          echo "$BRANCH" | grep -qE '^(feature|bugfix|hotfix|release|chore|docs|refactor)/[A-Za-z0-9._-]+$' \
-            || { echo "::error::Branch must be <prefix>/<ticket>-<desc> in kebab-case, e.g. feature/SAK-14-photosnap. Got: $BRANCH"; exit 1; }
+          # <prefix>/<TICKET>-<kebab-desc>. The old pattern accepted
+          # `feature/FooBar_NotKebab` while the error text claimed to require
+          # kebab-case and a ticket, so the message promised more than the check
+          # delivered. Now they agree.
+          echo "$BRANCH" | grep -qE '^(feature|bugfix|hotfix|release|chore|docs|refactor)/SAK-[0-9]+-[a-z0-9-]+$' \
+            || { echo "::error::Branch must be <prefix>/SAK-<n>-<kebab-desc>, e.g. feature/SAK-14-photosnap-confirm-sheet. Got: $BRANCH"; exit 1; }
           echo "✅ branch ok"
