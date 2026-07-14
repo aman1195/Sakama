@@ -1,0 +1,24 @@
+# The block-push-to-main guard is currently the ONLY thing protecting main:
+# repository rulesets are plan-gated on a free private repo (see
+# .github/scripts/apply-branch-protection.sh). A regression in the guard is a
+# regression in branch protection, so its test suite runs on every PR.
+#
+# Deliberately NOT path-filtered. A path filter plus a required status check is
+# a deadlock: the check never reports on a PR that touches no matching file, and
+# the PR waits on it forever.
+name: Hooks
+
+on:
+  pull_request:
+  push: {branches: [main]}
+
+permissions:
+  contents: read
+
+jobs:
+  guard-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: block-push-to-main guard
+        run: python3 .claude/hooks/test_block_push_to_main.py
