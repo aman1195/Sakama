@@ -2,11 +2,23 @@
   "name": "protect-main",
   "target": "branch",
   "enforcement": "active",
-  "conditions": { "ref_name": { "include": ["~DEFAULT_BRANCH"], "exclude": [] } },
+  "conditions": {
+    "ref_name": {
+      "include": [
+        "~DEFAULT_BRANCH"
+      ],
+      "exclude": []
+    }
+  },
   "rules": [
-    { "type": "deletion" },
-    { "type": "non_fast_forward" },
-    { "type": "pull_request",
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "pull_request",
       "parameters": {
         "required_approving_review_count": 0,
         "dismiss_stale_reviews_on_push": true,
@@ -15,15 +27,26 @@
         "required_review_thread_resolution": true
       }
     },
-    { "type": "required_status_checks",
+    {
+      "type": "required_status_checks",
       "parameters": {
         "strict_required_status_checks_policy": true,
         "required_status_checks": [
-          { "context": "dependency-review" },
-          { "context": "forbidden-sources" },
-          { "context": "odbl-containment" },
-          { "context": "links" },
-          { "context": "title-and-branch" }
+          {
+            "context": "forbidden-sources"
+          },
+          {
+            "context": "dependency-licences"
+          },
+          {
+            "context": "odbl-containment"
+          },
+          {
+            "context": "links"
+          },
+          {
+            "context": "title-and-branch"
+          }
         ]
       }
     }

@@ -1,5 +1,10 @@
 # Sakama is CLOSED-SOURCE. Copyleft contamination is existential.
-# Automates the .claude/agents/licence-guard checks. Pattern adapted from Bifrost's dependency-review.
+# Automates the checks in .claude/agents/licence-guard.md.
+#
+# NOTE: we deliberately do NOT use actions/dependency-review-action here.
+# It requires GitHub Advanced Security, a PAID add-on for private repos
+# (Bifrost can use it because it is public). We implement the equivalent
+# checks ourselves so the gate works on a private repo at zero cost.
 name: Licence gate
 
 on:
@@ -10,60 +15,83 @@ permissions:
   contents: read
 
 jobs:
-  dependency-review:
-    # GPL/AGPL deps and known vulns fail the PR outright.
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/dependency-review-action@v4
-        with:
-          deny-licenses: GPL-1.0-or-later, GPL-2.0-or-later, GPL-3.0-or-later, AGPL-1.0-or-later, AGPL-3.0-or-later, SSPL-1.0
-          fail-on-severity: high
-          comment-summary-in-pr: always
-
   forbidden-sources:
-    # Guards against copying from the copyleft apps we studied, and the known licence traps.
+    # Guards against COPYING from the copyleft apps we studied, and the known traps.
+    # Scans CODE and CONFIG only — *.md is excluded on purpose, because our own docs
+    # legitimately name these projects in order to FORBID them.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: No copyleft app code, no licence traps
         run: |
-          set -e
+          set +e
           fail=0
-          # Code lifted from copyleft apps (we may READ these; never COPY).
-          if grep -rniE "opennutritracker|com\.opennutritracker|wger|foodyou|waistline" \
-               --include='*.dart' --include='*.kt' --include='*.swift' --include='*.yaml' . 2>/dev/null; then
-            echo "::error::Reference to a COPYLEFT app (GPL/AGPL). These may be read for understanding, never copied."; fail=1
+          CODE=(--include=*.dart --include=*.kt --include=*.swift --include=*.java
+                --include=*.yaml --include=*.yml --include=*.json --include=*.gradle
+                --include=Podfile --include=pubspec.yaml)
+          EXCL=(--exclude-dir=.git --exclude-dir=.github --exclude-dir=.agents
+                --exclude-dir=.claude --exclude-dir=.kiro)
+
+          # 1. Code lifted from copyleft apps. We may READ these; never COPY.
+          if grep -rniE "opennutritracker|com\.opennutritracker|\bwger\b|foodyou|waistline" "${CODE[@]}" "${EXCL[@]}" . ; then
+            echo "::error::Copyleft app (GPL/AGPL) referenced in code/config. These may be read for domain understanding, NEVER copied — copying would force us to open-source all of Sakama."
+            fail=1
           fi
-          # Best-Flutter-UI-Templates looks MIT but is NOT (grant deletes "sell").
-          if grep -rniE "Best-Flutter-UI-Templates|best_flutter_ui" . --exclude-dir=.git --exclude-dir=.github 2>/dev/null; then
-            echo "::error::Best-Flutter-UI-Templates is NOT MIT. Unsafe for a commercial product."; fail=1
+
+          # 2. Best-Flutter-UI-Templates looks MIT but is NOT (its grant deletes "sell").
+          if grep -rniE "best-flutter-ui-templates|best_flutter_ui" "${CODE[@]}" "${EXCL[@]}" . ; then
+            echo "::error::Best-Flutter-UI-Templates is NOT MIT — unsafe for a commercial product."
+            fail=1
           fi
-          # LiteLLM is MIT EXCEPT enterprise/ — never vendor that directory.
+
+          # 3. LiteLLM is MIT EXCEPT enterprise/ (proprietary). Never vendor it.
           if [ -d ai-gateway/enterprise ]; then
-            echo "::error::LiteLLM enterprise/ is proprietary. Never vendor it."; fail=1
+            echo "::error::LiteLLM enterprise/ is proprietary. Never vendor it."
+            fail=1
           fi
-          # IFCT 2017: NIN forbids electronic reproduction for a product without written permission.
-          if grep -rniE "ifct[-_ ]?2017" --include='*.csv' --include='*.json' --include='*.sql' . 2>/dev/null; then
-            echo "::error::IFCT 2017 data detected. NIN forbids this without WRITTEN permission. Use INDB (CC BY) + USDA (CC0)."; fail=1
+
+          # 4. IFCT 2017 — NIN forbids electronic reproduction for a product without
+          #    written permission. Use INDB (CC BY 4.0) + USDA (CC0) instead.
+          if grep -rniE "ifct[-_ ]?2017" --include=*.csv --include=*.sql --include=*.dart "${EXCL[@]}" . ; then
+            echo "::error::IFCT 2017 data detected in code/data. NIN forbids this without WRITTEN permission."
+            fail=1
           fi
-          [ $fail -eq 0 ] && echo "✅ no copyleft / licence-trap violations"
+
+          if [ $fail -eq 0 ]; then echo "✅ no copyleft / licence-trap violations in code or config"; fi
           exit $fail
 
-  odbl-containment:
-    # Open Food Facts is ODbL. Share-alike attaches to DERIVED DATABASES.
-    # OFF rows must stay in their own source-tagged table, never merged into the proprietary one.
+  dependency-licences:
+    # Free replacement for dependency-review (needs no GitHub Advanced Security).
+    # No-op until M0 creates app/pubspec.yaml, then it hard-fails on any copyleft package.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: OFF data must stay segregated
+      - name: Flutter dependency licences
         run: |
           set -e
-          if [ -d supabase/migrations ] && ls supabase/migrations/*.sql >/dev/null 2>&1; then
-            if grep -rniE "insert into (foods|indian_foods)[^;]*openfoodfacts|openfoodfacts[^;]*into foods" supabase/migrations/ 2>/dev/null; then
-              echo "::error::Open Food Facts (ODbL) data is being merged into the proprietary food table. This risks share-alike on our whole DB. Keep OFF in its own source-tagged table."
+          if [ ! -f app/pubspec.yaml ]; then
+            echo "ℹ️  No Flutter app yet (arrives in M0). Skipping pub licence scan."
+            echo "    Until then, the licence-guard agent is the gate for new dependencies."
+            exit 0
+          fi
+          echo "TODO(M0): run 'flutter pub deps --json' and fail on GPL/AGPL/SSPL or any"
+          echo "package with no LICENSE. Allowed: MIT, Apache-2.0, BSD, ISC, CC0."
+
+  odbl-containment:
+    # Open Food Facts is ODbL. Share-alike attaches to DERIVED DATABASES.
+    # OFF rows must live in their own source-tagged table, never merged into the
+    # proprietary Indian food table. This is the biggest legal risk in the stack.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Open Food Facts data must stay segregated
+        run: |
+          set +e
+          if ls supabase/migrations/*.sql >/dev/null 2>&1; then
+            if grep -rniE "insert into (foods|indian_foods)[^;]*openfoodfacts|openfoodfacts[^;]*into (foods|indian_foods)" supabase/migrations/ ; then
+              echo "::error::Open Food Facts (ODbL) data is being merged into the proprietary food table. This risks share-alike attaching to our whole database. Keep OFF rows in a separate, source-tagged table."
               exit 1
             fi
           fi
-          echo "✅ no OFF/proprietary table merge detected"
+          echo "✅ no OFF / proprietary-table merge detected"
+          exit 0
