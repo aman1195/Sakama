@@ -19,7 +19,7 @@ chore/SAK-08-bump-flutter
 
 ## Commits
 
-Conventional commits: `type(scope): subject` — `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`.
+Conventional commits: `type(scope): subject` — `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `ci`, `build`, `style`.
 
 ```
 feat(photosnap): add portion confirm sheet

@@ -1,0 +1,26 @@
+# Enforces DEVELOPER_STANDARDS.md: branch naming + conventional commit PR titles.
+name: PR hygiene
+
+on:
+  pull_request: {types: [opened, edited, synchronize, reopened]}
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  title-and-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: PR title must be a conventional commit
+        env: {TITLE: "${{ github.event.pull_request.title }}"}
+        run: |
+          echo "$TITLE" | grep -qE '^(feat|fix|chore|docs|refactor|test|perf|ci|build|style)(\([a-z0-9._-]+\))?!?: .+' \
+            || { echo "::error::PR title must be conventional, e.g. 'feat(photosnap): add confirm sheet'. Got: $TITLE"; exit 1; }
+          echo "✅ title ok"
+      - name: Branch name must follow DEVELOPER_STANDARDS
+        env: {BRANCH: "${{ github.head_ref }}"}
+        run: |
+          echo "$BRANCH" | grep -qE '^(feature|bugfix|hotfix|release|chore|docs|refactor)/[A-Za-z0-9._-]+$' \
+            || { echo "::error::Branch must be <prefix>/<ticket>-<desc> in kebab-case, e.g. feature/SAK-14-photosnap. Got: $BRANCH"; exit 1; }
+          echo "✅ branch ok"

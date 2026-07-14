@@ -1,0 +1,21 @@
+name: Feature request
+description: Propose a change
+labels: [enhancement]
+body:
+  - type: textarea
+    attributes: {label: Problem, description: What user problem does this solve? Which user type — plan follower, goal setter, or casual tracker?}
+    validations: {required: true}
+  - type: textarea
+    attributes: {label: Proposal}
+    validations: {required: true}
+  - type: dropdown
+    attributes:
+      label: Milestone
+      options: [M0 Foundation, M1 Tracking core, M2 Food DB, M3 AI moat, M4 Plan engine, M5 Sensors, M6 Polish, M7 Launch, Unscoped]
+  - type: checkboxes
+    attributes:
+      label: Constraints checked
+      options:
+        - label: Works offline (or explicitly justified why not)
+        - label: Does not require a GPL/AGPL dependency
+        - label: Does not put core tracking behind a paywall (free-at-core promise)

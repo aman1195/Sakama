@@ -1,0 +1,8 @@
+# Default owner
+*                       @aman1195
+
+# Load-bearing: licence + data provenance (see .claude/agents/licence-guard.md)
+/ASSET_CREDITS.md       @aman1195
+/LICENSE                @aman1195
+/docs/adr/              @aman1195
+/docs/architecture/03-food-database.md  @aman1195

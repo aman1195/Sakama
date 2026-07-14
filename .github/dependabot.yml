@@ -1,0 +1,11 @@
+version: 2
+updates:
+  - package-ecosystem: "pub"          # Flutter/Dart — active from M0
+    directory: "/app"
+    schedule: {interval: "weekly"}
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "needs-licence-check"]
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule: {interval: "weekly"}
+    labels: ["dependencies"]

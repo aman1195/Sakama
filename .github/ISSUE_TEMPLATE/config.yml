@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/aman1195/Sakama/security/advisories/new
+    about: Report privately. Sakama handles health data — never open a public issue.

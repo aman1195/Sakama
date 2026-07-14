@@ -1,0 +1,29 @@
+name: Bug report
+description: Something is broken
+labels: [bug]
+body:
+  - type: textarea
+    attributes: {label: What happened?, description: Actual vs expected}
+    validations: {required: true}
+  - type: textarea
+    attributes: {label: Steps to reproduce}
+    validations: {required: true}
+  - type: dropdown
+    attributes:
+      label: Platform
+      options: [iOS, Android, Both]
+    validations: {required: true}
+  - type: dropdown
+    attributes:
+      label: Was the device offline?
+      description: Offline correctness is a hard requirement — this matters.
+      options: ["No", "Yes", "Unsure"]
+    validations: {required: true}
+  - type: input
+    attributes: {label: App version / build}
+  - type: checkboxes
+    attributes:
+      label: Data safety
+      options:
+        - label: This report contains **no** personal health data (weights, conditions, food logs, photos)
+          required: true
