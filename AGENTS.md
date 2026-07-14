@@ -74,6 +74,25 @@ effortless and the coach must feel warm, not clinical. Pair it with [docs/DESIGN
 (which records what we take from Fud AI and HealthifyMe) and [PRODUCT.md](PRODUCT.md) (brand,
 anti-references).
 
+## Custom agent — `.claude/agents/pr-reviewer.md`
+
+**Sakama's PR reviewer.** Executes the method in [docs/REVIEW.md](docs/REVIEW.md): objective-first reading,
+blast-radius order (migrations before widgets), adversarial input hunting, and tool-grounded refutation of
+every candidate finding. Run it on any diff before merge.
+
+It is built around the two facts that make this repo different from a web app: **you cannot hotfix**, and **a
+bad Drift migration destroys user data irrecoverably**. It carries the recipes for the change classes where
+that bites — a migration, an RLS policy, an LLM call path, a sync/conflict change, a new dependency, a
+nutrition-math change, a UI change.
+
+> **Its approval is never a merge gate.** Measured AI-review precision on real PRs, with full repository
+> context, is under 20% F1. A human owns the go/no-go on every irreversible surface. See §7 of
+> [docs/REVIEW.md](docs/REVIEW.md) for what the agent may and may not be trusted with, and why the reviewer is
+> itself a prompt-injection attack surface.
+
+Pair it with `licence-guard` below: the reviewer defers licence and provenance calls to it rather than
+duplicating them.
+
 ## Custom agent — `.claude/agents/licence-guard.md`
 
 **Sakama-specific, and load-bearing.** Sakama is closed-source and commercial, so licence contamination is
@@ -101,5 +120,7 @@ on every user table, and no health PII in analytics.
 - **About to commit to a big decision** → `grilling` first. This project has already reversed two
   confident conclusions under scrutiny; assume the third is lurking.
 - **Touching the UI** → `impeccable` + `docs/DESIGN.md`.
+- **Reviewing a PR** → `pr-reviewer`. Read [docs/REVIEW.md](docs/REVIEW.md) once first; the agent is that
+  document made executable, and it will not tell you the parts a human has to own.
 - **Adding any package or food data** → `licence-guard` before merge. No exceptions.
 - **Ending a session** → `handoff`.
