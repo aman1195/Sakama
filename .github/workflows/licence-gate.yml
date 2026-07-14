@@ -26,7 +26,13 @@ jobs:
         run: |
           set +e
           fail=0
+          # *.ts, *.py and *.sql are NOT optional. Supabase Edge Functions are
+          # TypeScript and the seed pipeline is Python/SQL — respectively where the
+          # BYOK keys and the LLM proxy call live (CLAUDE.md rule 3), and where OFF
+          # and IFCT data enters (rules 5 and 6). Without them the two highest-risk
+          # directories in the repo were the two this gate could not see.
           CODE=(--include=*.dart --include=*.kt --include=*.swift --include=*.java
+                --include=*.ts --include=*.js --include=*.py --include=*.sql
                 --include=*.yaml --include=*.yml --include=*.json --include=*.gradle
                 --include=Podfile --include=pubspec.yaml)
           EXCL=(--exclude-dir=.git --exclude-dir=.github --exclude-dir=.agents
@@ -52,7 +58,8 @@ jobs:
 
           # 4. IFCT 2017 — NIN forbids electronic reproduction for a product without
           #    written permission. Use INDB (CC BY 4.0) + USDA (CC0) instead.
-          if grep -rniE "ifct[-_ ]?2017" --include=*.csv --include=*.sql --include=*.dart "${EXCL[@]}" . ; then
+          if grep -rniE "ifct[-_ ]?2017" --include=*.csv --include=*.sql --include=*.dart \
+               --include=*.py --include=*.ts --include=*.json "${EXCL[@]}" . ; then
             echo "::error::IFCT 2017 data detected in code/data. NIN forbids this without WRITTEN permission."
             fail=1
           fi
@@ -62,7 +69,13 @@ jobs:
 
   dependency-licences:
     # Free replacement for dependency-review (needs no GitHub Advanced Security).
-    # No-op until M0 creates app/pubspec.yaml, then it hard-fails on any copyleft package.
+    #
+    # This job used to exit 0 on EVERY path — including after app/pubspec.yaml
+    # existed, where it printed "TODO(M0)" and passed. A required status check
+    # that cannot go red is worse than no check, because DEVELOPER_STANDARDS.md
+    # tells the team "Green CI required: ... the licence check" and they believe
+    # it. It now FAILS LOUDLY the day M0 lands a pubspec, so the gap cannot be
+    # merged past in silence.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -74,24 +87,72 @@ jobs:
             echo "    Until then, the licence-guard agent is the gate for new dependencies."
             exit 0
           fi
-          echo "TODO(M0): run 'flutter pub deps --json' and fail on GPL/AGPL/SSPL or any"
-          echo "package with no LICENSE. Allowed: MIT, Apache-2.0, BSD, ISC, CC0."
+          echo "::error::app/pubspec.yaml now exists, but the pub licence scan is not implemented."
+          echo "Implement it before merging any Flutter dependency:"
+          echo "  - resolve the TRANSITIVE set from pubspec.lock (not pubspec.yaml)"
+          echo "  - fail on GPL / AGPL / LGPL / SSPL, or any package with no LICENSE"
+          echo "  - allowed: MIT, Apache-2.0, BSD, ISC, CC0"
+          echo "LGPL is the one that hides. Sakama is closed-source; contamination is existential."
+          exit 1
 
   odbl-containment:
     # Open Food Facts is ODbL. Share-alike attaches to DERIVED DATABASES.
     # OFF rows must live in their own source-tagged table, never merged into the
     # proprietary Indian food table. This is the biggest legal risk in the stack.
+    #
+    # The previous check was line-based grep, so it could not see a normally
+    # formatted migration:
+    #
+    #     insert into foods (name, kcal, source, licence)
+    #     select name, kcal, 'openfoodfacts', 'ODbL'
+    #     from off_staging;
+    #
+    # `[^;]*` cannot span a newline, so every multi-line INSERT ... SELECT — that
+    # is, every realistic seed migration — passed green. It also only scanned
+    # supabase/migrations/*.sql, so a Python or TypeScript seed pipeline doing the
+    # same merge was never scanned at all.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Open Food Facts data must stay segregated
         run: |
-          set +e
-          if ls supabase/migrations/*.sql >/dev/null 2>&1; then
-            if grep -rniE "insert into (foods|indian_foods)[^;]*openfoodfacts|openfoodfacts[^;]*into (foods|indian_foods)" supabase/migrations/ ; then
-              echo "::error::Open Food Facts (ODbL) data is being merged into the proprietary food table. This risks share-alike attaching to our whole database. Keep OFF rows in a separate, source-tagged table."
-              exit 1
-            fi
-          fi
-          echo "✅ no OFF / proprietary-table merge detected"
-          exit 0
+          python3 - <<'PY'
+          import os, re, sys
+
+          # Statement-level, not line-level: strip comments, then split on ';'.
+          PROPRIETARY = r'(foods|indian_foods|indian_food)'
+          WRITE = re.compile(
+              r'\b(insert\s+into|copy|merge\s+into|update)\s+' + PROPRIETARY + r'\b', re.I)
+          OFF = re.compile(r"openfoodfacts|open_food_facts|off_(staging|foods|raw)|\bodbl\b", re.I)
+
+          SCAN_EXT = ('.sql', '.py', '.ts', '.js', '.dart')
+          SKIP_DIRS = {'.git', '.github', '.agents', '.claude', 'node_modules'}
+
+          hits = []
+          for dp, dn, fn in os.walk('.'):
+              if SKIP_DIRS & set(dp.split(os.sep)):
+                  dn[:] = []
+                  continue
+              for f in fn:
+                  if not f.endswith(SCAN_EXT):
+                      continue
+                  p = os.path.join(dp, f)
+                  try:
+                      body = open(p, encoding='utf-8', errors='ignore').read()
+                  except OSError:
+                      continue
+                  body = re.sub(r'--[^\n]*|/\*.*?\*/|#[^\n]*', ' ', body, flags=re.S)
+                  for stmt in body.split(';'):
+                      if WRITE.search(stmt) and OFF.search(stmt):
+                          one = ' '.join(stmt.split())[:160]
+                          hits.append(f"{p}: {one}")
+
+          for h in hits:
+              print(f"::error::ODbL contamination: {h}")
+          if hits:
+              print("Open Food Facts (ODbL) data is being written into the proprietary food table.")
+              print("Share-alike would attach to our whole database. Keep OFF rows in a separate,")
+              print("source-tagged table. See CLAUDE.md rule 5 and docs/architecture/03-food-database.md.")
+              sys.exit(1)
+          print("✅ no OFF / proprietary-table merge detected")
+          PY

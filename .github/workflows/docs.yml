@@ -1,9 +1,14 @@
 # We hand-found 20 broken links once. Never again. (Pattern from Bifrost's docs-validation.)
+#
+# NOT path-filtered, deliberately. `links` is a REQUIRED status check, and a
+# required check on a path-filtered workflow is a deadlock: GitHub waits forever
+# for a context that never reports. The first Flutter-only PR of M0 (touching no
+# .md at all) would have hung with a dead merge button and no way to clear it.
 name: Docs
 
 on:
-  pull_request: {paths: ['**.md']}
-  push: {branches: [main], paths: ['**.md']}
+  pull_request:
+  push: {branches: [main]}
 
 permissions:
   contents: read
@@ -17,15 +22,27 @@ jobs:
         run: |
           python3 - <<'PY'
           import os, re, sys
+
+          # Compare path COMPONENTS, not substrings. `'.git' in './.github'` is
+          # True, so the old substring test silently skipped the entire .github
+          # tree — including the PR template, which links to docs/DESIGN.md and
+          # docs/MOBILE.md. The check that exists to catch a moved file was blind
+          # to the file most likely to link at one.
+          SKIP_DIRS = {'.git', '.agents', 'node_modules'}
+          SKIP_TREES = {os.path.join('.claude', 'skills')}
+
           bad = []
           for dp, dn, fn in os.walk('.'):
-              if any(x in dp for x in ['.git', '.agents', '.claude/skills', 'node_modules']):
+              if SKIP_DIRS & set(dp.split(os.sep)) or any(s in dp for s in SKIP_TREES):
+                  dn[:] = []
                   continue
               for f in fn:
                   if not f.endswith('.md'):
                       continue
                   p = os.path.join(dp, f)
-                  for link in re.findall(r'\]\(([^)#][^)]*)\)', open(p, encoding='utf-8').read()):
+                  with open(p, encoding='utf-8') as fh:
+                      body = fh.read()
+                  for link in re.findall(r'\]\(([^)#][^)]*)\)', body):
                       if link.startswith(('http', 'mailto', '<')):
                           continue
                       t = os.path.normpath(os.path.join(dp, link.split('#')[0]))

@@ -16,6 +16,10 @@ Sakama is a **closed-source commercial product**. Contributions are internal.
 4. Run **`licence-guard`** if you added a dependency, vendored code, or touched food data.
 5. Open a PR against `main`. Green CI + review required.
 
+> **Approvals are not enforced today**, and that is a recorded deviation rather than an oversight: we have one
+> human contributor, and GitHub rulesets are plan-gated on a free private repo. See the "Approvals" section of
+> [DEVELOPER_STANDARDS.md](DEVELOPER_STANDARDS.md) for what actually protects `main`.
+
 ## The rules that get PRs rejected
 - A GPL/AGPL dependency, or code copied from a copyleft app.
 - A user table without RLS.
