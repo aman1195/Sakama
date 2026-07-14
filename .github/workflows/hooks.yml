@@ -19,6 +19,6 @@ jobs:
   guard-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: block-push-to-main guard
         run: python3 .claude/hooks/test_block_push_to_main.py

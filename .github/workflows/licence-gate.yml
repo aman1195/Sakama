@@ -21,7 +21,7 @@ jobs:
     # legitimately name these projects in order to FORBID them.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: No copyleft app code, no licence traps
         run: |
           set +e
@@ -78,7 +78,7 @@ jobs:
     # merged past in silence.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Flutter dependency licences
         run: |
           set -e
@@ -113,7 +113,7 @@ jobs:
     # same merge was never scanned at all.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Open Food Facts data must stay segregated
         run: |
           python3 - <<'PY'
