@@ -41,6 +41,23 @@ BLOCK = [
     # pushes every local branch, main included
     "git push --all origin",
     "git push --mirror origin",
+    # ── Bypasses found by adversarial review of PR #4. The guard used to reason
+    #    about the command STRING; the shell does not. Every one of these was a
+    #    LIVE hole while this hook was the only thing protecting main.
+    "git -C /repo push origin main",          # B1: global -C between git and push
+    "git -c gc.auto=0 push origin main",      # B1: global -c
+    "git --git-dir=/r/.git push origin main",  # B1: --git-dir
+    'git "push" origin main',                 # B2: quoted verb
+    "$(git push origin main)",                # B3: command substitution
+    "`git push origin main`",                 # B3: backtick substitution
+    "git push origin main&",                  # B4: operator glued to the ref
+    "git push origin main & echo done",       # B4: backgrounded
+    # ── Foreign repo: -C/--git-dir/--work-tree retarget git at ANOTHER repo whose
+    #    HEAD we cannot resolve. Any HEAD-dependent push there must fail CLOSED.
+    "git -C /other push",
+    "git -C /other push origin",
+    "git -C /other push origin HEAD",
+    "git --git-dir=/o/.git push",
 ]
 
 # No refspec: git pushes the CURRENT branch. Must block only when HEAD is main.
@@ -65,6 +82,10 @@ ALLOW = [
     # not a push at all
     "git log --oneline main",
     "gh pr merge 1 --squash",
+    # an explicit, safe refspec is fine even on a foreign repo — the destination
+    # is named and it is not main, so HEAD never enters into it
+    "git -C /other push origin feature/x",
+    "git -c gc.auto=0 push origin feature/x",
 ]
 
 
