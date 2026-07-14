@@ -1,0 +1,11 @@
+Copyright (c) 2026 Aman Tripathi. All Rights Reserved.
+
+Sakama is proprietary, closed-source software. No licence is granted to copy, modify,
+distribute, sublicense, or use this source code, in whole or in part, without prior
+written permission from the copyright holder.
+
+Third-party components are used under their own permissive licences (MIT, Apache-2.0,
+BSD, CC0). Nutrition data is used under its own terms (CC BY 4.0, CC0, ODbL).
+See ASSET_CREDITS.md — attribution obligations there are binding.
+
+No GPL or AGPL code is included, and none may be introduced. See CLAUDE.md.

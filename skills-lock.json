@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "note": "Sakama skills. Mobile (Flutter) project \u2014 web-only skills (benchmark, web-design-guidelines) were deliberately removed. See AGENTS.md.",
+  "skills": {
+    "ask-matt": {
+      "source": "mattpocock/skills",
+      "sourceType": "github"
+    },
+    "caveman": {
+      "source": "internal/he2-beta",
+      "sourceType": "github"
+    },
+    "caveman-commit": {
+      "source": "internal/he2-beta",
+      "sourceType": "github"
+    },
+    "caveman-review": {
+      "source": "internal/he2-beta",
+      "sourceType": "github"
+    },
+    "codebase-design": {
+      "source": "mattpocock/skills",
+      "sourceType": "github"
+    },
+    "compress": {
+      "source": "internal/he2-beta",
+      "sourceType": "github"
+    },
+    "diagnose": {
+      "source": "internal/he2-beta",
+      "sourceType": "github"
+    },
+    "diagnosing-bugs": {
+      "source": "mattpocock/skills",
+      "sourceType": "github"
+    },
+    "domain-modeling": {
+      "source": "mattpocock/skills",
+      "sourceType": "github"
+    },
+    "emil-design-eng": {
+      "source": "internal/he2-beta",
+      "sourceType": "github"
+    },
+    "grill-me": {
+      "source": "mattpocock/skills",
+      "sourceType": "github"
+    },
+    "grill-with-docs": {
+      "source": "mattpocock/skills",
+      "sourceType": "github"
+    },
+    "grilling": {
+      "source": "mattpocock/skills",
+      "sourceType": "github"
+    },
+    "handoff": {
+      "source": "mattpocock/skills",
+      "sourceType": "github"
+    },
+    "improve-codebase-architecture": {
+      "source": "mattpocock/skills",
+      "sourceType": "github"
+    },
+    "prototype": {
+      "source": "mattpocock/skills",
+      "sourceType": "github"
+    },
+    "setup-matt-pocock-skills": {
+      "source": "mattpocock/skills",
+      "sourceType": "github"
+    },
+    "skill-creator": {
+      "source": "internal/he2-beta",
+      "sourceType": "github"
+    },
+    "system-design": {
+      "source": "internal/he2-beta",
+      "sourceType": "github"
+    },
+    "tdd": {
+      "source": "mattpocock/skills",
+      "sourceType": "github"
+    },
+    "teach": {
+      "source": "mattpocock/skills",
+      "sourceType": "github"
+    },
+    "to-issues": {
+      "source": "mattpocock/skills",
+      "sourceType": "github"
+    },
+    "to-prd": {
+      "source": "mattpocock/skills",
+      "sourceType": "github"
+    },
+    "triage": {
+      "source": "mattpocock/skills",
+      "sourceType": "github"
+    },
+    "writing-great-skills": {
+      "source": "mattpocock/skills",
+      "sourceType": "github"
+    },
+    "zoom-out": {
+      "source": "internal/he2-beta",
+      "sourceType": "github"
+    }
+  }
+}

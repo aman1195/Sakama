@@ -1,0 +1,32 @@
+# Secrets — never commit
+.env
+*.env
+!.env.example
+**/key.properties
+**/*.keystore
+**/*.jks
+ios/Runner/GoogleService-Info.plist
+ai-gateway/config.yaml
+
+# Flutter / Dart
+app/.dart_tool/
+app/build/
+app/.flutter-plugins*
+app/pubspec.lock
+**/*.g.dart
+**/*.freezed.dart
+
+# iOS / Android
+ios/Pods/
+ios/.symlinks/
+android/.gradle/
+android/local.properties
+
+# Supabase
+supabase/.branches/
+supabase/.temp/
+
+# OS / editor
+.DS_Store
+.idea/
+*.iml
