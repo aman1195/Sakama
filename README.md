@@ -34,6 +34,7 @@ plan, your day, and your streak.
 | [docs/adr/](docs/adr/) | Architecture decision records |
 | [docs/architecture/](docs/architecture/) | Data model · AI layer · Food database · Plan engine |
 | [docs/research/](docs/research/) | Why we fork nothing · Fud AI teardown · OpenNutriTracker teardown · sources |
+| [docs/references/BY-MODULE.md](docs/references/BY-MODULE.md) | **Reference map** — which OSS project to look at per module, licence-aware |
 
 ## Stack
 

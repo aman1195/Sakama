@@ -16,6 +16,7 @@ Start with [Sakama-Start-Plan.md](../Sakama-Start-Plan.md) — the direction doc
 - [architecture/03-food-database.md](architecture/03-food-database.md) — three-tier DB, licensing
 - [architecture/04-plan-engine.md](architecture/04-plan-engine.md) — the plan JSON contract
 - [adr/](adr/) — architecture decision records
+- [references/BY-MODULE.md](references/BY-MODULE.md) — **reference map**: which OSS project to look at per module (licence-aware)
 
 ## Research (why we decided what we decided)
 - [research/base-decision.md](research/base-decision.md) — **why we fork nothing**; the assembly kit
