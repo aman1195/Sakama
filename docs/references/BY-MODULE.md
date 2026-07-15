@@ -59,8 +59,14 @@
 | **PhotoSnap prompt design** | **Fud AI** | `ios/calorietracker/Services/GeminiService.swift` | **MIT** | ✅ **Adapt** (port to Dart) | The food-analysis JSON schema + portion-semantics prompt logic — re-vocabularise for Indian units |
 | **Multi-provider / BYOK abstraction** | Fud AI | `ios/calorietracker/Models/AIProvider.swift` | MIT | ✅ Adapt | The provider enum + baseURL/fallback pattern |
 | API-key-in-Keychain handling | Fud AI | `ios/calorietracker/Services/KeychainHelper.swift` | MIT | ✅ Adapt | Secure BYOK key storage pattern |
-| **AI gateway / tier routing / metering** | **Helium** (he2-beta, own repo) | `backend/infrastructure/llm/tier_router.py`, `cloudflare_gateway.py`, `llm_service.py` | Internal | ✅ Port patterns | Tier→model chain, Cloudflare AI Gateway wiring, per-call BYOK key. **Port the pattern to a Deno Edge Function** ([ADR 0011](../adr/0011-serverless-ai-gateway.md)) |
-| Freemium metering / entitlements | Helium | `backend/domain/billing_v3/` | Internal | ✅ Port patterns | Usage metering + tier gating shape |
+| **AI gateway / tier routing / metering** | **Helium** (he2-beta) | `backend/infrastructure/llm/tier_router.py`, `cloudflare_gateway.py`, `llm_service.py` | **First-party** (our own repo) | ✅ Port patterns | Tier→model chain, Cloudflare AI Gateway wiring, per-call BYOK key. **Port the *backend metering pattern* to a Deno Edge Function** ([ADR 0011](../adr/0011-serverless-ai-gateway.md)) |
+| Freemium metering / entitlements | Helium | `backend/domain/billing_v3/` | First-party | ✅ Port patterns | Usage metering + tier gating shape |
+
+> **On Helium:** it is **our own (first-party) code**, so there is no external licence constraint —
+> "Internal / port patterns" means exactly that. This does **not** conflict with the AGENTS.md caution
+> that "Helium is a *web* project, take its process not its code": that warning is about its
+> **web-client tooling** (React/Next). What we port here is a **Python backend metering/gateway pattern**,
+> which is architecture, not web-client code — reimplemented in Deno/TypeScript for our Edge Function.
 
 ### Sensors, charts, platform
 | Building… | Reference | Where exactly | Licence | Posture | Take |

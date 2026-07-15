@@ -40,7 +40,7 @@ plan, your day, and your streak.
 
 **Flutter** (iOS-primary, Android-capable) · **Riverpod** · **go_router** · **Drift** (local, source of
 truth) · **PowerSync** (offline sync) · **Supabase** (Postgres, Auth, Storage, Edge Functions) ·
-**LiteLLM** proxy (multi-provider AI, BYOK) · `fl_chart`
+**serverless AI gateway** (Supabase Edge Function → Cloudflare AI Gateway / OpenRouter, multi-provider + BYOK) · `fl_chart`
 
 ## Layout
 
@@ -48,7 +48,7 @@ truth) · **PowerSync** (offline sync) · **Supabase** (Postgres, Auth, Storage,
 docs/           planning, architecture, design, research
 app/            Flutter app          (empty — M0)
 supabase/       migrations, edge functions, seed pipeline (empty — M0)
-ai-gateway/     LiteLLM proxy config (empty — M3)
+supabase/       AI gateway lives in edge functions (ADR 0011; ai-gateway/ dir superseded)
 .agents/skills/ 27 engineering skills
 .claude/        agents (licence-guard), hooks, skills
 ```

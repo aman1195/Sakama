@@ -23,7 +23,7 @@ Read [PRODUCT.md](PRODUCT.md) before touching anything user-facing.
 | Local DB | **Drift** (SQLite) — the single source of truth |
 | Sync | **PowerSync** (offline-first, Supabase-endorsed) |
 | Backend | **Supabase** — Postgres + Auth + Storage + Edge Functions |
-| AI gateway | **LiteLLM** proxy (self-hosted, MIT — never vendor `enterprise/`) |
+| AI gateway | **Serverless**: Supabase Edge Function → managed gateway (Cloudflare AI Gateway / OpenRouter). No self-hosted proxy. ([ADR 0011](docs/adr/0011-serverless-ai-gateway.md)) |
 | AI providers | Config-swappable. Cheap model default, escalate for hard turns. BYOK supported. |
 | Charts | `fl_chart` (MIT) |
 
@@ -34,7 +34,9 @@ Read [PRODUCT.md](PRODUCT.md) before touching anything user-facing.
 2. **RLS on every user table.** `user_id uuid default auth.uid()` + `auth.uid() = user_id` policies.
    This is the primary data-isolation boundary for a health app.
 3. **No provider API key ever ships in the client.** All LLM calls route through a Supabase Edge Function
-   → LiteLLM proxy. User BYOK keys are envelope-encrypted at rest and redacted from all logs (OWASP M1).
+   → managed AI gateway → provider on a **paid tier** (free tiers train on data — unacceptable for health
+   data; [ADR 0011](docs/adr/0011-serverless-ai-gateway.md)). User BYOK keys are envelope-encrypted at rest
+   and redacted from all logs (OWASP M1).
 4. **Licence hygiene is load-bearing.** This is a closed-source commercial product.
    - **NEVER copy GPL/AGPL code.** OpenNutriTracker, wger, FoodYou, Waistline are all copyleft — they may
      be read for *domain understanding only*, never copied.
@@ -57,7 +59,8 @@ Read [PRODUCT.md](PRODUCT.md) before touching anything user-facing.
      else. For **mobile** conventions the references are **OpenNutriTracker** and **Fud AI** (both shipping
      health apps) — take their *process*, never OpenNutriTracker's *code* (GPL).
 9. **AI cost discipline.** Cheap model by default, prompt-cache long system prompts, hard per-user
-   budgets at the proxy. Defaulting chat or vision to a flagship model is what blows the budget.
+   budgets enforced in the Edge Function (against `ai_usage`). Defaulting chat or vision to a flagship
+   model is what blows the budget.
 
 ## Repository layout
 
@@ -72,12 +75,13 @@ docs/
   DESIGN.md           UI/UX system (what we take from Fud AI + HealthifyMe)
   ROADMAP.md          milestones M0–M7
   MOBILE.md           mobile realities: no hotfix, migrations, store review, perf targets
-  adr/                architecture decision records
+  adr/                architecture decision records (0011 supersedes 0006; 0012 amends 0008)
   architecture/       01-data-model · 02-ai-layer · 03-food-database · 04-plan-engine
+  references/         BY-MODULE.md — which OSS project to look at per module (licence-aware)
   research/           base-decision · eval-fud-ai · eval-opennutritracker · sources
 app/                  Flutter app        (empty — created in M0)
-supabase/             migrations, edge functions, seed pipeline (empty — M0)
-ai-gateway/           LiteLLM proxy config (empty — M3)
+supabase/             migrations, edge functions (the AI gateway lives here — M3)
+ai-gateway/           SUPERSEDED by ADR 0011 (no self-hosted proxy). Empty; may be removed.
 ```
 
 ## Commands

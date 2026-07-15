@@ -15,7 +15,7 @@ that touches auth, user data, food logs, health metrics, photos, AI calls, or lo
 | Area | Rule |
 |---|---|
 | Data isolation | **RLS on every user table** (`auth.uid() = user_id`). A new user table without RLS is a blocking defect. |
-| API keys | **No provider key in the client, ever** (OWASP Mobile M1). All LLM calls go Edge Function → LiteLLM proxy. |
+| API keys | **No provider key in the client, ever** (OWASP Mobile M1). All LLM calls go Edge Function → managed AI gateway → paid provider tier (ADR 0011). |
 | BYOK keys | Envelope-encrypted at rest. **Never logged. Never returned to the device.** |
 | AI boundary | Meal photos/text may go to an LLM provider. **HealthKit records must never leave the device.** Declare what we send. |
 | Analytics | **No health data** (weight, conditions, food logs) in analytics or crash reports. |
