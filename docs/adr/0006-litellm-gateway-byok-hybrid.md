@@ -1,6 +1,8 @@
 # 0006. LiteLLM gateway with hybrid BYOK
 
-**Status:** Accepted · **Date:** 2026-07
+**Status:** ⚠️ **Superseded by [0011](0011-serverless-ai-gateway.md)** (the self-hosted proxy is rejected;
+serverless Edge Function + managed gateway replaces it). The **hybrid-BYOK** and **cheap-default +
+escalation** ideas here still hold — 0011 keeps them. · **Date:** 2026-07
 
 ## Context
 Sakama needs multi-provider LLM access (vision for PhotoSnap, chat for the coach, structured JSON for plan

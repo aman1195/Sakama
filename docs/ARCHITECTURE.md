@@ -26,19 +26,26 @@
                        │  · Edge Functions (Deno) = AI entry + BFF     │
                        │  · Vault/KMS (encrypted BYOK keys)            │
                        └───────────────┬───────────────────────────────┘
-                                       │ OpenAI-format HTTPS
+                                       │ HTTPS (usage-metered in the Edge Fn)
                        ┌───────────────▼───────────────────────────────┐
-                       │  LiteLLM PROXY (self-hosted, small always-on)  │
-                       │  virtual keys · budgets/RPM · BYOK passthrough │
-                       │  routing · prompt caching · spend ledger       │
+                       │  MANAGED AI GATEWAY (Cloudflare AI Gateway /   │
+                       │  OpenRouter) — caching · rate-limit · routing  │
+                       │  · multi-provider · BYOK. No self-hosted proxy │
                        └──┬───────────────┬───────────────┬─────────────┘
                           ▼               ▼               ▼
-                   Gemini Flash      Claude Sonnet    OpenAI / vLLM
-                   (PhotoSnap)       (Vita coach)     (fallback/BYOK)
+                   Gemini Flash      Claude Sonnet    OpenAI (fallback / BYOK)
+                   (PhotoSnap)       (Vita coach)     — all on a PAID tier
 ```
 
-Three tiers: **Flutter client** (offline-first), **Supabase** (data + auth + BFF), **LiteLLM proxy**
-(AI gateway). Detail on the AI tier is in [architecture/02-ai-layer.md](architecture/02-ai-layer.md).
+> **⚠️ Superseded design note:** an earlier version of this doc put a **self-hosted LiteLLM proxy** at the
+> centre. [ADR 0011](adr/0011-serverless-ai-gateway.md) replaced it with the serverless design above
+> (Edge Function meters usage → managed gateway → provider). The metering that the proxy's "virtual keys"
+> would have done now lives in the **Edge Function against the `ai_usage` table**. Section 5 below still
+> describes the old proxy and will be rewritten when the AI layer is built (M3).
+
+Three tiers: **Flutter client** (offline-first), **Supabase** (data + auth + Edge Function AI entry +
+metering), **managed AI gateway**. Detail on the AI tier is in
+[architecture/02-ai-layer.md](architecture/02-ai-layer.md).
 
 ## 2. Client architecture (Flutter)
 

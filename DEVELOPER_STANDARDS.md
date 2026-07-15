@@ -57,7 +57,7 @@ deadlocks every PR.
 ## Security & secrets
 
 - **No secrets in the repo.** Ever. Use `.env` (gitignored) + compile-time obfuscation.
-- **No provider API key in the client.** All LLM calls go through the Edge Function → LiteLLM proxy.
+- **No provider API key in the client.** All LLM calls go through the Edge Function → managed AI gateway → paid provider tier (ADR 0011).
 - BYOK keys: envelope-encrypted at rest, **never logged**, never returned to the device.
 - **RLS on every user table.** A new user-data table without RLS is a blocking defect.
 - No health data (weight, conditions, food logs) in analytics or crash reports.

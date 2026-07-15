@@ -1,6 +1,9 @@
 # 0008. Indian food DB: INDB + USDA + Open Food Facts. Never IFCT.
 
-**Status:** Accepted · **Date:** 2026-07 · **Supersedes:** an earlier "recompute from IFCT 2017" plan
+**Status:** ⚠️ **Partly superseded by [0012](0012-ship-bundled-food-data.md)** — the *recompute pipeline*
+is deferred; v1 bundles INDB + USDA as-is. The **source choices** (INDB/USDA/OFF), the **ODbL
+containment**, and the **IFCT prohibition** below all still stand. · **Date:** 2026-07 ·
+**Supersedes:** an earlier "recompute from IFCT 2017" plan
 
 ## Context
 The Indian food database is the real moat (HealthifyMe's biggest advantage). An earlier plan proposed

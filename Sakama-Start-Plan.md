@@ -34,7 +34,7 @@ not a failure, and both reversals are recorded in the ADRs.
 | Backend + offline | **Supabase** + **Drift/PowerSync** offline-first | [0003](docs/adr/0003-supabase-offline-first-drift-powersync.md) |
 | Licence stance | **Closed-source, commercial** | [0004](docs/adr/0004-closed-source-licence-stance.md) |
 | Base | **Fork nothing.** Build fresh from a permissive assembly kit | [0005](docs/adr/0005-build-fresh-no-fork.md) |
-| AI | **LiteLLM** proxy + hybrid **BYOK** | [0006](docs/adr/0006-litellm-gateway-byok-hybrid.md) |
+| AI | **Serverless gateway** (Edge Fn + managed gateway) + hybrid **BYOK** | [0011](docs/adr/0011-serverless-ai-gateway.md) |
 | Plans | **JSON data**, never hardcoded | [0007](docs/adr/0007-plan-engine-as-json-data.md) |
 | Food data | **INDB + USDA + OFF.** Never IFCT | [0008](docs/adr/0008-indian-food-database-strategy.md) |
 
@@ -56,8 +56,8 @@ not a failure, and both reversals are recorded in the ADRs.
 | Barcode + food | `openfoodfacts-dart`, Smooth App `packages/scanner` | Apache-2.0 |
 | Charts | `fl_chart` | MIT |
 | Health/sensors | `health`, `pedometer`, `mobile_scanner` | MIT / BSD |
-| AI gateway | **LiteLLM** (never vendor `enterprise/`) | MIT |
-| AI blueprint | **Fud AI** prompts + 13-provider abstraction — **port, do not fork** | MIT |
+| AI gateway | **Supabase Edge Fn** + managed gateway (Cloudflare AI Gateway / OpenRouter) | managed |
+| AI blueprint | **Fud AI** prompts + provider abstraction; **Helium** tier-router pattern | MIT / first-party |
 | Shell / CI | `very_good_cli`, `very_good_workflows` | MIT |
 
 **Never use:** `Best-Flutter-UI-Templates` (not actually MIT), any GPL/AGPL app, any repo with no LICENSE.
@@ -72,7 +72,7 @@ breadth-first.**
 | **M0** | Foundation: Flutter scaffold, Supabase schema + RLS, Drift + PowerSync sync loop | Write a row offline; see it sync to Supabase and to a second device |
 | **M1** | Onboarding + profile + tracking core + dashboard | A casual tracker logs a full day; totals correct **offline** |
 | **M2** | Food database v1 (INDB + USDA + OFF) + barcode + search | Search finds Indian dishes offline; a real barcode resolves |
-| **M3** | **The AI moat** — LiteLLM proxy, PhotoSnap, Vita coach, AI estimation | Photograph a thali → sane items/macros; Vita answers with today's real data |
+| **M3** | **The AI moat** — serverless AI gateway (Edge Fn + managed gateway), PhotoSnap, Vita coach, AI estimation | Photograph a thali → sane items/macros; Vita answers with today's real data |
 | **M4** | Plan engine — AI generation + import + enforcement | A "Tuesday reset" day changes targets/checklist; Vita references it |
 | **M5** | Fasting, workouts, steps, sleep (HealthKit) | A fast completes; a workout raises the calorie target |
 | **M6** | Voice logging, micronutrient panel, streaks, polish, Hindi | — |
@@ -97,7 +97,7 @@ breadth-first.**
 | **Benchmark vision models on Indian food** (portion estimation is workload-dependent) | Eng | M3 |
 | Quote from **Bon Happetee** (India-native food data licence) | Product | M2 |
 | **FatSecret** Premier Free eligibility + India locale, in writing | Product | M2 |
-| LiteLLM proxy hosting (Fly.io vs VM vs Cloud Run) | Eng | M3 |
+| Managed AI gateway choice (Cloudflare AI Gateway vs OpenRouter) — ADR 0011 | Eng | M3 |
 | Privacy-respecting analytics choice (no health PII) | Eng | M6 |
 
 ## 8. How to work in this repo
