@@ -70,6 +70,10 @@ def call_openrouter(model: str, image: Path, api_key: str) -> str:
             }
         ],
         "temperature": 0.2,
+        # Explicit cap: without it OpenRouter reserves the model's FULL output ceiling
+        # (65K tokens) against your credit balance per call and 402s on small balances.
+        # The JSON response is ~400-700 tokens; 1200 is generous.
+        "max_tokens": 2500,
     }
     headers = {
         "Authorization": f"Bearer {api_key}",
