@@ -52,6 +52,14 @@ def pct_err(est: float, true: float) -> float | None:
     return abs(est - true) / true * 100.0
 
 
+def safe_float(v) -> float | None:
+    """Hand-filled CSV cells can be blank or malformed — treat as missing, never crash."""
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--band", type=float, default=30.0, help="pass band in %% (default 30)")
@@ -82,17 +90,26 @@ def main() -> int:
             gt = truth[match]
             est = est_totals(json.loads(jf.read_text()).get("result", {}))
             n += 1
-            ke = pct_err(est["kcal"], float(gt["true_kcal"]))
-            if ke is not None:
-                kcal_errs.append(ke)
-                if ke <= args.band:
-                    passes += 1
+            tk = safe_float(gt["true_kcal"])
+            if tk is None or tk <= 0:
+                # Blank/zero kcal cell: excluded from calorie stats AND the pass rate,
+                # so the PASS denominator matches the population the median uses.
+                print(f"  note: '{img}' has blank/invalid true_kcal — excluded from calorie stats")
+            else:
+                ke = pct_err(est["kcal"], tk)
+                if ke is not None:
+                    kcal_errs.append(ke)
+                    if ke <= args.band:
+                        passes += 1
             for key, col, bucket in [
                 ("protein_g", "true_protein_g", prot_errs),
                 ("carb_g", "true_carb_g", carb_errs),
                 ("fat_g", "true_fat_g", fat_errs),
             ]:
-                e = pct_err(est[key], float(gt[col]))
+                tv = safe_float(gt[col])
+                if tv is None:
+                    continue  # blank macro cell: skip this metric for this row only
+                e = pct_err(est[key], tv)
                 if e is not None:
                     bucket.append(e)
 
@@ -100,7 +117,9 @@ def main() -> int:
             continue
         med = lambda xs: f"{statistics.median(xs):.0f}" if xs else "-"
         mean = lambda xs: f"{statistics.mean(xs):.0f}" if xs else "-"
-        rate = f"{passes}/{n}"
+        # Denominator = meals with VALID calorie ground truth (same population as the median),
+        # not all matched results — otherwise a bad row deflates the pass rate toward NO-GO.
+        rate = f"{passes}/{len(kcal_errs)}" if kcal_errs else "-"
         print(
             f"{model_dir.name:38} {n:>3} {med(kcal_errs):>9} {mean(kcal_errs):>10} "
             f"{rate:>6} {med(prot_errs):>6} {med(carb_errs):>6} {med(fat_errs):>6}"

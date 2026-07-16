@@ -72,7 +72,8 @@ def call_openrouter(model: str, image: Path, api_key: str) -> str:
         "temperature": 0.2,
         # Explicit cap: without it OpenRouter reserves the model's FULL output ceiling
         # (65K tokens) against your credit balance per call and 402s on small balances.
-        # The JSON response is ~400-700 tokens; 1200 is generous.
+        # 2500, not less: a 12-item thali's JSON truncated at 1200, and reasoning models
+        # (gpt-5-mini) spend part of the cap thinking before emitting content.
         "max_tokens": 2500,
     }
     headers = {
@@ -97,8 +98,10 @@ def call_gemini(model: str, image: Path, api_key: str) -> str:
                 ]
             }
         ],
-        "generationConfig": {"temperature": 0.2},
+        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 2500},
     }
+    # NOTE: key-in-query-string is Google's documented pattern but more log-leakable than an
+    # Authorization header. Dev-spike only — never against real user data (ADR 0011).
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
     resp = _post(url, {"Content-Type": "application/json"}, body)
     return resp["candidates"][0]["content"]["parts"][0]["text"]

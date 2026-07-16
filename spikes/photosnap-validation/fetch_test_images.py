@@ -84,8 +84,10 @@ def main() -> int:
     IMAGES.mkdir(exist_ok=True)
     rows = []
     for slug, query in QUERIES:
+        # extension resolved AFTER the search so PNG sources keep .png (a PNG saved as
+        # .jpg makes run_spike declare the wrong mime type for the bytes)
         dest = IMAGES / f"{slug}.jpg"
-        if dest.exists():
+        if dest.exists() or (IMAGES / f"{slug}.png").exists():
             print(f"  skip {slug} (exists)")
             continue
         try:
@@ -93,6 +95,8 @@ def main() -> int:
             if not hit:
                 print(f"  none {slug}  ({query})")
                 continue
+            ext = ".png" if hit["url"].lower().split("?")[0].endswith(".png") else ".jpg"
+            dest = IMAGES / f"{slug}{ext}"
             req = urllib.request.Request(hit["url"], headers=UA)
             with urllib.request.urlopen(req, timeout=60) as r:
                 dest.write_bytes(r.read())
