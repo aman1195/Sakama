@@ -1,0 +1,23 @@
+image,dish_description,true_kcal,true_protein_g,true_carb_g,true_fat_g,notes
+thali-north.jpg,"1 large stuffed paratha + 1 katori dal + 1 katori boondi raita + 1 katori sabzi (close-up partial thali)",620,18,62,30,"boondi raita is fried — fat matters"
+thali-south.jpg,"full restaurant south thali: ~3 poori + rice bowl + sambar + rasam + kootu + 2 curries + aloo + curd + chutney + halwa + papad",1350,30,185,50,"HARD: 12+ items"
+dosa-masala.jpg,"1 large rolled masala dosa + coconut chutney + sambar (small cups)",540,10,75,22,
+dosa-plain.jpg,"1 plain dosa folded + tomato-coconut chutney dollop on banana leaf",230,5,32,9,"no sambar"
+idli.jpg,"3 rava idli + 1 bowl sambar + green chutney + red chutney",410,11,60,13,"count test: 3"
+medu-vada.jpg,"2 idli + 1 medu vada + coconut chutney + sambar cup",470,11,62,18,"image has text labels — may help models"
+uttapam.jpg,"1 large onion-tomato uttapam + 2 cups sambar + 1 coconut chutney",510,13,72,17,"2 sambar cups"
+chole-bhature.jpg,"2 large bhature + small chole + onion + lemon + green chilli + pickle cup",820,18,95,40,"count test: 2 large fried breads"
+biryani-chicken.jpg,"mutton biryani with potato (~250g rice) + bowl of chicken curry (kassa) + cucumber",745,38,72,32,"two protein dishes"
+biryani-veg.jpg,"veg biryani bowl (~250g) + raita + salan + onion + lime",520,10,72,20,
+dal-chawal.jpg,"dal tadka (generous) + jeera rice + 2-3 roasted papad",530,17,85,12,"clean overhead shot"
+rajma-chawal.jpg,"1 bowl rajma + peas pulao + palak saag + tomato raita + onion + fried side",580,19,92,14,"home thali"
+aloo-paratha.jpg,"2 aloo paratha + white butter dollop (~25g)",760,14,80,40,"butter is significant"
+vada-pav.jpg,"2 batata vada + 1 pav + dry garlic chutney + green chilli (deconstructed)",480,10,62,20,"stylized plating"
+samosa.jpg,"2 samosa + chole/ragda gravy on paper plate",640,14,72,32,"VERY dark photo — lighting edge case"
+poha.jpg,"1 serving poha (~200g) + lime wedge (close-up)",280,6,48,8,
+upma.jpg,"1 molded serving upma with peas/corn (~180g) + 2 apple slices",290,6,42,10,"tea nearby not part of meal"
+pav-bhaji.jpg,"MISAL PAV: misal with sev + tari gravy cup + chopped onion + 2 pav",745,22,92,28,"TRAP: filename says pav-bhaji; actual dish is misal pav"
+paneer-naan.jpg,"1 large butter naan + paneer butter masala (~120g, 8 cubes)",600,17,62,30,
+puri-sabzi.jpg,"3 poori + aloo sabzi + coconut chutney on banana leaf",500,8,62,24,"count partially occluded"
+khichdi.jpg,"1 plate lentil khichdi (~250g) — EXTREME close-up fills frame",320,11,55,7,"portion nearly unknowable — hardest case"
+dhokla.jpg,"~10 pieces tempered sooji dhokla + green chutney",380,12,55,12,"many small pieces"

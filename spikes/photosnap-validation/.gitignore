@@ -1,0 +1,6 @@
+images/*
+!images/.gitkeep
+results/
+*.env
+__pycache__/
+*.pyc
