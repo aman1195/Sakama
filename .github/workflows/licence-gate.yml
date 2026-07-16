@@ -68,32 +68,32 @@ jobs:
           exit $fail
 
   dependency-licences:
-    # Free replacement for dependency-review (needs no GitHub Advanced Security).
-    #
-    # This job used to exit 0 on EVERY path — including after app/pubspec.yaml
-    # existed, where it printed "TODO(M0)" and passed. A required status check
-    # that cannot go red is worse than no check, because DEVELOPER_STANDARDS.md
-    # tells the team "Green CI required: ... the licence check" and they believe
-    # it. It now FAILS LOUDLY the day M0 lands a pubspec, so the gap cannot be
-    # merged past in silence.
+    # Real transitive licence scan (the pre-M0 tripwire version of this job failed
+    # loudly once app/pubspec.yaml existed — this is the implementation it demanded).
+    # Free replacement for dependency-review, which needs GitHub Advanced Security.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Flutter dependency licences
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Transitive licence scan (very_good_cli over pubspec.lock)
+        working-directory: app
         run: |
           set -e
-          if [ ! -f app/pubspec.yaml ]; then
-            echo "ℹ️  No Flutter app yet (arrives in M0). Skipping pub licence scan."
-            echo "    Until then, the licence-guard agent is the gate for new dependencies."
-            exit 0
-          fi
-          echo "::error::app/pubspec.yaml now exists, but the pub licence scan is not implemented."
-          echo "Implement it before merging any Flutter dependency:"
-          echo "  - resolve the TRANSITIVE set from pubspec.lock (not pubspec.yaml)"
-          echo "  - fail on GPL / AGPL / LGPL / SSPL, or any package with no LICENSE"
-          echo "  - allowed: MIT, Apache-2.0, BSD, ISC, CC0"
-          echo "LGPL is the one that hides. Sakama is closed-source; contamination is existential."
-          exit 1
+          flutter pub get
+          dart pub global activate very_good_cli
+          # Allowlist rationale (CLAUDE.md rule 4: permissive only; additions reviewed):
+          #  - MPL-2.0: file-level copyleft — unmodified use in a closed app is permitted;
+          #    carried only by `gtk`, a LINUX-DESKTOP plugin that never compiles into our
+          #    iOS/Android binaries. Reviewed + accepted 2026-07 (licence-guard).
+          #  - Pixar, BSD-3-Clause-HP: SPDX-recognized permissive Apache/BSD variants,
+          #    carried by sqlcipher_flutter_libs (via powersync). Reviewed + accepted.
+          # GPL/AGPL/LGPL/SSPL are NOT in this list and will fail the build.
+          dart pub global run very_good_cli:very_good packages check licenses \
+            --dependency-type="direct-main,transitive" \
+            --allowed="MIT,Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,CC0-1.0,Zlib,BSL-1.0,Unicode-DFS-2016,Unicode-3.0,MPL-2.0,Pixar,BSD-3-Clause-HP"
 
   odbl-containment:
     # Open Food Facts is ODbL. Share-alike attaches to DERIVED DATABASES.
