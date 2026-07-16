@@ -8,8 +8,10 @@ Guidance for Claude Code when working in this repository.
 competitor whose wedge is a genuinely better LLM coaching layer. It is a **real product** headed for the
 App Store and Play Store, not a prototype. It is **closed-source and commercial**.
 
-**Status: planning complete, no application code written yet.** The next step is M0 (see
-[docs/ROADMAP.md](docs/ROADMAP.md)), which begins with a Flutter SDK install.
+**Status: M0 in progress.** Phase 0 (PhotoSnap validation) passed — GO, model =
+`gemini-2.5-flash` (see docs/research/photosnap-spike-findings.md). The Flutter scaffold
+lives in `app/` (feature-first, Riverpod, go_router, Drift v1 schema, envied env).
+Supabase/PowerSync wiring is stubbed in `lib/core/sync/` pending project credentials in `app/.env`.
 
 Read [PRODUCT.md](PRODUCT.md) before touching anything user-facing.
 
@@ -86,7 +88,18 @@ ai-gateway/           SUPERSEDED by ADR 0011 (no self-hosted proxy). Empty; may 
 
 ## Commands
 
-_None yet — the Flutter app does not exist. This section gets filled in at M0._
+Run from the repo root via [justfile](justfile), or directly in `app/`:
+
+```
+just install    # flutter pub get
+just build      # dart run build_runner build (envied + drift codegen — required after clone)
+just analyze    # flutter analyze
+just test       # flutter test (includes test/migration/ — mandatory per docs/MOBILE.md)
+just ci         # all of the above
+```
+
+After a fresh clone: `cp app/.env.example app/.env`, then `just install build` before anything else
+(generated `*.g.dart` files are gitignored on purpose).
 
 ## Conventions (to apply from M0)
 
