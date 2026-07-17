@@ -12,7 +12,6 @@ ai-gateway/config.yaml
 app/.dart_tool/
 app/build/
 app/.flutter-plugins*
-app/pubspec.lock
 **/*.g.dart
 **/*.freezed.dart
 

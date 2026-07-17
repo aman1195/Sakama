@@ -1,0 +1,36 @@
+name: Flutter CI
+
+# No path filter: if this ever becomes a required check, a filtered job would
+# never report on non-app PRs and deadlock the merge (the gates' #1 bug class).
+on:
+  pull_request:
+  push: {branches: [main]}
+
+permissions:
+  contents: read
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Pub get
+        working-directory: app
+        run: flutter pub get
+      - name: Codegen (envied needs an env file; CI uses the committed example)
+        working-directory: app
+        run: |
+          cp .env.example .env
+          dart run build_runner build --delete-conflicting-outputs
+      - name: Analyze (dart, not flutter — ONLY dart analyze loads the native
+              analyzer plugins, i.e. riverpod_lint; verified by probe. --fatal-infos
+              because plugin rules emit warnings, which exit 0 by default)
+        working-directory: app
+        run: dart analyze --fatal-infos
+      - name: Tests (includes test/migration — mandatory per docs/MOBILE.md)
+        working-directory: app
+        run: flutter test
