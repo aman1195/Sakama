@@ -1,0 +1,17 @@
+# PowerSync SYNC STREAMS for Sakama — paste into the dashboard's Sync Streams
+# editor (the current format; replaced the legacy bucket_definitions sync rules
+# our earlier sync-rules.yaml used).
+#
+# Per-user scoping: auth.user_id() is the Supabase auth.uid() carried in the
+# PowerSync JWT — each client syncs ONLY its own rows (defence-in-depth on top
+# of Postgres RLS, which stays the primary boundary for the REST path).
+#
+# auto_subscribe is LOAD-BEARING: our SupabaseConnector never calls a
+# subscribe API, so every stream here must sync by default on connect.
+config:
+  edition: 3
+
+streams:
+  user_data:
+    auto_subscribe: true
+    query: SELECT * FROM food_logs WHERE user_id = auth.user_id()
