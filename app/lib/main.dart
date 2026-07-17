@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/app.dart';
+import 'core/env/env.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Supabase/PowerSync init lands here once .env has real project values
-  // (Env.isConfigured) — offline-first means the app must run fully without it.
+  // Offline-first (CLAUDE.md rule 1): Supabase init is auth/sync plumbing only.
+  // With placeholder .env values the app runs fully local — nothing awaits the
+  // network on the startup path.
+  if (Env.isConfigured) {
+    await Supabase.initialize(url: Env.supabaseUrl, publishableKey: Env.supabaseAnonKey);
+  }
   runApp(const ProviderScope(child: SakamaApp()));
 }
