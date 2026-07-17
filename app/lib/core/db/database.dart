@@ -8,6 +8,13 @@ part 'database.g.dart';
 /// sync when PowerSync is wired (ADR 0003).
 class FoodLogs extends Table {
   TextColumn get id => text()();
+
+  /// Owner. Nullable on-device: rows can be born before first sign-in
+  /// (offline-first). Server-side the column is NOT NULL with a default of
+  /// auth.uid(), and PowerSync omits null columns from uploads, so the
+  /// default fills it. TODO(M1): set from the session at insert once auth
+  /// exists, and backfill pre-auth rows on first sign-in.
+  TextColumn get userId => text().nullable()();
   TextColumn get date => text()(); // yyyy-MM-dd (user's local day)
   TextColumn get meal => text()(); // breakfast | lunch | dinner | snack
   TextColumn get name => text()();

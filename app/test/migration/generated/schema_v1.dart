@@ -17,6 +17,14 @@ class FoodLogs extends Table with TableInfo {
     requiredDuringInsert: true,
     $customConstraints: 'NOT NULL',
   );
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    $customConstraints: 'NULL',
+  );
   late final GeneratedColumn<String> date = GeneratedColumn<String>(
     'date',
     aliasedName,
@@ -112,6 +120,7 @@ class FoodLogs extends Table with TableInfo {
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    userId,
     date,
     meal,
     name,

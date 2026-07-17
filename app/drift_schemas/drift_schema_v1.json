@@ -26,6 +26,16 @@
             "dsl_features": []
           },
           {
+            "name": "user_id",
+            "getter_name": "userId",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
             "name": "date",
             "getter_name": "date",
             "moor_type": "string",
@@ -151,7 +161,7 @@
       "sql": [
         {
           "dialect": "sqlite",
-          "sql": "CREATE TABLE IF NOT EXISTS \"food_logs\" (\"id\" TEXT NOT NULL, \"date\" TEXT NOT NULL, \"meal\" TEXT NOT NULL, \"name\" TEXT NOT NULL, \"grams\" REAL NULL, \"energy_kcal\" REAL NOT NULL, \"protein_g\" REAL NOT NULL DEFAULT 0.0, \"carb_g\" REAL NOT NULL DEFAULT 0.0, \"fat_g\" REAL NOT NULL DEFAULT 0.0, \"logged_via\" TEXT NOT NULL DEFAULT 'search', \"created_at\" INTEGER NOT NULL, \"updated_at\" INTEGER NOT NULL, PRIMARY KEY (\"id\"));"
+          "sql": "CREATE TABLE IF NOT EXISTS \"food_logs\" (\"id\" TEXT NOT NULL, \"user_id\" TEXT NULL, \"date\" TEXT NOT NULL, \"meal\" TEXT NOT NULL, \"name\" TEXT NOT NULL, \"grams\" REAL NULL, \"energy_kcal\" REAL NOT NULL, \"protein_g\" REAL NOT NULL DEFAULT 0.0, \"carb_g\" REAL NOT NULL DEFAULT 0.0, \"fat_g\" REAL NOT NULL DEFAULT 0.0, \"logged_via\" TEXT NOT NULL DEFAULT 'search', \"created_at\" INTEGER NOT NULL, \"updated_at\" INTEGER NOT NULL, PRIMARY KEY (\"id\"));"
         }
       ]
     }

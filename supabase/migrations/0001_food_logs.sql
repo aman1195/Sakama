@@ -34,14 +34,20 @@ create index food_logs_user_date_idx on public.food_logs (user_id, date);
 alter table public.food_logs enable row level security;
 alter table public.food_logs force row level security;
 
+-- (select auth.uid()) — NOT bare auth.uid(): the subquery form is evaluated once
+-- per QUERY (initPlan) instead of once per ROW. Supabase's documented RLS-perf
+-- pattern; on an unboundedly-growing table a per-row policy is a stalled sync.
+-- `to authenticated`: anon never even evaluates the policy.
+-- THIS BLOCK IS THE TEMPLATE for every future user table.
 create policy "own rows: select" on public.food_logs
-  for select using (auth.uid() = user_id);
+  for select to authenticated using ((select auth.uid()) = user_id);
 create policy "own rows: insert" on public.food_logs
-  for insert with check (auth.uid() = user_id);
+  for insert to authenticated with check ((select auth.uid()) = user_id);
 create policy "own rows: update" on public.food_logs
-  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  for update to authenticated
+  using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 create policy "own rows: delete" on public.food_logs
-  for delete using (auth.uid() = user_id);
+  for delete to authenticated using ((select auth.uid()) = user_id);
 
 -- PowerSync replicates via logical replication; its publication must cover the table.
 -- (Supabase creates the powersync publication when following the official guide; this
