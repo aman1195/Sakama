@@ -46,12 +46,15 @@ class _Shell extends StatelessWidget {
       bottomNavigationBar: NavigationBar(
         selectedIndex: shell.currentIndex,
         onDestinationSelected: shell.goBranch,
+        // Keys are the stable, locale-independent handles (CLAUDE.md a11y
+        // convention) — tests and UI drivers must never find by visible label,
+        // which breaks the day Hindi localization lands.
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
-          NavigationDestination(icon: Icon(Icons.book_outlined), label: 'Diary'),
-          NavigationDestination(icon: Icon(Icons.add_circle, size: 36), label: 'Log'),
-          NavigationDestination(icon: Icon(Icons.chat_bubble_outline), label: 'Coach'),
-          NavigationDestination(icon: Icon(Icons.person_outline), label: 'Me'),
+          NavigationDestination(key: Key('nav-home'), icon: Icon(Icons.home_outlined), label: 'Home'),
+          NavigationDestination(key: Key('nav-diary'), icon: Icon(Icons.book_outlined), label: 'Diary'),
+          NavigationDestination(key: Key('nav-capture'), icon: Icon(Icons.add_circle, size: 36), label: 'Log'),
+          NavigationDestination(key: Key('nav-coach'), icon: Icon(Icons.chat_bubble_outline), label: 'Coach'),
+          NavigationDestination(key: Key('nav-me'), icon: Icon(Icons.person_outline), label: 'Me'),
         ],
       ),
     );

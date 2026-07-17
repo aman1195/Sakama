@@ -84,16 +84,18 @@ jobs:
           set -e
           flutter pub get
           dart pub global activate very_good_cli
-          # Allowlist rationale (CLAUDE.md rule 4: permissive only; additions reviewed):
-          #  - MPL-2.0: file-level copyleft — unmodified use in a closed app is permitted;
-          #    carried only by `gtk`, a LINUX-DESKTOP plugin that never compiles into our
-          #    iOS/Android binaries. Reviewed + accepted 2026-07 (licence-guard).
-          #  - Pixar, BSD-3-Clause-HP: SPDX-recognized permissive Apache/BSD variants,
-          #    carried by sqlcipher_flutter_libs (via powersync). Reviewed + accepted.
-          # GPL/AGPL/LGPL/SSPL are NOT in this list and will fail the build.
+          # Allowlist = permissive classes ONLY (CLAUDE.md rule 4). Exceptions are scoped
+          # to the EXACT package via --skip-packages so a future dep with the same licence
+          # class still trips the gate (review 2026-07-17):
+          #  - gtk (MPL-2.0): Linux-desktop-only plugin — never compiles into our
+          #    iOS/Android binaries; MPL file-level copyleft permits unmodified use.
+          #  - sqlcipher_flutter_libs (Pixar + BSD-3-Clause-HP): SPDX-recognized
+          #    permissive Apache/BSD variants, pulled by powersync.
+          # direct-dev included: a GPL code GENERATOR would contaminate generated output.
           dart pub global run very_good_cli:very_good packages check licenses \
-            --dependency-type="direct-main,transitive" \
-            --allowed="MIT,Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,CC0-1.0,Zlib,BSL-1.0,Unicode-DFS-2016,Unicode-3.0,MPL-2.0,Pixar,BSD-3-Clause-HP"
+            --dependency-type="direct-main,direct-dev,transitive" \
+            --skip-packages="gtk,sqlcipher_flutter_libs" \
+            --allowed="MIT,Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,CC0-1.0,Zlib,BSL-1.0,Unicode-DFS-2016,Unicode-3.0"
 
   odbl-containment:
     # Open Food Facts is ODbL. Share-alike attaches to DERIVED DATABASES.
