@@ -28,14 +28,17 @@ void main() {
       ],
       child: const SakamaApp(),
     ));
-    // Bounded pumps, NOT pumpAndSettle: the Home branch shows an infinitely
-    // animating spinner while the db future resolves, so settle can never
-    // complete (its default timeout is 10 minutes — learned the hard way).
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
-    await tester.pump(const Duration(milliseconds: 100));
-
-    // Proves the override actually resolved (no stuck loading state).
+    // NOT pumpAndSettle: the Home branch shows an infinitely animating spinner
+    // while the db future resolves, so settle can never complete (its default
+    // timeout is 10 minutes). Pump until the spinner CLEARS rather than a fixed
+    // count: the onboarding gate added async hops (profile stream -> redirect
+    // off /splash -> shell mounts -> HomePage db resolves), so the settle point
+    // moved past the old 3-pump count. Robust against the exact timing.
+    for (var i = 0;
+        i < 40 && tester.any(find.byType(CircularProgressIndicator));
+        i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
     expect(find.byType(CircularProgressIndicator), findsNothing);
 
     for (final id in ['nav-home', 'nav-diary', 'nav-capture', 'nav-coach', 'nav-me']) {

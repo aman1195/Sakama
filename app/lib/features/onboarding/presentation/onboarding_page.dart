@@ -24,6 +24,12 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   int _page = 0;
   static const _lastStep = 6; // 0..5 questions, 6 = preview
 
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
   void _go(int page) {
     setState(() => _page = page);
     _controller.animateToPage(page,
