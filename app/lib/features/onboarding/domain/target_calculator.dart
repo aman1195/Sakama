@@ -57,12 +57,30 @@ class TargetCalculator {
         _ => 0.30,
       };
 
+  /// Minimum share of calories reserved for carbohydrate. Prevents an
+  /// accidental near-zero-carb (quasi-keto) prescription at extreme profiles,
+  /// where body-weight protein + fat would otherwise consume the whole budget.
+  static const _carbFloorFraction = 0.15;
+
   NutritionTargets targets(Profile p) {
     final kcal = calorieTarget(p);
-    final proteinG = (proteinGPerKg(p.goal) * p.weightKg).round();
+
+    // Fat first (a bounded fraction of calories).
     final fatG = (kcal * fatFraction(p.goal) / _kcalPerG['fat']!).round();
-    // Carbs fill the remainder; never negative (very low targets + high
-    // body-weight protein can consume the whole budget).
+    final fatKcal = fatG * _kcalPerG['fat']!;
+
+    // Protein is anchored to body weight, but CAPPED so it can never push the
+    // macro total past the calorie target or starve carbs below the floor.
+    // (The clinical refinement — lean/adjusted weight for severe obesity — is a
+    // deeper change; this cap keeps the numbers self-consistent meanwhile.)
+    final carbFloorKcal = kcal * _carbFloorFraction;
+    final maxProteinKcal = kcal - fatKcal - carbFloorKcal;
+    final desiredProteinKcal = proteinGPerKg(p.goal) * p.weightKg * 4;
+    final proteinG =
+        (math.min(desiredProteinKcal, maxProteinKcal) / _kcalPerG['protein']!)
+            .round();
+
+    // Carbs take the remainder — now guaranteed positive by the reserve above.
     final remainderKcal = kcal - proteinG * 4 - fatG * 9;
     final carbG = math.max(0, (remainderKcal / _kcalPerG['carb']!).round());
     return NutritionTargets(

@@ -81,13 +81,37 @@ void main() {
   });
 
   group('targets: macros, protein-by-bodyweight, fibre + water', () {
-    test('every goal: protein+carb+fat kcal within rounding of target', () {
-      for (final goal in Goal.values) {
-        final t = calc.targets(p(goal: goal));
-        final macroKcal = t.proteinG * 4 + t.carbG * 4 + t.fatG * 9;
-        expect((macroKcal - t.calories).abs(), lessThanOrEqualTo(12),
-            reason: 'goal $goal: macro kcal $macroKcal vs ${t.calories}');
+    test('macros reconcile to calories across a full profile SWEEP (never over)', () {
+      // The prior version only ran the 70kg default and missed the extreme-
+      // profile overshoot the reviewer found. Sweep the realistic envelope.
+      var checked = 0;
+      for (final age in [15, 30, 60, 90]) {
+        for (final kg in [40.0, 70.0, 120.0, 198.0]) {
+          for (final cm in [140.0, 175.0, 200.0]) {
+            for (final sex in Sex.values) {
+              for (final act in ActivityLevel.values) {
+                for (final goal in Goal.values) {
+                  final t = calc.targets(Profile(
+                    ageYears: age, weightKg: kg, heightCm: cm, sex: sex,
+                    activity: act, goal: goal,
+                    diet: DietPreference.veg, cuisine: CuisinePreference.both));
+                  final macroKcal = t.proteinG * 4 + t.carbG * 4 + t.fatG * 9;
+                  // Reconcile within rounding, and CRUCIALLY never exceed the
+                  // stated target (a dashboard must not contradict itself).
+                  expect(macroKcal, lessThanOrEqualTo(t.calories + 6),
+                      reason: 'OVERSHOOT $sex/$kg kg/$goal: $macroKcal > ${t.calories}');
+                  expect((macroKcal - t.calories).abs(), lessThanOrEqualTo(12));
+                  // Carbs never zero — no accidental keto prescription.
+                  expect(t.carbG, greaterThan(0),
+                      reason: 'zero carbs $sex/$kg kg/$goal');
+                  checked++;
+                }
+              }
+            }
+          }
+        }
       }
+      expect(checked, greaterThan(1000));
     });
     test('protein is anchored to body weight, not the calorie budget', () {
       // 70kg loseWeight = 2.0 g/kg = 140g, DESPITE fewer calories than maintain
@@ -98,14 +122,16 @@ void main() {
       expect(calc.targets(p(goal: Goal.loseWeight)).proteinG,
           greaterThan(calc.targets(p(goal: Goal.maintain)).proteinG));
     });
-    test('carbs never go negative on a low target with high protein', () {
-      for (final goal in Goal.values) {
-        final t = calc.targets(Profile(
-          ageYears: 25, weightKg: 45, heightCm: 150, sex: Sex.female,
-          activity: ActivityLevel.sedentary, goal: goal,
-          diet: DietPreference.veg, cuisine: CuisinePreference.both));
-        expect(t.carbG, greaterThanOrEqualTo(0), reason: '$goal');
-      }
+    test("reviewer's exact overshoot repro is now self-consistent", () {
+      // female 90yr 198kg 140cm sedentary loseWeight: previously 396p/0c/72f
+      // = 2232 kcal against a 2150 target. Protein must now be capped, carbs > 0.
+      final t = calc.targets(Profile(
+        ageYears: 90, weightKg: 198, heightCm: 140, sex: Sex.female,
+        activity: ActivityLevel.sedentary, goal: Goal.loseWeight,
+        diet: DietPreference.veg, cuisine: CuisinePreference.both));
+      final macroKcal = t.proteinG * 4 + t.carbG * 4 + t.fatG * 9;
+      expect(macroKcal, lessThanOrEqualTo(t.calories + 6));
+      expect(t.carbG, greaterThan(0));
     });
     test('fibre = 14 g per 1000 kcal', () {
       final t = calc.targets(p()); // 2560 kcal
