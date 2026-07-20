@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sakama/app/app.dart';
 import 'package:sakama/core/db/database.dart';
 import 'package:sakama/core/providers/app_providers.dart';
+import 'package:sakama/features/home/presentation/widgets/calorie_budget_ring.dart';
 import 'package:sakama/features/onboarding/domain/enums.dart';
 import 'package:sakama/features/onboarding/domain/profile_record.dart';
 
@@ -28,18 +29,18 @@ void main() {
       ],
       child: const SakamaApp(),
     ));
-    // NOT pumpAndSettle: the Home branch shows an infinitely animating spinner
-    // while the db future resolves, so settle can never complete (its default
-    // timeout is 10 minutes). Pump until the spinner CLEARS rather than a fixed
-    // count: the onboarding gate added async hops (profile stream -> redirect
-    // off /splash -> shell mounts -> HomePage db resolves), so the settle point
-    // moved past the old 3-pump count. Robust against the exact timing.
+    // NOT pumpAndSettle: the calorie ring animates forever, so settle never
+    // completes. Pump until the Home CONTENT appears (the dashboard resolved
+    // through the gate's async hops). Waiting on the ring — not on the ABSENCE
+    // of a CircularProgressIndicator — because the ring IS a
+    // CircularProgressIndicator, so "no spinner" would never hold.
     for (var i = 0;
-        i < 40 && tester.any(find.byType(CircularProgressIndicator));
+        i < 40 && tester.widgetList(find.byType(CalorieBudgetRing)).isEmpty;
         i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(CalorieBudgetRing), findsOneWidget,
+        reason: 'Home dashboard should have resolved past loading');
 
     for (final id in ['nav-home', 'nav-diary', 'nav-capture', 'nav-coach', 'nav-me']) {
       expect(find.byKey(Key(id)), findsOneWidget, reason: '$id missing');
