@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/providers/app_providers.dart';
-import '../features/capture/presentation/capture_page.dart';
+import '../features/capture/presentation/quick_add_page.dart';
 import '../features/coach/presentation/coach_page.dart';
 import '../features/diary/presentation/diary_page.dart';
+import '../features/home/domain/day_totals.dart';
 import '../features/home/presentation/home_page.dart';
 import '../features/me/presentation/me_page.dart';
 import '../features/onboarding/presentation/onboarding_page.dart';
@@ -37,6 +38,14 @@ final routerProvider = Provider<GoRouter>((ref) {
             const Scaffold(body: Center(child: CircularProgressIndicator())),
       ),
       GoRoute(path: '/onboarding', builder: (_, _) => const OnboardingPage()),
+      GoRoute(
+        path: '/add',
+        builder: (context, state) {
+          final mealKey = state.uri.queryParameters['meal'];
+          final meal = Meal.values.where((m) => m.key == mealKey).firstOrNull;
+          return QuickAddPage(initialMeal: meal);
+        },
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => _Shell(shell: shell),
         branches: [
@@ -47,7 +56,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             GoRoute(path: '/diary', builder: (_, _) => const DiaryPage()),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(path: '/capture', builder: (_, _) => const CapturePage()),
+            GoRoute(path: '/capture', builder: (_, _) => const QuickAddPage()),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(path: '/coach', builder: (_, _) => const CoachPage()),
