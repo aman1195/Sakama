@@ -4,6 +4,7 @@ import 'package:sakama/core/db/database.dart';
 
 import 'generated/schema.dart';
 import 'generated/schema_v1.dart' as v1;
+import 'generated/schema_v2.dart' as v2;
 
 /// The migration harness required by docs/MOBILE.md and docs/REVIEW.md §6.1:
 /// a bad on-device migration destroys user data irrecoverably, so every schema
@@ -50,13 +51,42 @@ void main() {
     await db.close();
   });
 
-  test('database schema matches the committed v2 snapshot', () async {
+  test('v2 -> v3 migration adds water_logs + weight_logs AND preserves data',
+      () async {
+    final schema = await verifier.schemaAt(2);
+    final v2Db = v2.DatabaseAtV2(schema.newConnection());
+    // Seed a v2 food_log AND a v2 profile; both must survive to v3.
+    await v2Db.customStatement(
+      "INSERT INTO food_logs (id, date, meal, name, energy_kcal, protein_g, "
+      "carb_g, fat_g, logged_via, created_at, updated_at) "
+      "VALUES ('fl','2026-07-20','lunch','dal',180,9,22,6,'quick_add',1,1)");
+    await v2Db.customStatement(
+      "INSERT INTO profiles (id, dob, weight_kg, height_cm, sex, activity, "
+      "goal, diet, cuisine, conditions, onboarding_complete, created_at, "
+      "updated_at) VALUES ('p','1994-01-01',70,175,'male','moderate','maintain',"
+      "'veg','both','',1,1,1)");
+    await v2Db.close();
+
+    final db = SakamaDatabase.withExecutor(schema.newConnection());
+    await verifier.migrateAndValidate(db, 3);
+
+    expect((await db.select(db.foodLogs).get()).map((r) => r.id), contains('fl'),
+        reason: 'food_logs must survive v3');
+    expect((await db.select(db.profiles).get()).map((r) => r.id), contains('p'),
+        reason: 'profiles must survive v3');
+    // The two new tables exist and are usable.
+    expect(await db.select(db.waterLogs).get(), isEmpty);
+    expect(await db.select(db.weightLogs).get(), isEmpty);
+    await db.close();
+  });
+
+  test('database schema matches the committed v3 snapshot', () async {
     // Creates a fresh db from SakamaDatabase's Dart definitions and diffs it
     // against drift_schemas/drift_schema_v1.json. Fails if the code drifts
     // from the committed snapshot without a new schema version + migration.
-    final connection = await verifier.startAt(2);
+    final connection = await verifier.startAt(3);
     final db = SakamaDatabase.withExecutor(connection);
-    await verifier.migrateAndValidate(db, 2);
+    await verifier.migrateAndValidate(db, 3);
     await db.close();
   });
 

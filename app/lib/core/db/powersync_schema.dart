@@ -36,4 +36,19 @@ const powersyncSchema = Schema([
     Column.integer('created_at'),
     Column.integer('updated_at'),
   ]),
+  Table('water_logs', [
+    Column.text('user_id'),
+    Column.text('date'),
+    Column.integer('amount_ml'),
+    Column.integer('created_at'),
+    Column.integer('updated_at'),
+  ]),
+  Table('weight_logs', [
+    Column.text('user_id'),
+    Column.text('date'),
+    Column.real('weight_kg'),
+    Column.text('note'),
+    Column.integer('created_at'),
+    Column.integer('updated_at'),
+  ]),
 ]);

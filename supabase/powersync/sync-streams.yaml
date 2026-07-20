@@ -19,3 +19,11 @@ streams:
   user_profile:
     auto_subscribe: true
     query: SELECT * FROM profiles WHERE user_id = auth.user_id()
+
+  user_water:
+    auto_subscribe: true
+    query: SELECT * FROM water_logs WHERE user_id = auth.user_id()
+
+  user_weight:
+    auto_subscribe: true
+    query: SELECT * FROM weight_logs WHERE user_id = auth.user_id()
