@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../features/capture/data/food_log_repository.dart';
 import '../../features/onboarding/data/profile_repository.dart';
 import '../../features/onboarding/domain/profile_record.dart';
 import '../db/database.dart';
@@ -33,6 +34,11 @@ final databaseProvider = FutureProvider<SakamaDatabase>((ref) async {
 final profileRepositoryProvider = FutureProvider<ProfileRepository>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return ProfileRepository(db);
+});
+
+final foodLogRepositoryProvider = FutureProvider<FoodLogRepository>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return FoodLogRepository(db);
 });
 
 /// The persisted profile, live. Null until onboarding writes it.

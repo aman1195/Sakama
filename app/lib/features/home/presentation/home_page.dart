@@ -1,9 +1,6 @@
-import 'package:drift/drift.dart' show Value;
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:powersync/powersync.dart' show uuid;
 
 import '../../../core/db/database.dart';
 import '../../../core/providers/app_providers.dart';
@@ -46,17 +43,13 @@ class HomePage extends ConsumerWidget {
       identifier: 'home-page',
       child: Scaffold(
         appBar: AppBar(title: const Text('Today')),
-        // Debug-only sample entry so the dashboard has data before slice 5's
-        // real search-logging exists. kDebugMode -> tree-shaken from release.
-        floatingActionButton: kDebugMode
-            ? Semantics(
-                identifier: 'dev-add-log',
-                child: FloatingActionButton(
-                  onPressed: () => _addSample(ref),
-                  child: const Icon(Icons.add),
-                ),
-              )
-            : null,
+        floatingActionButton: Semantics(
+          identifier: 'home-add-food',
+          child: FloatingActionButton(
+            onPressed: () => context.push('/add'),
+            child: const Icon(Icons.add),
+          ),
+        ),
         body: logsAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Center(child: Text('Error: $e')),
@@ -87,7 +80,7 @@ class HomePage extends ConsumerWidget {
                   MealSlotCard(
                     meal: meal,
                     entries: byMeal[meal]!,
-                    onAdd: () => context.go('/capture'),
+                    onAdd: () => context.push('/add?meal=${meal.key}'),
                   ),
               ],
             );
@@ -97,22 +90,4 @@ class HomePage extends ConsumerWidget {
     );
   }
 
-  Future<void> _addSample(WidgetRef ref) async {
-    final db = await ref.read(databaseProvider.future);
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final meal = Meal.values[(now ~/ 1000) % Meal.values.length];
-    await db.into(db.foodLogs).insert(FoodLogsCompanion.insert(
-          id: uuid.v4(),
-          userId: Value(ref.read(currentUserIdProvider)),
-          date: _today(),
-          meal: meal.key,
-          name: 'dal tadka',
-          energyKcal: 180,
-          proteinG: const Value(9),
-          carbG: const Value(22),
-          fatG: const Value(6),
-          createdAt: now,
-          updatedAt: now,
-        ));
-  }
 }
