@@ -52,4 +52,15 @@ class SyncService {
   }
 
   Future<void> disconnect() async => _psDb?.disconnect();
+
+  /// User switch / sign-out: local synced data belongs to the OLD identity and
+  /// must not leak to the next signer-in. (Plain disconnect keeps local data —
+  /// correct for a temporary sign-out of the SAME user; the M1 auth flow will
+  /// choose per case. The dev harness and the isolation test use clear.)
+  Future<void> disconnectAndClear() async => _psDb?.disconnectAndClear();
+
+  /// Test/orchestration seams.
+  Future<void> waitForFirstSync() async => _psDb?.waitForFirstSync();
+  Future<int> uploadQueueCount() async =>
+      (await _psDb?.getUploadQueueStats())?.count ?? 0;
 }
