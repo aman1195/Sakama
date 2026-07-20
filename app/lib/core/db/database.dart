@@ -31,7 +31,33 @@ class FoodLogs extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-@DriftDatabase(tables: [FoodLogs])
+/// The user's onboarding profile — one row per user. Enums are stored by name
+/// (their `.name` string), conditions as a comma-joined list, dob as yyyy-MM-dd
+/// (age is DERIVED at read time — storing age would silently go stale). Mirrors
+/// supabase/migrations and powersync_schema.dart (the three-file sync contract).
+@DataClassName('ProfileRow') // avoid colliding with the domain Profile
+class Profiles extends Table {
+  TextColumn get id => text()();
+  TextColumn get userId => text().nullable()(); // same offline-birth rule as FoodLogs
+  TextColumn get dob => text()(); // yyyy-MM-dd
+  RealColumn get weightKg => real()();
+  RealColumn get heightCm => real()();
+  TextColumn get sex => text()();
+  TextColumn get activity => text()();
+  TextColumn get goal => text()();
+  TextColumn get diet => text()();
+  TextColumn get cuisine => text()();
+  TextColumn get conditions => text().withDefault(const Constant(''))();
+  BoolColumn get onboardingComplete =>
+      boolean().withDefault(const Constant(false))();
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()(); // LWW
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DriftDatabase(tables: [FoodLogs, Profiles])
 class SakamaDatabase extends _$SakamaDatabase {
   SakamaDatabase()
       : managedExternally = false,
@@ -49,16 +75,21 @@ class SakamaDatabase extends _$SakamaDatabase {
   final bool managedExternally;
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => managedExternally
       ? MigrationStrategy(onCreate: (m) async {}, onUpgrade: (m, from, to) async {})
       : MigrationStrategy(
           onCreate: (m) async => m.createAll(),
-          // MOBILE.md rule: every future schema change ships a tested, forward-only
-          // migration here. A bad migration destroys user data irrecoverably.
-          onUpgrade: (m, from, to) async {},
+          // MOBILE.md rule: every schema change ships a tested, forward-only
+          // migration. A bad migration destroys user data irrecoverably.
+          // v2: add the profiles table. Additive — no existing data touched.
+          onUpgrade: (m, from, to) async {
+            if (from < 2) {
+              await m.createTable(profiles);
+            }
+          },
         );
 
   Stream<List<FoodLog>> watchDay(String date) =>
