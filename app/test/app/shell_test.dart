@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sakama/app/app.dart';
 import 'package:sakama/core/db/database.dart';
 import 'package:sakama/core/providers/app_providers.dart';
+import 'package:sakama/features/onboarding/domain/enums.dart';
+import 'package:sakama/features/onboarding/domain/profile_record.dart';
 
 void main() {
   testWidgets('shell renders five tabs and actually switches branches',
@@ -13,18 +15,30 @@ void main() {
     // tests override it with in-memory Drift, per its own contract.
     final db = SakamaDatabase.withExecutor(NativeDatabase.memory());
     addTearDown(db.close);
+    // A completed profile so the onboarding gate lets us reach the shell.
+    final onboarded = ProfileRecord(
+      dob: DateTime(1994, 1, 1), weightKg: 70, heightCm: 175, sex: Sex.male,
+      activity: ActivityLevel.moderate, goal: Goal.maintain,
+      diet: DietPreference.veg, cuisine: CuisinePreference.both,
+      onboardingComplete: true);
     await tester.pumpWidget(ProviderScope(
-      overrides: [databaseProvider.overrideWith((ref) async => db)],
+      overrides: [
+        databaseProvider.overrideWith((ref) async => db),
+        profileProvider.overrideWith((ref) => Stream.value(onboarded)),
+      ],
       child: const SakamaApp(),
     ));
-    // Bounded pumps, NOT pumpAndSettle: the Home branch shows an infinitely
-    // animating spinner while the db future resolves, so settle can never
-    // complete (its default timeout is 10 minutes — learned the hard way).
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
-    await tester.pump(const Duration(milliseconds: 100));
-
-    // Proves the override actually resolved (no stuck loading state).
+    // NOT pumpAndSettle: the Home branch shows an infinitely animating spinner
+    // while the db future resolves, so settle can never complete (its default
+    // timeout is 10 minutes). Pump until the spinner CLEARS rather than a fixed
+    // count: the onboarding gate added async hops (profile stream -> redirect
+    // off /splash -> shell mounts -> HomePage db resolves), so the settle point
+    // moved past the old 3-pump count. Robust against the exact timing.
+    for (var i = 0;
+        i < 40 && tester.any(find.byType(CircularProgressIndicator));
+        i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
     expect(find.byType(CircularProgressIndicator), findsNothing);
 
     for (final id in ['nav-home', 'nav-diary', 'nav-capture', 'nav-coach', 'nav-me']) {
