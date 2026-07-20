@@ -54,13 +54,28 @@ class SyncService {
   Future<void> disconnect() async => _psDb?.disconnect();
 
   /// User switch / sign-out: local synced data belongs to the OLD identity and
-  /// must not leak to the next signer-in. (Plain disconnect keeps local data —
-  /// correct for a temporary sign-out of the SAME user; the M1 auth flow will
-  /// choose per case. The dev harness and the isolation test use clear.)
+  /// must not leak to the next signer-in.
+  ///
+  /// ⚠️ DESTRUCTIVE: this also deletes the PENDING UPLOAD QUEUE (ps_crud) —
+  /// any row written offline that has not yet uploaded is gone, locally and
+  /// irrecoverably. Correct for the dev harness and the isolation test; the
+  /// M1 auth flow must decide deliberately between plain disconnect()
+  /// (same-user re-login, keeps data) and a bounded drain-then-clear for real
+  /// user switches. Tracked as an M1 design decision.
   Future<void> disconnectAndClear() async => _psDb?.disconnectAndClear();
 
-  /// Test/orchestration seams.
-  Future<void> waitForFirstSync() async => _psDb?.waitForFirstSync();
+  /// Test/orchestration seams. Fail loudly if the database was never opened —
+  /// a null no-op here would make "queue drained" / "first sync done" pass
+  /// vacuously in a test that forgot open().
+  Future<void> waitForFirstSync() => _requireDb().waitForFirstSync();
   Future<int> uploadQueueCount() async =>
-      (await _psDb?.getUploadQueueStats())?.count ?? 0;
+      (await _requireDb().getUploadQueueStats()).count;
+
+  PowerSyncDatabase _requireDb() {
+    final db = _psDb;
+    if (db == null) {
+      throw StateError('SyncService.open() must be called first');
+    }
+    return db;
+  }
 }

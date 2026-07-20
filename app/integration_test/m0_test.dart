@@ -25,7 +25,7 @@ import 'package:sakama/core/sync/sync_service.dart';
 const phase = String.fromEnvironment('PHASE');
 const email = String.fromEnvironment('EMAIL');
 const password = String.fromEnvironment('PASSWORD');
-const marker = String.fromEnvironment('MARKER', defaultValue: 'm0-marker');
+const marker = String.fromEnvironment('MARKER'); // REQUIRED, unique per run
 
 Future<void> _retry(Future<bool> Function() check, String what,
     {int seconds = 60}) async {
@@ -41,6 +41,10 @@ void main() {
 
   test('m0 phase: $phase', () async {
     expect(Env.isConfigured, isTrue, reason: 'real .env required');
+    // A reused marker lets a re-run pass on a STALE server row from an earlier
+    // execution while this run's upload silently failed (review f5fdb22 #1).
+    expect(marker, isNotEmpty,
+        reason: 'pass a unique --dart-define=MARKER=<run-id> per run');
     await Supabase.initialize(url: Env.supabaseUrl, publishableKey: Env.supabaseAnonKey);
     final sync = SyncService();
     final db = await sync.open();
@@ -65,8 +69,9 @@ void main() {
 
         await auth.signInWithPassword(email: email, password: password);
         final uid = auth.currentSession!.user.id;
+        final authedId = uuid.v4();
         await db.into(db.foodLogs).insert(FoodLogsCompanion.insert(
-              id: uuid.v4(), date: today, meal: 'lunch',
+              id: authedId, date: today, meal: 'lunch',
               name: '$marker-authed', energyKcal: 222,
               userId: Value(uid), createdAt: now, updatedAt: now,
             ));
@@ -78,10 +83,12 @@ void main() {
 
         // Server-side proof via REST as tester-a (RLS-scoped).
         final rows = await Supabase.instance.client
-            .from('food_logs').select('name,user_id');
+            .from('food_logs').select('id,name,user_id');
+        // Assert on the exact id inserted THIS run — name-matching would pass
+        // vacuously on a stale row from a previous execution.
+        expect([for (final r in rows) r['id'] as String], contains(authedId),
+            reason: 'THIS run\'s authed row must reach Postgres');
         final names = [for (final r in rows) r['name'] as String];
-        expect(names, contains('$marker-authed'),
-            reason: 'authed row must reach Postgres');
         // The pre-auth row: PASS either way, but RECORD the answer to the bet.
         // ignore: avoid_print
         print('NULL-USERID-BET: preauth row synced = '
