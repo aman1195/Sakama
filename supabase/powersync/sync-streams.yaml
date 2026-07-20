@@ -15,3 +15,7 @@ streams:
   user_data:
     auto_subscribe: true
     query: SELECT * FROM food_logs WHERE user_id = auth.user_id()
+
+  user_profile:
+    auto_subscribe: true
+    query: SELECT * FROM profiles WHERE user_id = auth.user_id()
