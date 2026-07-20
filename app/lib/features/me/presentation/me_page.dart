@@ -58,7 +58,9 @@ class _DevSignInCardState extends ConsumerState<_DevSignInCard> {
   }
 
   Future<void> _signOut() async {
-    await ref.read(syncServiceProvider).disconnect();
+    // Dev harness uses user-SWITCH semantics: clear local synced data so the
+    // next signer-in cannot see the previous user's rows.
+    await ref.read(syncServiceProvider).disconnectAndClear();
     await Supabase.instance.client.auth.signOut();
     setState(() => _status = 'signed out');
   }
