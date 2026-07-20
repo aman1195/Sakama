@@ -3,7 +3,7 @@ import 'package:powersync/powersync.dart';
 /// PowerSync's view of the synced schema. MUST stay column-compatible with:
 ///  - the Drift tables in database.dart (client source of truth), and
 ///  - supabase/migrations/*.sql (server source of truth).
-/// A new synced table/column touches all three, plus sync-rules.yaml.
+/// A new synced table/column touches all three, plus sync-streams.yaml.
 ///
 /// `id` is implicit in PowerSync tables (client-generated text UUID).
 const powersyncSchema = Schema([
