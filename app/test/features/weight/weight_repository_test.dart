@@ -33,4 +33,15 @@ void main() {
     await repo.add(date: '2026-07-20', weightKg: 69);
     expect((await repo.watchLatest().first)!.weightKg, 69);
   });
+
+  test('watchAll orders same-day entries by createdAt (the rendered path)',
+      () async {
+    // PR #23 nit 1: the UI shows entries.last from watchAll, so same-day order
+    // must be deterministic here too — .last is the later-created weigh-in.
+    await repo.add(date: '2026-07-20', weightKg: 70);
+    await repo.add(date: '2026-07-20', weightKg: 69);
+    final all = await repo.watchAll().first;
+    expect(all.map((w) => w.weightKg), [70, 69]);
+    expect(all.last.weightKg, 69);
+  });
 }

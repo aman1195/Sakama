@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/body_metrics.dart';
 import '../../../core/db/database.dart';
 import '../../../core/providers/app_providers.dart';
 
@@ -58,7 +59,13 @@ class WeightSection extends ConsumerWidget {
                     if (entries.length < 2)
                       const Text('Log a couple of days to see your trend.')
                     else
-                      SizedBox(height: 180, child: _WeightChart(entries)),
+                      SizedBox(
+                        height: 180,
+                        child: Semantics(
+                          label: 'Weight trend',
+                          child: _WeightChart(entries),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -91,7 +98,9 @@ class WeightSection extends ConsumerWidget {
               validator: (v) {
                 final n = double.tryParse((v ?? '').trim());
                 if (n == null) return 'Enter a number';
-                if (n < 20 || n > 400) return 'Out of range';
+                if (n < BodyMetrics.minWeightKg || n > BodyMetrics.maxWeightKg) {
+                  return 'Out of range';
+                }
                 return null;
               },
             ),
