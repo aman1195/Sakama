@@ -86,7 +86,70 @@ class WeightLogs extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-@DriftDatabase(tables: [FoodLogs, Profiles, WaterLogs, WeightLogs])
+/// The food reference table — the searchable corpus users log against
+/// (INDB CC-BY + USDA CC0 once real ingestion lands in M2.2; a labelled sample
+/// today). READ-ONLY REFERENCE DATA, not per-user: it is a PowerSync
+/// `localOnly` table (see powersync_schema.dart), so it never syncs and never
+/// enters the upload queue, and there is deliberately NO Supabase mirror.
+///
+/// Every row carries source / licence / confidence (CLAUDE.md rule 7) so we can
+/// prove provenance and rank verified data above AI estimates. Nutrition is
+/// canonical PER 100 g (CLAUDE.md); per-serving is derived at read time.
+@DataClassName('FoodRow')
+class Foods extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  TextColumn get nameHi => text().nullable()();
+  TextColumn get type => text()(); // dish | ingredient | branded
+  TextColumn get cuisineRegion => text().nullable()();
+  TextColumn get foodGroup => text().nullable()();
+  RealColumn get energyKcal => real()(); // per 100 g
+  RealColumn get proteinG => real()();
+  RealColumn get carbG => real()();
+  RealColumn get fatG => real()();
+  RealColumn get fiberG => real().nullable()();
+  TextColumn get defaultServingLabel => text().nullable()(); // "1 katori"
+  RealColumn get defaultServingGrams => real().nullable()();
+  TextColumn get source => text()(); // sample | indb | usda_fdc | ai_estimate
+  TextColumn get licence => text()(); // CC0 | CC-BY-4.0 | ODbL | computed
+  RealColumn get confidence => real()(); // 0..1 — 1.0 measured, lower for AI
+  TextColumn get sourceRef => text().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Open Food Facts foods — ODbL. PHYSICALLY SEPARATE from [Foods] by mandate
+/// (CLAUDE.md rule 5: the single biggest legal risk in the stack). Its share-
+/// alike licence must never contaminate the proprietary table, so the boundary
+/// is structural, not a `source` filter on a shared table. Also `localOnly`.
+/// Empty until the OFF snapshot + barcode work in M2.3; declared now so the
+/// separation is a schema-level invariant, not a future migration.
+@DataClassName('OffFoodRow')
+class OffFoods extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  TextColumn get barcode => text().nullable()();
+  TextColumn get type => text()();
+  TextColumn get cuisineRegion => text().nullable()();
+  TextColumn get foodGroup => text().nullable()();
+  RealColumn get energyKcal => real()();
+  RealColumn get proteinG => real()();
+  RealColumn get carbG => real()();
+  RealColumn get fatG => real()();
+  RealColumn get fiberG => real().nullable()();
+  TextColumn get defaultServingLabel => text().nullable()();
+  RealColumn get defaultServingGrams => real().nullable()();
+  TextColumn get source => text()(); // always 'openfoodfacts'
+  TextColumn get licence => text()(); // always 'ODbL'
+  RealColumn get confidence => real()();
+  TextColumn get sourceRef => text().nullable()(); // OFF:<barcode>
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DriftDatabase(tables: [FoodLogs, Profiles, WaterLogs, WeightLogs, Foods, OffFoods])
 class SakamaDatabase extends _$SakamaDatabase {
   SakamaDatabase()
       : managedExternally = false,
@@ -104,7 +167,7 @@ class SakamaDatabase extends _$SakamaDatabase {
   final bool managedExternally;
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => managedExternally
@@ -121,6 +184,14 @@ class SakamaDatabase extends _$SakamaDatabase {
             if (from < 3) {
               await m.createTable(waterLogs);
               await m.createTable(weightLogs);
+            }
+            if (from < 4) {
+              // Local-only reference tables. In production PowerSync creates
+              // these (localOnly schema); this Drift DDL path runs only in
+              // plain-Drift mode (tests/local-only). Additive — no existing
+              // user row is touched.
+              await m.createTable(foods);
+              await m.createTable(offFoods);
             }
           },
         );

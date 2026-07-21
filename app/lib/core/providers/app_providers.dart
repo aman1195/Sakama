@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/capture/data/food_log_repository.dart';
+import '../../features/foods/data/food_repository.dart';
 import '../../features/onboarding/data/profile_repository.dart';
 import '../../features/water/data/water_repository.dart';
 import '../../features/weight/data/weight_repository.dart';
@@ -53,6 +54,15 @@ final waterRepositoryProvider = FutureProvider<WaterRepository>((ref) async {
 final weightRepositoryProvider = FutureProvider<WeightRepository>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return WeightRepository(db);
+});
+
+/// The food reference repository, seeded on first access (idempotent). The
+/// seed is a labelled sample today; real INDB/USDA ingestion lands in M2.2.
+final foodRepositoryProvider = FutureProvider<FoodRepository>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  final repo = FoodRepository(db);
+  await repo.ensureSeeded();
+  return repo;
 });
 
 /// The persisted profile, live. Null until onboarding writes it.
