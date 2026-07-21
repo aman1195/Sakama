@@ -53,10 +53,19 @@ void main() {
           child: MaterialApp(home: QuickAddPage(initialMeal: meal)),
         );
 
+    // Tall surface: the form (search + meal + name + optional grams + 4 macro
+    // fields + save) exceeds the default 600px, and off-screen ListView
+    // children are not built, so the save button would be unfindable.
+    Future<void> pumpTall(WidgetTester tester, Meal? meal) async {
+      await tester.binding.setSurfaceSize(const Size(600, 1600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(harness(meal));
+      await tester.pump();
+    }
+
     testWidgets('validation blocks empty name and non-positive kcal',
         (tester) async {
-      await tester.pumpWidget(harness(Meal.lunch));
-      await tester.pump();
+      await pumpTall(tester, Meal.lunch);
 
       // Save with nothing filled -> validation errors, nothing written.
       await tester.tap(find.bySemanticsIdentifier('qa-save'));
@@ -74,8 +83,7 @@ void main() {
     });
 
     testWidgets('a valid entry persists to the preselected meal', (tester) async {
-      await tester.pumpWidget(harness(Meal.dinner));
-      await tester.pump();
+      await pumpTall(tester, Meal.dinner);
 
       await tester.enterText(find.bySemanticsIdentifier('qa-name'), 'paneer');
       await tester.enterText(find.bySemanticsIdentifier('qa-kcal'), '250');
@@ -90,6 +98,77 @@ void main() {
       expect(rows.single.meal, 'dinner');
       expect(rows.single.energyKcal, 250);
       expect(rows.single.proteinG, 14);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 50));
+    });
+
+    testWidgets('search → pick derives macros from grams and logs via search',
+        (tester) async {
+      await pumpTall(tester, Meal.lunch);
+
+      // Type a corpus food; the repo seeds itself + searches (both async).
+      await tester.enterText(
+          find.bySemanticsIdentifier('qa-search'), 'cooked rice');
+      for (var i = 0;
+          i < 40 && find.text('Cooked Rice').evaluate().isEmpty;
+          i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(find.text('Cooked Rice'), findsOneWidget,
+          reason: 'search result should appear');
+
+      await tester.tap(find.text('Cooked Rice'));
+      await tester.pump();
+
+      // Picking reveals the grams field and derives the macros (sample rice is
+      // 130 kcal/100 g, default serving 150 g -> 195 kcal).
+      expect(find.bySemanticsIdentifier('qa-grams'), findsOneWidget);
+
+      await tester.tap(find.bySemanticsIdentifier('qa-save'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      final rows = await db.select(db.foodLogs).get();
+      expect(rows, hasLength(1));
+      expect(rows.single.name, 'Cooked Rice');
+      expect(rows.single.meal, 'lunch');
+      expect(rows.single.loggedVia, 'search',
+          reason: 'a corpus pick must be provenance-tagged as search');
+      expect(rows.single.grams, 150);
+      expect(rows.single.energyKcal, closeTo(195, 0.5),
+          reason: 'macros derived from per-100g × grams/100');
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 50));
+    });
+
+    testWidgets('editing the name after a pick reverts to manual provenance',
+        (tester) async {
+      await pumpTall(tester, Meal.lunch);
+      await tester.enterText(
+          find.bySemanticsIdentifier('qa-search'), 'cooked rice');
+      for (var i = 0;
+          i < 40 && find.text('Cooked Rice').evaluate().isEmpty;
+          i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await tester.tap(find.text('Cooked Rice'));
+      await tester.pump();
+      // Hand-edit the name: it is no longer the picked food.
+      await tester.enterText(find.bySemanticsIdentifier('qa-name'), 'My Rice');
+      await tester.pump();
+      expect(find.bySemanticsIdentifier('qa-grams'), findsNothing,
+          reason: 'grams field is only for a picked food');
+
+      await tester.tap(find.bySemanticsIdentifier('qa-save'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      final rows = await db.select(db.foodLogs).get();
+      expect(rows.single.name, 'My Rice');
+      expect(rows.single.loggedVia, 'manual');
+      expect(rows.single.grams, isNull);
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(milliseconds: 50));
