@@ -6,6 +6,7 @@ import '../../../core/db/database.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../onboarding/domain/nutrition_targets.dart';
 import '../../onboarding/domain/target_calculator.dart';
+import '../../water/presentation/water_chip.dart';
 import '../domain/day_totals.dart';
 import 'widgets/calorie_budget_ring.dart';
 import 'widgets/macro_bars.dart';
@@ -75,6 +76,8 @@ class HomePage extends ConsumerWidget {
                     fatEaten: totals.fatG,
                     fatTarget: targets.fatG,
                   ),
+                const SizedBox(height: 16),
+                if (targets != null) WaterChip(targetMl: targets.waterMl),
                 const SizedBox(height: 16),
                 for (final meal in Meal.values)
                   MealSlotCard(

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/env/env.dart';
+import '../../weight/presentation/weight_section.dart';
 import '../../../core/providers/app_providers.dart';
 
 class MePage extends ConsumerWidget {
@@ -16,7 +17,7 @@ class MePage extends ConsumerWidget {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Center(child: Text('Me')),
+          const WeightSection(),
           // Debug-only: the real auth UI is M1. This exists so the M0 exit test
           // and the two-account isolation test can obtain a session at all.
           if (kDebugMode && Env.isConfigured) const _DevSignInCard(),

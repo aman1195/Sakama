@@ -13,7 +13,12 @@ class WeightRepository {
       .watch();
 
   Stream<WeightLog?> watchLatest() => (_db.select(_db.weightLogs)
-        ..orderBy([(t) => OrderingTerm.desc(t.date)])
+        // Secondary createdAt tiebreak (PR #22 review): two weigh-ins on the
+        // same day would otherwise make "latest" nondeterministic.
+        ..orderBy([
+          (t) => OrderingTerm.desc(t.date),
+          (t) => OrderingTerm.desc(t.createdAt),
+        ])
         ..limit(1))
       .watchSingleOrNull();
 

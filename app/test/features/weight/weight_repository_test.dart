@@ -25,4 +25,12 @@ void main() {
     await repo.add(date: '2026-07-20', weightKg: 68.5);
     expect((await repo.watchLatest().first)!.weightKg, 68.5);
   });
+
+  test('watchLatest tiebreaks same-day entries by createdAt (PR #22 review)',
+      () async {
+    // Two weigh-ins on the SAME day: the later-created one wins deterministically.
+    await repo.add(date: '2026-07-20', weightKg: 70);
+    await repo.add(date: '2026-07-20', weightKg: 69);
+    expect((await repo.watchLatest().first)!.weightKg, 69);
+  });
 }
