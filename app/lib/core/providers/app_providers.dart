@@ -3,6 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/capture/data/food_log_repository.dart';
 import '../../features/onboarding/data/profile_repository.dart';
+import '../../features/water/data/water_repository.dart';
+import '../../features/weight/data/weight_repository.dart';
 import '../../features/onboarding/domain/profile_record.dart';
 import '../db/database.dart';
 import '../sync/sync_service.dart';
@@ -39,6 +41,16 @@ final profileRepositoryProvider = FutureProvider<ProfileRepository>((ref) async 
 final foodLogRepositoryProvider = FutureProvider<FoodLogRepository>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return FoodLogRepository(db);
+});
+
+final waterRepositoryProvider = FutureProvider<WaterRepository>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return WaterRepository(db);
+});
+
+final weightRepositoryProvider = FutureProvider<WeightRepository>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return WeightRepository(db);
 });
 
 /// The persisted profile, live. Null until onboarding writes it.

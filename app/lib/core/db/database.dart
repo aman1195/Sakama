@@ -57,7 +57,36 @@ class Profiles extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-@DriftDatabase(tables: [FoodLogs, Profiles])
+/// Water intake events (one row per drink). Summed per day against the water
+/// target. Same three-file sync contract as the other synced tables.
+class WaterLogs extends Table {
+  TextColumn get id => text()();
+  TextColumn get userId => text().nullable()();
+  TextColumn get date => text()(); // yyyy-MM-dd
+  IntColumn get amountMl => integer()();
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()(); // LWW
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Weight measurements over time (the profile weight is the onboarding value;
+/// these are the tracked trend that powers the weight chart).
+class WeightLogs extends Table {
+  TextColumn get id => text()();
+  TextColumn get userId => text().nullable()();
+  TextColumn get date => text()(); // yyyy-MM-dd
+  RealColumn get weightKg => real()();
+  TextColumn get note => text().nullable()();
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()(); // LWW
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DriftDatabase(tables: [FoodLogs, Profiles, WaterLogs, WeightLogs])
 class SakamaDatabase extends _$SakamaDatabase {
   SakamaDatabase()
       : managedExternally = false,
@@ -75,7 +104,7 @@ class SakamaDatabase extends _$SakamaDatabase {
   final bool managedExternally;
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => managedExternally
@@ -84,10 +113,14 @@ class SakamaDatabase extends _$SakamaDatabase {
           onCreate: (m) async => m.createAll(),
           // MOBILE.md rule: every schema change ships a tested, forward-only
           // migration. A bad migration destroys user data irrecoverably.
-          // v2: add the profiles table. Additive — no existing data touched.
+          // Each step is ADDITIVE (new tables), so no existing data is touched.
           onUpgrade: (m, from, to) async {
             if (from < 2) {
               await m.createTable(profiles);
+            }
+            if (from < 3) {
+              await m.createTable(waterLogs);
+              await m.createTable(weightLogs);
             }
           },
         );
