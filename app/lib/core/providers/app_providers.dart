@@ -6,6 +6,8 @@ import '../../features/onboarding/data/profile_repository.dart';
 import '../../features/water/data/water_repository.dart';
 import '../../features/weight/data/weight_repository.dart';
 import '../../features/onboarding/domain/profile_record.dart';
+import '../config/remote_config.dart';
+import '../config/remote_config_service.dart';
 import '../db/database.dart';
 import '../sync/sync_service.dart';
 
@@ -58,6 +60,37 @@ final profileProvider = StreamProvider<ProfileRecord?>((ref) async* {
   final repo = await ref.watch(profileRepositoryProvider.future);
   yield* repo.watch();
 });
+
+/// Server-controlled config: the min-version gate + feature kill-switches
+/// (MOBILE.md). Overridable in tests. This talks to Supabase REST directly,
+/// NOT PowerSync — app_config is global, not per-user synced data.
+final remoteConfigServiceProvider =
+    Provider<RemoteConfigService>((ref) => RemoteConfigService());
+
+/// The fetched config. FutureProvider so callers can fail-open while it loads.
+/// Fetched once per launch; the service caches the min-build for offline use.
+final remoteConfigProvider = FutureProvider<RemoteConfig>((ref) async {
+  return ref.watch(remoteConfigServiceProvider).fetch();
+});
+
+/// True ONLY when we know the running build is below the required floor.
+/// While the fetch is loading or errored, resolves to false (fail-open) so a
+/// merely-offline user is never locked out (CLAUDE.md rule 1).
+final mustUpdateProvider = FutureProvider<bool>((ref) async {
+  final service = ref.watch(remoteConfigServiceProvider);
+  final config = await ref.watch(remoteConfigProvider.future);
+  return service.mustUpdate(config);
+});
+
+/// Read a feature kill-switch by name, defaulting to [orElse] until config
+/// loads or when the flag is absent. Future features (PhotoSnap in M3) gate on
+/// this so we can disable them server-side without shipping a new build.
+bool featureEnabled(WidgetRef ref, String name, {bool orElse = true}) {
+  return ref.watch(remoteConfigProvider).maybeWhen(
+        data: (c) => c.flag(name, orElse: orElse),
+        orElse: () => orElse,
+      );
+}
 
 /// Onboarding is done once a profile exists AND is flagged complete.
 /// Drives the router gate. Loading/error resolve to "not complete" so the
