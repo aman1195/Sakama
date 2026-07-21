@@ -33,12 +33,19 @@ void main() {
           isFalse);
     });
 
-    test('unparseable build number reads as 0 => blocks against any floor',
+    test('unidentifiable build => fail-open (allowed), never bricks the user',
         () async {
-      final svc = RemoteConfigService(packageInfo: _infoWithBuild('nonsense'));
-      // A build we cannot read is treated as ancient — safest against a floor.
-      expect(await svc.mustUpdate(const RemoteConfig(minSupportedBuild: 2)),
-          isTrue);
+      // iOS CFBundleVersion may be dot-separated ("1.2.3"), which does not
+      // parse to an int. A build we cannot identify must NOT be pulled — you
+      // cannot safely force-update off a version you can't even read. This is
+      // the whole point of the gate: it must never brick a working user.
+      final dotted = RemoteConfigService(packageInfo: _infoWithBuild('1.2.3'));
+      expect(await dotted.mustUpdate(const RemoteConfig(minSupportedBuild: 2)),
+          isFalse);
+      final garbage =
+          RemoteConfigService(packageInfo: _infoWithBuild('nonsense'));
+      expect(await garbage.mustUpdate(const RemoteConfig(minSupportedBuild: 9)),
+          isFalse);
     });
   });
 }

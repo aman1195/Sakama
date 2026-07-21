@@ -21,9 +21,15 @@ class RemoteConfigService {
   final PackageInfo? _injectedInfo;
   static const _cachedMinBuildKey = 'remote_config.min_build';
 
-  Future<int> currentBuild() async {
+  /// The running build number, or null when it cannot be read as an integer.
+  /// Null means UNIDENTIFIABLE — deliberately distinct from 0. iOS
+  /// CFBundleVersion may legally be dot-separated (e.g. "1.2.3"), which does
+  /// not parse to an int; treating that as 0 would brick every such user
+  /// against any floor >= 1, so [mustUpdate] fails OPEN on null instead. You
+  /// cannot safely pull a build you cannot even identify.
+  Future<int?> currentBuild() async {
     final info = _injectedInfo ?? await PackageInfo.fromPlatform();
-    return int.tryParse(info.buildNumber) ?? 0;
+    return int.tryParse(info.buildNumber);
   }
 
   /// Fetch config. On any failure, fall back to a cached min-build (so an
@@ -49,9 +55,12 @@ class RemoteConfigService {
   }
 
   /// True only when we KNOW the running build is below the required floor.
+  /// Fail-open end to end: no floor known OR an unidentifiable build => allow.
   Future<bool> mustUpdate(RemoteConfig config) async {
     if (config.minSupportedBuild <= 0) return false; // no floor known -> allow
-    return (await currentBuild()) < config.minSupportedBuild;
+    final build = await currentBuild();
+    if (build == null) return false; // unidentifiable build -> fail open
+    return build < config.minSupportedBuild;
   }
 
   /// Convenience wrapper for cheap JSON round-tripping in tests.
