@@ -3,11 +3,17 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/app_providers.dart';
+import '../../foods/domain/food.dart';
 import '../../home/domain/day_totals.dart';
 
-/// Quick-add manual food logging (M1). Photo / voice / barcode / DB-search
-/// capture come with M2–M3; this is the type-it-in path, which every tracker
-/// needs as the fallback. Reachable from the Log tab and the meal-slot "+".
+/// Quick-add food logging (M1 manual entry + M2.1b corpus search).
+///
+/// Two paths share one form:
+///  - SEARCH: pick a food from the reference corpus → enter grams → macros are
+///    derived from the canonical per-100g values (CLAUDE.md) and prefilled.
+///  - MANUAL: type a name + macros directly (the always-available fallback;
+///    every tracker needs it for foods not yet in the corpus).
+/// Photo / voice / barcode capture arrive in M2.3–M3.
 class QuickAddPage extends ConsumerStatefulWidget {
   const QuickAddPage({super.key, this.initialMeal});
 
@@ -20,13 +26,22 @@ class QuickAddPage extends ConsumerStatefulWidget {
 
 class _QuickAddPageState extends ConsumerState<QuickAddPage> {
   final _formKey = GlobalKey<FormState>();
+  final _search = TextEditingController();
   final _name = TextEditingController();
+  final _grams = TextEditingController();
   final _kcal = TextEditingController();
   final _protein = TextEditingController();
   final _carb = TextEditingController();
   final _fat = TextEditingController();
   late Meal _meal = widget.initialMeal ?? _defaultMeal();
   bool _saving = false;
+
+  /// Set when a corpus food is picked; drives grams→macro derivation and the
+  /// `loggedVia='search'` provenance. Cleared the moment the user edits the
+  /// name by hand (it is no longer that food).
+  Food? _picked;
+  List<Food> _results = const [];
+  int _searchToken = 0; // drops stale async results
 
   static Meal _defaultMeal() {
     final h = DateTime.now().hour;
@@ -38,7 +53,7 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
 
   @override
   void dispose() {
-    for (final c in [_name, _kcal, _protein, _carb, _fat]) {
+    for (final c in [_search, _name, _grams, _kcal, _protein, _carb, _fat]) {
       c.dispose();
     }
     super.dispose();
@@ -48,6 +63,43 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
     final n = DateTime.now();
     return '${n.year.toString().padLeft(4, '0')}-'
         '${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _onSearchChanged(String query) async {
+    final token = ++_searchToken;
+    final q = query.trim();
+    if (q.isEmpty) {
+      setState(() => _results = const []);
+      return;
+    }
+    final repo = await ref.read(foodRepositoryProvider.future);
+    final results = await repo.search(q, limit: 8);
+    if (!mounted || token != _searchToken) return; // a newer query superseded us
+    setState(() => _results = results);
+  }
+
+  void _pick(Food food) {
+    _picked = food;
+    _name.text = food.name;
+    _grams.text = (food.defaultServingGrams ?? 100).toStringAsFixed(0);
+    _recomputeFromGrams();
+    setState(() {
+      _results = const [];
+      _search.clear();
+    });
+    FocusScope.of(context).unfocus();
+  }
+
+  /// Derive the portion macros from the picked food's per-100g values.
+  void _recomputeFromGrams() {
+    final food = _picked;
+    if (food == null) return;
+    final grams = double.tryParse(_grams.text.trim()) ?? 0;
+    final m = food.per100g.scaleTo(grams);
+    _kcal.text = m.energyKcal.toStringAsFixed(0);
+    _protein.text = m.proteinG.toStringAsFixed(1);
+    _carb.text = m.carbG.toStringAsFixed(1);
+    _fat.text = m.fatG.toStringAsFixed(1);
   }
 
   Future<void> _save() async {
@@ -62,6 +114,8 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
       proteinG: double.tryParse(_protein.text) ?? 0,
       carbG: double.tryParse(_carb.text) ?? 0,
       fatG: double.tryParse(_fat.text) ?? 0,
+      grams: _picked == null ? null : double.tryParse(_grams.text.trim()),
+      loggedVia: _picked == null ? 'manual' : 'search',
       userId: ref.read(currentUserIdProvider),
     );
     if (mounted) {
@@ -82,6 +136,21 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              // Corpus search — the primary path.
+              Semantics(
+                identifier: 'qa-search',
+                child: TextField(
+                  controller: _search,
+                  onChanged: _onSearchChanged,
+                  decoration: const InputDecoration(
+                    labelText: 'Search foods',
+                    prefixIcon: Icon(Icons.search),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              if (_results.isNotEmpty) _resultsList(),
+              const SizedBox(height: 16),
               // Meal slot.
               SegmentedButton<Meal>(
                 segments: [
@@ -92,7 +161,16 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
                 onSelectionChanged: (s) => setState(() => _meal = s.first),
               ),
               const SizedBox(height: 16),
-              _field(_name, 'Food name', id: 'qa-name', required: true),
+              _field(_name, 'Food name', id: 'qa-name', required: true,
+                  onChanged: (_) {
+                // Hand-editing the name means it is no longer the picked food.
+                if (_picked != null) setState(() => _picked = null);
+              }),
+              // Grams only matters for a picked food (drives derivation).
+              if (_picked != null)
+                _field(_grams, 'Amount (g)', id: 'qa-grams',
+                    number: true, required: true, positive: true,
+                    onChanged: (_) => _recomputeFromGrams()),
               _field(_kcal, 'Calories (kcal)', id: 'qa-kcal',
                   number: true, required: true, positive: true),
               _field(_protein, 'Protein (g)', id: 'qa-protein', number: true),
@@ -113,6 +191,28 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
     );
   }
 
+  Widget _resultsList() {
+    return Card(
+      margin: const EdgeInsets.only(top: 8),
+      child: Column(
+        children: [
+          for (final food in _results)
+            Semantics(
+              identifier: 'qa-result-${food.id}',
+              button: true,
+              child: ListTile(
+                dense: true,
+                title: Text(food.name),
+                subtitle: Text('${food.per100g.energyKcal.toStringAsFixed(0)} '
+                    'kcal / 100 g · ${food.source}'),
+                onTap: () => _pick(food),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _field(
     TextEditingController c,
     String label, {
@@ -120,6 +220,7 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
     bool number = false,
     bool required = false,
     bool positive = false,
+    ValueChanged<String>? onChanged,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -127,6 +228,7 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
         identifier: id,
         child: TextFormField(
           controller: c,
+          onChanged: onChanged,
           keyboardType: number
               ? const TextInputType.numberWithOptions(decimal: true)
               : TextInputType.text,
