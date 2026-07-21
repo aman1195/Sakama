@@ -5,6 +5,7 @@ import 'package:sakama/core/db/database.dart';
 import 'generated/schema.dart';
 import 'generated/schema_v1.dart' as v1;
 import 'generated/schema_v2.dart' as v2;
+import 'generated/schema_v3.dart' as v3;
 
 /// The migration harness required by docs/MOBILE.md and docs/REVIEW.md §6.1:
 /// a bad on-device migration destroys user data irrecoverably, so every schema
@@ -80,13 +81,51 @@ void main() {
     await db.close();
   });
 
-  test('database schema matches the committed v3 snapshot', () async {
+  test('v3 -> v4 adds foods + off_foods AND preserves all user data', () async {
+    final schema = await verifier.schemaAt(3);
+    final v3Db = v3.DatabaseAtV3(schema.newConnection());
+    // Seed one row in every EXISTING (synced) table; all must survive v4.
+    await v3Db.customStatement(
+      "INSERT INTO food_logs (id, date, meal, name, energy_kcal, protein_g, "
+      "carb_g, fat_g, logged_via, created_at, updated_at) "
+      "VALUES ('fl','2026-07-21','lunch','dal',180,9,22,6,'quick_add',1,1)");
+    await v3Db.customStatement(
+      "INSERT INTO profiles (id, dob, weight_kg, height_cm, sex, activity, "
+      "goal, diet, cuisine, conditions, onboarding_complete, created_at, "
+      "updated_at) VALUES ('p','1994-01-01',70,175,'male','moderate','maintain',"
+      "'veg','both','',1,1,1)");
+    await v3Db.customStatement(
+      "INSERT INTO water_logs (id, date, amount_ml, created_at, updated_at) "
+      "VALUES ('w','2026-07-21',250,1,1)");
+    await v3Db.customStatement(
+      "INSERT INTO weight_logs (id, date, weight_kg, created_at, updated_at) "
+      "VALUES ('wt','2026-07-21',70.5,1,1)");
+    await v3Db.close();
+
+    final db = SakamaDatabase.withExecutor(schema.newConnection());
+    await verifier.migrateAndValidate(db, 4);
+
+    // Every pre-existing row survived the migration (MOBILE.md: a bad
+    // migration destroys user data irrecoverably).
+    expect((await db.select(db.foodLogs).get()).map((r) => r.id), contains('fl'));
+    expect((await db.select(db.profiles).get()).map((r) => r.id), contains('p'));
+    expect((await db.select(db.waterLogs).get()).map((r) => r.id), contains('w'));
+    expect((await db.select(db.weightLogs).get()).map((r) => r.id),
+        contains('wt'));
+    // The two new reference tables exist and are usable (born empty; seeding
+    // is the repository's job, not the migration's).
+    expect(await db.select(db.foods).get(), isEmpty);
+    expect(await db.select(db.offFoods).get(), isEmpty);
+    await db.close();
+  });
+
+  test('database schema matches the committed v4 snapshot', () async {
     // Creates a fresh db from SakamaDatabase's Dart definitions and diffs it
-    // against drift_schemas/drift_schema_v1.json. Fails if the code drifts
+    // against drift_schemas/drift_schema_v4.json. Fails if the code drifts
     // from the committed snapshot without a new schema version + migration.
-    final connection = await verifier.startAt(3);
+    final connection = await verifier.startAt(4);
     final db = SakamaDatabase.withExecutor(connection);
-    await verifier.migrateAndValidate(db, 3);
+    await verifier.migrateAndValidate(db, 4);
     await db.close();
   });
 

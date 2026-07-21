@@ -51,4 +51,46 @@ const powersyncSchema = Schema([
     Column.integer('created_at'),
     Column.integer('updated_at'),
   ]),
+  // Reference tables — LOCAL-ONLY: real SQLite tables PowerSync creates but
+  // never syncs and never routes through the upload queue. They hold shipped
+  // reference data, not per-user data, so there is no Supabase mirror and no
+  // sync-streams entry. Columns must still match database.dart (the alignment
+  // test cross-checks the two Dart reps).
+  Table.localOnly('foods', [
+    Column.text('name'),
+    Column.text('name_hi'),
+    Column.text('type'),
+    Column.text('cuisine_region'),
+    Column.text('food_group'),
+    Column.real('energy_kcal'),
+    Column.real('protein_g'),
+    Column.real('carb_g'),
+    Column.real('fat_g'),
+    Column.real('fiber_g'),
+    Column.text('default_serving_label'),
+    Column.real('default_serving_grams'),
+    Column.text('source'),
+    Column.text('licence'),
+    Column.real('confidence'),
+    Column.text('source_ref'),
+  ]),
+  // ODbL, physically separate from `foods` (CLAUDE.md rule 5).
+  Table.localOnly('off_foods', [
+    Column.text('name'),
+    Column.text('barcode'),
+    Column.text('type'),
+    Column.text('cuisine_region'),
+    Column.text('food_group'),
+    Column.real('energy_kcal'),
+    Column.real('protein_g'),
+    Column.real('carb_g'),
+    Column.real('fat_g'),
+    Column.real('fiber_g'),
+    Column.text('default_serving_label'),
+    Column.real('default_serving_grams'),
+    Column.text('source'),
+    Column.text('licence'),
+    Column.real('confidence'),
+    Column.text('source_ref'),
+  ]),
 ]);
