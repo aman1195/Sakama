@@ -1,5 +1,6 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import '../../../core/body_metrics.dart';
 import '../domain/enums.dart';
 import '../domain/profile_record.dart';
 
@@ -23,11 +24,12 @@ abstract class OnboardingDraft with _$OnboardingDraft {
     ActivityLevel? activity,
   }) = _OnboardingDraft;
 
-  // Validation bounds (also the UI's accepted input ranges). Health context:
-  // reject absurd/typo values so garbage never reaches the calculator.
-  static const minAge = 13, maxAge = 100;
-  static const minWeight = 20.0, maxWeight = 300.0;
-  static const minHeight = 100.0, maxHeight = 250.0;
+  // Validation bounds = the shared BodyMetrics (single source of truth, so
+  // onboarding and weight logging can't diverge). Reject absurd/typo values so
+  // garbage never reaches the calculator.
+  static const minAge = BodyMetrics.minAgeYears, maxAge = BodyMetrics.maxAgeYears;
+  static const minWeight = BodyMetrics.minWeightKg, maxWeight = BodyMetrics.maxWeightKg;
+  static const minHeight = BodyMetrics.minHeightCm, maxHeight = BodyMetrics.maxHeightCm;
 
   int? ageAt(DateTime now) {
     final d = dob;

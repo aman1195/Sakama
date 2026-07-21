@@ -7,9 +7,15 @@ class WeightRepository {
   WeightRepository(this._db);
   final SakamaDatabase _db;
 
-  /// All entries oldest-first — the shape the chart wants.
+  /// All entries oldest-first — the shape the chart wants. Secondary createdAt
+  /// tiebreak (PR #23 review nit 1): this is the path the UI renders (last =
+  /// latest, and same-day chart-point order), so it must be deterministic too —
+  /// not just watchLatest.
   Stream<List<WeightLog>> watchAll() => (_db.select(_db.weightLogs)
-        ..orderBy([(t) => OrderingTerm.asc(t.date)]))
+        ..orderBy([
+          (t) => OrderingTerm.asc(t.date),
+          (t) => OrderingTerm.asc(t.createdAt),
+        ]))
       .watch();
 
   Stream<WeightLog?> watchLatest() => (_db.select(_db.weightLogs)
