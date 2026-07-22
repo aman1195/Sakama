@@ -12,6 +12,20 @@ updates:
     open-pull-requests-limit: 5
     commit-message: {prefix: "chore", include: "scope"}
     labels: ["dependencies", "needs-licence-check"]
+    # Some Dart packages ship a runtime + a codegen sibling that share private
+    # APIs and MUST move in lockstep. Bumping one alone breaks codegen/tests
+    # (PR #29: `drift` 2.34.2 with `drift_dev` 2.34.0 → the migration harness
+    # failed to compile). Group each family so Dependabot bumps them together.
+    groups:
+      drift:
+        patterns: ["drift", "drift_dev", "drift_flutter", "drift_sqlite_async"]
+      riverpod:
+        patterns: ["riverpod", "flutter_riverpod", "riverpod_annotation",
+                   "riverpod_generator", "riverpod_lint"]
+      freezed:
+        patterns: ["freezed", "freezed_annotation"]
+      envied:
+        patterns: ["envied", "envied_generator"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule: {interval: "weekly"}
