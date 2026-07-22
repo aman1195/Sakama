@@ -91,12 +91,12 @@ pay **PowerSync Cloud** or self-host under a non-OSI licence. Accepted, with eye
 
 | Source | Licence / terms | Action |
 |---|---|---|
-| **INDB** (Indian Nutrient Databank) | **CC BY 4.0** — commercial OK with attribution *(⚠ verify: research streams disagreed)* | **Core Indian seed.** 1,014 Indian **recipes** + 1,095 raw items, per 100 g and per serving. |
+| **INDB** (Indian Nutrient Databank) | ❌ **UNLICENSED (all-rights-reserved) AND derived from IFCT 2017** — verified from source 2026-07-22 (see below). NOT CC BY 4.0. | **DO NOT bundle.** The CC BY badge is on the *paper*, not the data; the GitHub dataset has no licence, and its base table is IFCT 2017 (re-imports the rule-6 risk). |
 | **USDA FoodData Central** | **CC0 / public domain** | Free generic-ingredient base layer. Take it. |
 | **Open Food Facts** | **ODbL** (attribution + share-alike **on the derived database**) | Barcodes / Indian packaged goods. **Keep in a physically separate schema**, never merged into our proprietary table. |
 | **FatSecret Platform** | **Caching permitted.** Premier **free for startups under $1M revenue**, India locale | **Open here.** Best terms in the category. |
 | **Bon Happetee** (Indian) | Sells a **full data licence (CSV/DB dump)** | **Negotiate.** India-native, 20k items, condition-tagged (diabetes, PCOS). Used by Swiggy, Apollo 24/7. Solves the India DB problem outright. |
-| **IFCT 2017 (NIN)** | ⚠ **"No part ... can be stored or reproduced in any electronic format for creating a product without prior written permission."** | **DO NOT ingest.** Get written NIN permission, or rely on INDB instead. |
+| **IFCT 2017 (NIN)** | ⚠ **"No part ... can be stored or reproduced in any electronic format for creating a product without prior written permission."** | **DO NOT ingest.** Get written NIN permission. (INDB is NOT a way around this — it is itself IFCT-derived; see the INDB row.) |
 | Edamam / Spoonacular / Nutritionix | ⚠ **Caching prohibited or 1-hour max; delete all data on cancellation** | **Structurally disqualified for a diary app.** A meal logged in March must render in December, offline. |
 | Passio Nutrition-AI SDK | $99 / $599 / $2,999 per month, token-metered | Benchmark against our own vision model first; likely too costly for a free Indian-market tier. |
 
@@ -105,16 +105,23 @@ pay **PowerSync Cloud** or self-host under a non-OSI licence. Accepted, with eye
   [ARCHITECTURE.md](../ARCHITECTURE.md) **stands unchanged**. This research validates it.
 - [ROADMAP.md](../ROADMAP.md) M0 is now **seeded** rather than blank: start from the CC0 PowerSync/Drift
   demo and the deliverzler architecture instead of `flutter create`.
-- **M2 (food database) changes materially**: pivot from "recompute from IFCT" to
-  "**INDB (CC BY) + USDA (CC0) + OFF (ODbL, isolated) + FatSecret**", and open a commercial
-  conversation with **Bon Happetee**.
+- **M2 (food database) changes materially**: generic base = **USDA (CC0)**, branded = **OFF (ODbL,
+  isolated)**. The **Indian-dish** wedge does NOT come from INDB (unlicensed + IFCT-derived — see the
+  data table and the correction note below); it comes from **AI estimation** (M2.4, confidence-tagged)
+  plus a **commercially licensed** Indian dataset — open a conversation with **Bon Happetee** / confirm
+  **FatSecret** India. UK CoFID (OGL v3.0) is a clean generic gap-fill, sourced direct from gov.uk.
 - Ship an **Open Source Licenses** screen (Apache-2.0 requires preserving NOTICE files; MIT/BSD require
   the copyright notice). Wire `very_good_cli`'s licence checker into CI to catch any accidental
   GPL/AGPL transitive dependency.
 
 ## Must-verify before launch (legal)
-1. **INDB licence** — confirm CC BY 4.0 in writing (streams disagreed).
-2. **IFCT** — written NIN permission, or do not touch it.
+1. ~~**INDB licence** — confirm CC BY 4.0 in writing.~~ **RESOLVED 2026-07-22: INDB is unusable.**
+   Verified from primary sources — the dataset (GitHub `lindsayjaacks/Indian-Nutrient-Databank-INDB-`)
+   has **no licence** (`license: None`, `/license` → 404) so it is all-rights-reserved, and its README
+   shows it is **built from IFCT 2017** ("a master IFCT"). The CC BY 4.0 badge is on the *journal
+   article* only. Bundling it would both redistribute all-rights-reserved data and re-import the IFCT
+   rule-6 risk. **Do not bundle INDB.** Indian-dish coverage → AI estimation + a commercial licence.
+2. **IFCT** — written NIN permission, or do not touch it (and INDB does not sidestep this).
 3. **Open Food Facts ODbL** — counsel review of our derived-database posture (this is the single
    biggest legal risk in the stack, and it has nothing to do with GPL).
 4. **FatSecret** — confirm India locale coverage and Premier Free eligibility in writing.
