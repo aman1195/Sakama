@@ -24,8 +24,9 @@ loader, not repeated per row in the asset.
 
 ## Not yet ingested
 
-- **INDB** (CC BY 4.0) — the Indian dishes (the wedge). Attribution is
-  MANDATORY (issue #28). Lands in M2.2b.
+- **Indian dishes** (the wedge) — NOT from INDB (unlicensed + IFCT-derived; do not bundle, see
+  CLAUDE.md rule 6). Covered by **AI estimation** (M2.4) + a **commercially licensed** dataset
+  (FatSecret / Bon Happetee — a business action).
 - **Open Food Facts** (ODbL) — branded/barcode. Kept in the SEPARATE
   `off_foods` table (CLAUDE.md rule 5). Lands in M2.3.
 - **IFCT 2017** — NEVER ingest (NIN prohibition, CLAUDE.md rule 6).

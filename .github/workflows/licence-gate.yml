@@ -57,7 +57,9 @@ jobs:
           fi
 
           # 4. IFCT 2017 — NIN forbids electronic reproduction for a product without
-          #    written permission. Use INDB (CC BY 4.0) + USDA (CC0) instead.
+          #    written permission. Use USDA (CC0) for the generic base; Indian dishes
+          #    via AI estimation + a commercial licence. NOT INDB (unlicensed +
+          #    IFCT-derived — see CLAUDE.md rule 6 / docs/research/base-decision.md).
           if grep -rniE "ifct[-_ ]?2017" --include=*.csv --include=*.sql --include=*.dart \
                --include=*.py --include=*.ts --include=*.json "${EXCL[@]}" . ; then
             echo "::error::IFCT 2017 data detected in code/data. NIN forbids this without WRITTEN permission."

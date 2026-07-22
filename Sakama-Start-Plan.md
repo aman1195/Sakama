@@ -71,7 +71,7 @@ breadth-first.**
 |---|---|---|
 | **M0** | Foundation: Flutter scaffold, Supabase schema + RLS, Drift + PowerSync sync loop | Write a row offline; see it sync to Supabase and to a second device |
 | **M1** | Onboarding + profile + tracking core + dashboard | A casual tracker logs a full day; totals correct **offline** |
-| **M2** | Food database v1 (INDB + USDA + OFF) + barcode + search | Search finds Indian dishes offline; a real barcode resolves |
+| **M2** | Food database v1 (USDA + OFF + AI/commercial for Indian dishes; NOT INDB) + barcode + search | Search finds Indian dishes offline; a real barcode resolves |
 | **M3** | **The AI moat** — serverless AI gateway (Edge Fn + managed gateway), PhotoSnap, Vita coach, AI estimation | Photograph a thali → sane items/macros; Vita answers with today's real data |
 | **M4** | Plan engine — AI generation + import + enforcement | A "Tuesday reset" day changes targets/checklist; Vita references it |
 | **M5** | Fasting, workouts, steps, sleep (HealthKit) | A fast completes; a workout raises the calorie target |
@@ -92,7 +92,7 @@ breadth-first.**
 
 | Question | Owner | Blocks |
 |---|---|---|
-| **Verify INDB is CC BY 4.0 in writing** (research streams disagreed) | Legal | M2 |
+| ~~Verify INDB is CC BY 4.0~~ **RESOLVED: INDB unusable** (unlicensed + IFCT-derived, verified 2026-07-22). Instead: pursue a commercial Indian-food licence (FatSecret / Bon Happetee) | Legal/Biz | M2 |
 | Counsel review of our **Open Food Facts ODbL** posture | Legal | M7 |
 | **Benchmark vision models on Indian food** (portion estimation is workload-dependent) | Eng | M3 |
 | Quote from **Bon Happetee** (India-native food data licence) | Product | M2 |

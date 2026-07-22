@@ -2,7 +2,7 @@
 """Ingest USDA FoodData Central SR Legacy into Sakama's food seed asset.
 
 USDA FoodData Central is PUBLIC DOMAIN (CC0) — no attribution or share-alike
-obligation (unlike INDB CC-BY or OFF ODbL). Every emitted row is tagged
+obligation (unlike OFF ODbL). Every emitted row is tagged
 source='usda_fdc', licence='CC0'. Re-runnable as USDA publishes updates.
 
 Usage:

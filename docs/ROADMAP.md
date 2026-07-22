@@ -50,8 +50,9 @@ The whole thesis rests on "a VLM estimates an Indian meal's macros usefully." Te
 - **Exit test:** a casual tracker onboards and logs a full day; totals and chart correct **offline**.
 
 ## M2 — Food database v1 + barcode · [ADR 0012](adr/0012-ship-bundled-food-data.md)
-- **Bundle INDB (CC BY) + USDA (CC0) as-is** as the seed — **not** the recompute pipeline. Optional:
-  the 6000+ Indian Recipes name/ingredient corpus for search coverage (names/tags only).
+- **Bundle USDA (CC0) as-is** as the generic seed (done, M2.2a) — **not** the recompute pipeline.
+  **NOT INDB** — it is unlicensed + IFCT-derived (see ADR 0012 banner / CLAUDE.md rule 6). Indian-dish
+  coverage = **AI estimation (M2.4)** + a **commercially licensed** dataset (FatSecret / Bon Happetee).
 - Barcode scanning (`mobile_scanner` + openfoodfacts-dart / Smooth App scanner) → lookup + cache +
   attribution.
 - Custom meals / favourites / quick-add.
@@ -100,7 +101,7 @@ The whole thesis rests on "a VLM estimates an Indian meal's macros usefully." Te
 ## M7 — Ongoing hardening (much pulled into M3 for launch)
 - Security review (RLS coverage, key redaction, storage policies, OWASP M1).
 - **Licensing:** finalize permissive attributions + creator credits on the product website; resolve the
-  Open Food Facts ODbL posture with counsel; confirm INDB CC BY in writing.
+  Open Food Facts ODbL posture with counsel. (INDB is resolved: unusable — do not bundle.)
 - Privacy policy, App Store / Play data-safety, DPDP/GDPR alignment.
 
 ---
@@ -115,7 +116,8 @@ The whole thesis rests on "a VLM estimates an Indian meal's macros usefully." Te
 
 ## Known decisions still open (tracked)
 - Vision model — decided by the **Phase 0 spike**.
-- Open Food Facts **live vs. bundled** (M2); INDB CC BY confirmation in writing.
+- Open Food Facts **live vs. bundled** (M2). Indian-dish source: AI estimation + which commercial
+  licence (FatSecret vs Bon Happetee). (INDB is closed: unusable — unlicensed + IFCT-derived.)
 - Subscription tooling (RevenueCat vs. native billing) for Sakama Plus.
 - Privacy-respecting analytics (no health PII).
 - Melos (multi-package) — defer until feature count justifies it.

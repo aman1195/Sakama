@@ -54,8 +54,9 @@ class InMemoryFoodSeed implements FoodSeedSource {
   Future<List<FoodSeedEntry>> load() async => entries;
 }
 
-/// Production seed: the labelled Indian sample (kept until INDB lands in M2.2b)
-/// PLUS USDA SR Legacy (CC0) loaded from the bundled asset. The JSON is parsed
+/// Production seed: the labelled Indian sample (kept until real Indian-dish
+/// data lands — via AI estimation / a commercial licence, NOT INDB) PLUS USDA
+/// SR Legacy (CC0) loaded from the bundled asset. The JSON is parsed
 /// off the UI thread (compute) to avoid a jank frame on first launch.
 class AssetFoodSeed implements FoodSeedSource {
   const AssetFoodSeed();
@@ -98,7 +99,9 @@ List<FoodSeedEntry> _parseUsda(String raw) {
 }
 
 /// The labelled Indian sample from M2.1 — approximate values, honestly tagged
-/// source='sample' (NOT faked as indb/usda). Replaced by real INDB in M2.2b.
+/// source='sample' (NOT faked as a real source). Replaced when real Indian-dish
+/// data lands (AI estimation / a commercial licence — NOT INDB, which is
+/// unlicensed + IFCT-derived; see CLAUDE.md rule 6).
 final List<FoodSeedEntry> kSampleFoods = [
   _s('sample-roti', 'Roti (Chapati)', 'dish', 297, 11, 51, 7.5,
       hi: 'रोटी', grp: 'cereals', sl: '1 roti', sg: 40),
