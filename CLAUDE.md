@@ -47,8 +47,12 @@ Read [PRODUCT.md](PRODUCT.md) before touching anything user-facing.
 5. **Open Food Facts data is ODbL.** Keep OFF-derived rows in a **physically separate, source-tagged
    table**. Never merge them into the proprietary Indian food table. This is the single biggest legal risk
    in the stack.
-6. **Do NOT ingest IFCT 2017.** NIN forbids electronic reproduction for a product without written
-   permission. Use **INDB** (CC BY 4.0) + **USDA** (CC0) instead.
+6. **Do NOT ingest IFCT 2017, and do NOT bundle INDB either.** NIN forbids electronic reproduction of
+   IFCT for a product without written permission. **INDB is NOT a safe substitute** — verified from
+   source 2026-07-22: the INDB *dataset* has no licence (all-rights-reserved) and is itself **derived
+   from IFCT 2017**, so bundling it re-imports the same risk (see docs/research/base-decision.md). Use
+   **USDA** (CC0) for the generic base; cover **Indian dishes** via AI estimation (M2.4) + a
+   commercially licensed dataset (Bon Happetee / FatSecret), never INDB.
 7. **Every food row carries `source`, `licence`, `confidence`.** Non-negotiable for provenance audits and
    for ranking verified data above AI estimates.
 8. **This is a MOBILE app — read [docs/MOBILE.md](docs/MOBILE.md).**

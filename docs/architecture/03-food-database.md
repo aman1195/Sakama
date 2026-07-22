@@ -12,10 +12,13 @@
 >    publication can be stored or reproduced in any electronic format for creating a product without
 >    the prior written permission of the National Institute of Nutrition."* The "recompute our seed DB
 >    from IFCT" strategy below is **legally unsafe without written NIN permission.**
-> 2. **INDB is far better than stated below.** It appears to be **CC BY 4.0 (commercial use permitted
->    with attribution)**, not "ambiguous / reference only". It has **1,014 Indian recipes + 1,095 raw
->    items**, per 100 g and per serving. It becomes our **core Indian seed**, replacing IFCT.
->    *(⚠ Two research streams disagreed on this licence. Confirm in writing before launch.)*
+> 2. ~~**INDB is far better than stated below** — CC BY 4.0, our core Indian seed.~~ **RETRACTED
+>    2026-07-22.** Verified from primary sources: the INDB *dataset* (GitHub
+>    `lindsayjaacks/Indian-Nutrient-Databank-INDB-`) has **no licence** (`license: None`, `/license`
+>    → 404) = all-rights-reserved, and its own README shows it is **built from IFCT 2017** ("a master
+>    IFCT"). The CC BY 4.0 badge is on the journal *article*, not the data. **INDB is unusable** — it
+>    is neither CC BY nor IFCT-independent. The row below ("Cross-check reference only") was correct all
+>    along. Indian-dish coverage comes from AI estimation (M2.4) + a commercial licence, not INDB.
 > 3. **New: buy the data.** **FatSecret** (caching permitted, free under $1M revenue, India locale) and
 >    **Bon Happetee** (India-native, sells a full data dump) are the commercial options.
 >    **Edamam / Spoonacular / Nutritionix are structurally disqualified** — they prohibit persistent

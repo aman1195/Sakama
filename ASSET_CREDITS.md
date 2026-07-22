@@ -10,7 +10,7 @@
 
 | Source | Licence | Obligation | How we use it |
 |---|---|---|---|
-| **INDB** (Indian Nutrient Databank) | **CC BY 4.0** ⚠️ *verify in writing* | **Attribution required** | Core Indian seed: 1,014 recipes + 1,095 raw items. Bundled. |
+| ~~**INDB** (Indian Nutrient Databank)~~ | ❌ **UNLICENSED + IFCT-derived** — NOT CC BY 4.0 (verified 2026-07-22) | **Cannot use** | **NOT bundled, NOT used.** The dataset has no licence (all-rights-reserved) and is derived from IFCT 2017. See docs/research/base-decision.md. Indian dishes come from AI estimation + a commercial licence instead. |
 | **USDA FoodData Central** | **CC0 / public domain** | None (attribution requested) | Generic ingredients, nutrient gap-fill. Bundled. |
 | **Open Food Facts** | **ODbL** (+ images CC BY-SA) | **Attribution + share-alike on derived databases** | Barcode / packaged-food lookup. **See the critical note below.** |
 | **IFCT 2017** (ICMR-NIN) | ❌ **Not licensed for us** | NIN forbids electronic reproduction for a product without written permission | **NOT USED.** Do not ingest. |

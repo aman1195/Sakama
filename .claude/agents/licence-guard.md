@@ -40,9 +40,13 @@ to the App Store and Play Store. Three legal hazards are real and have already b
 - **OFF-derived rows must live in a physically separate, source-tagged table.** Flag any join, migration,
   or ETL that merges `source = 'openfoodfacts'` rows into the proprietary Indian table.
 - **Flag any ingestion of IFCT 2017** unless a written NIN permission artefact is present in the repo.
-- Permitted seeds: **INDB** (CC BY 4.0 — requires attribution), **USDA FDC** (CC0), **OFF** (ODbL,
-  isolated + attributed).
-- Verify an in-app attribution surface exists for ODbL (OFF) and CC BY (INDB).
+- **Flag any ingestion/bundling of INDB.** INDB is UNLICENSED (all-rights-reserved) AND derived from
+  IFCT 2017 (verified 2026-07-22 — the CC BY badge is on the paper, not the dataset). It is NOT a
+  permitted seed and re-imports the IFCT risk. Treat an INDB ingestion PR as a blocking violation
+  unless a written Anuvaad commercial+redistribution licence AND IFCT clearance are present in the repo.
+- Permitted seeds: **USDA FDC** (CC0), **OFF** (ODbL, isolated + attributed), and any dataset with a
+  written commercial licence in the repo. AI estimates carry `source='ai_estimate'` + confidence.
+- Verify an in-app attribution surface exists for ODbL (OFF) and any bundled CC BY dataset.
 
 ### 3. Health-data privacy
 - **No provider API key in the client**, ever. All LLM calls route through the Edge Function → LiteLLM

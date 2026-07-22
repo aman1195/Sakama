@@ -87,8 +87,9 @@ class WeightLogs extends Table {
 }
 
 /// The food reference table — the searchable corpus users log against
-/// (INDB CC-BY + USDA CC0 once real ingestion lands in M2.2; a labelled sample
-/// today). READ-ONLY REFERENCE DATA, not per-user: it is a PowerSync
+/// (USDA CC0 now; Indian dishes via AI estimation + a commercial licence later.
+/// NOT INDB — unlicensed + IFCT-derived, see CLAUDE.md rule 6). READ-ONLY
+/// REFERENCE DATA, not per-user: it is a PowerSync
 /// `localOnly` table (see powersync_schema.dart), so it never syncs and never
 /// enters the upload queue, and there is deliberately NO Supabase mirror.
 ///
@@ -110,7 +111,8 @@ class Foods extends Table {
   RealColumn get fiberG => real().nullable()();
   TextColumn get defaultServingLabel => text().nullable()(); // "1 katori"
   RealColumn get defaultServingGrams => real().nullable()();
-  TextColumn get source => text()(); // sample | indb | usda_fdc | ai_estimate
+  TextColumn get source => text()(); // sample | usda_fdc | ai_estimate | <licensed>
+
   TextColumn get licence => text()(); // CC0 | CC-BY-4.0 | ODbL | computed
   RealColumn get confidence => real()(); // 0..1 — 1.0 measured, lower for AI
   TextColumn get sourceRef => text().nullable()();
