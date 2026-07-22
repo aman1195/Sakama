@@ -6,7 +6,16 @@ import 'package:sakama/core/db/database.dart';
 import 'package:sakama/core/providers/app_providers.dart';
 import 'package:sakama/features/capture/data/food_log_repository.dart';
 import 'package:sakama/features/capture/presentation/quick_add_page.dart';
+import 'package:sakama/features/foods/data/food_seed.dart';
 import 'package:sakama/features/home/domain/day_totals.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+/// A tiny corpus so search tests never load the 1.5 MB USDA asset.
+FoodSeedEntry _seed(String id, String name, double kcal, double servingGrams) =>
+    FoodSeedEntry(
+      id: id, name: name, type: 'dish', energyKcal: kcal, proteinG: 2,
+      carbG: 28, fatG: 1, servingLabel: '1 katori', servingGrams: servingGrams,
+      source: 'sample', licence: 'CC0', confidence: 0.5);
 
 void main() {
   group('FoodLogRepository', () {
@@ -45,11 +54,20 @@ void main() {
 
   group('QuickAddPage', () {
     late SakamaDatabase db;
-    setUp(() => db = SakamaDatabase.withExecutor(NativeDatabase.memory()));
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      db = SakamaDatabase.withExecutor(NativeDatabase.memory());
+    });
     tearDown(() => db.close());
 
     Widget harness(Meal? meal) => ProviderScope(
-          overrides: [databaseProvider.overrideWith((ref) async => db)],
+          overrides: [
+            databaseProvider.overrideWith((ref) async => db),
+            foodSeedSourceProvider.overrideWithValue(InMemoryFoodSeed([
+              _seed('sample-rice', 'Cooked Rice', 130, 150),
+              _seed('sample-dal', 'Dal Tadka', 120, 150),
+            ])),
+          ],
           child: MaterialApp(home: QuickAddPage(initialMeal: meal)),
         );
 

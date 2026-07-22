@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/capture/data/food_log_repository.dart';
 import '../../features/foods/data/food_repository.dart';
+import '../../features/foods/data/food_seed.dart';
 import '../../features/onboarding/data/profile_repository.dart';
 import '../../features/water/data/water_repository.dart';
 import '../../features/weight/data/weight_repository.dart';
@@ -56,12 +57,17 @@ final weightRepositoryProvider = FutureProvider<WeightRepository>((ref) async {
   return WeightRepository(db);
 });
 
-/// The food reference repository, seeded on first access (idempotent). The
-/// seed is a labelled sample today; real INDB/USDA ingestion lands in M2.2.
+/// The seed corpus. Production = Indian sample + USDA asset; overridable in
+/// tests with a small in-memory set (so tests never load the 1.5 MB asset).
+final foodSeedSourceProvider =
+    Provider<FoodSeedSource>((ref) => const AssetFoodSeed());
+
+/// The food reference repository, seeded (version-gated) on first access.
+/// Reloads when the bundled seed version bumps (existing installs get updates).
 final foodRepositoryProvider = FutureProvider<FoodRepository>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   final repo = FoodRepository(db);
-  await repo.ensureSeeded();
+  await repo.ensureSeeded(ref.watch(foodSeedSourceProvider));
   return repo;
 });
 
