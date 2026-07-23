@@ -12,7 +12,7 @@ skill (`.agents/skills/domain-modeling/ADR-FORMAT.md`).
 | [0005](0005-build-fresh-no-fork.md) | Fork nothing; build fresh from a permissive assembly kit | Accepted |
 | [0006](0006-litellm-gateway-byok-hybrid.md) | LiteLLM gateway with hybrid BYOK | ⚠️ Superseded by 0011 |
 | [0007](0007-plan-engine-as-json-data.md) | Plans are JSON data, never hardcoded logic | Accepted |
-| [0008](0008-indian-food-database-strategy.md) | Indian food DB: INDB + USDA + OFF, never IFCT | ⚠️ Partly superseded by 0012 |
+| [0008](0008-indian-food-database-strategy.md) | Indian food DB: USDA + OFF + AI/commercial. Never IFCT, never INDB | ⚠️ Partly superseded by 0012; amended 2026-07-22 (INDB removed) |
 | [0009](0009-freemium-monetization.md) | Freemium — core free, expensive AI metered | Accepted |
 | [0010](0010-wedge-v1-scope-solo.md) | Wedge v1 (M0–M3), solo builder; launch at M3 | Accepted |
 | [0011](0011-serverless-ai-gateway.md) | Serverless AI gateway (Edge Fn + managed gateway) | Accepted |
