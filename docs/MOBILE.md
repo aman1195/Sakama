@@ -29,7 +29,7 @@ not code — OpenNutriTracker is GPL and must never be copied):
 ### The most valuable thing we learned from them
 **Fud AI does not bundle the Open Food Facts database — it queries the API live, per barcode.** That is a
 deliberate **ODbL-avoidance strategy**: if you never distribute a derived database, share-alike never
-triggers. Our plan to ship an OFF snapshot is precisely what *does* trigger it. Both options, and the
+triggers. Shipping an OFF snapshot is precisely what *would* trigger it — which is why we do NOT ship one ([ADR 0014](adr/0014-off-live-lookup-only.md)). Both options, and the
 trade-off against our offline-first promise, are written up in [ASSET_CREDITS.md](../ASSET_CREDITS.md).
 
 ---

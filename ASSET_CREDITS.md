@@ -27,14 +27,20 @@ Two options, and we must choose deliberately:
 
 | Option | ODbL exposure | Cost |
 |---|---|---|
-| **A. Live API only** (Fud AI's approach) | **Low.** No derived database is distributed; attribution alone suffices. | Barcode lookup **requires connectivity**, and OFF rate-limits to 15 req/min. Conflicts with our offline-first promise. |
-| **B. Bundle a filtered Indian OFF snapshot** (current plan) | **Higher.** We ship an OFF-derived database → share-alike likely applies to *that database*. | Barcode works offline. Must keep OFF rows in a **physically separate, source-tagged table**, never merged into the proprietary table, and be prepared to publish that table as open data. |
+| **A. Live API only + per-scan cache** (CHOSEN — [ADR 0014](docs/adr/0014-off-live-lookup-only.md)) | **Low.** No derived database is distributed; attribution alone suffices. | Barcode lookup **requires connectivity**, and OFF rate-limits to 15 req/min. Conflicts with our offline-first promise. |
+| **B. Bundle a filtered Indian OFF snapshot** (rejected) | **Higher.** We ship an OFF-derived database → share-alike likely applies to *that database*. | Barcode works offline. Must keep OFF rows in a **physically separate, source-tagged table**, never merged into the proprietary table, and be prepared to publish that table as open data. |
 
-**Current decision: Option B, with strict containment** (see
-[docs/adr/0008](docs/adr/0008-indian-food-database-strategy.md)). Our proprietary Indian food table stays
-clean; only the OFF-derived table carries ODbL. **This requires counsel review before launch.** If counsel
-is uncomfortable, fall back to Option A with an on-device cache of only the user's own scans (a cache of
-individual lookups is a much weaker claim to a "derivative database" than a shipped snapshot).
+**DECIDED 2026-07-22: Option A** — live lookup with an on-device cache of only the user's own scans
+([ADR 0014](docs/adr/0014-off-live-lookup-only.md)). We do NOT ship an OFF snapshot, so no derived
+database is distributed and the pre-launch counsel review Option B required is not needed.
+
+The offline-first objection to A does not bite: **logging copies values into `food_logs` (our own
+data)**, so a meal logged in March renders in December offline with no OFF row present. OFF is only
+needed at *scan* time, and a previously scanned barcode resolves from cache. The single accepted
+limit is scanning a brand-new barcode while offline.
+
+Containment is unchanged and still mandatory: cached OFF rows stay in the separate `off_foods`
+table, never merged into the proprietary table (CLAUDE.md rule 5).
 
 **Required in-app attribution (either option):**
 > "Barcode and packaged-food data from Open Food Facts contributors, available under the Open Database

@@ -32,7 +32,7 @@
 (a) CURATED SEED DB   ~300–800 common Indian dishes + staples   ← our core asset, shipped in-app
         source: recomputed from IFCT 2017 + NIN 2024 portions + USDA (CC0) gap-fill
 (b) OPEN FOOD FACTS    barcodes / branded packaged foods         ← source-tagged, ODbL-contained
-        ship a filtered Indian snapshot; live API fallback (15 req/min, proper User-Agent)
+        LIVE lookup per scan + local cache of the user's own scans; NO bundled snapshot (ADR 0014)
 (c) LLM AI ESTIMATION  the long tail (any dish/portion not above) ← retrieval-grounded, confidence-scored
         promote frequently-requested, human-reviewed estimates into (a)
 ```
@@ -102,10 +102,11 @@ Store canonically per 100 g; derive per-serving from `serving_units` at read tim
 ## 5. Runtime behavior
 
 - **Search / autocomplete:** query the **local Drift** seed + cached rows (OFF live search is rate-
-  limited to 10 req/min and unfit for as-you-type). Ship the seed + Indian OFF snapshot as app data.
-- **Barcode:** `mobile_scanner` → look up local snapshot first → fall back to live OFF API (15
-  req/min, proper `User-Agent` `Sakama/<ver> (contact)`) → cache result locally. Show ODbL
-  attribution on OFF-sourced items.
+  limited to 10 req/min and unfit for as-you-type). Ship the USDA seed as app data. NO OFF snapshot is bundled (ADR 0014).
+- **Barcode:** `mobile_scanner` → look up the local **cache of previously scanned barcodes** first →
+  otherwise live OFF API (proper `User-Agent` `Sakama/<ver> (contact)`) → cache the result into the
+  separate `off_foods` table. No bundled snapshot ([ADR 0014](../adr/0014-off-live-lookup-only.md)).
+  Show ODbL attribution on OFF-sourced items.
 - **Gap → AI estimate:** if not found in (a)/(b), call the AI estimator ([architecture/02-ai-layer.md](02-ai-layer.md))
   grounded on nearest IFCT/USDA rows; store as `source=ai_estimate` with `confidence`. Queue frequent
   estimates for human review → promotion into the curated seed.
@@ -117,6 +118,6 @@ Store canonically per 100 g; derive per-serving from `serving_units` at read tim
 3. Compute per-100g energy/macros/micros per dish; fill missing nutrients from USDA.
 4. Cross-validate against INDB / Kaggle (reference only); flag large deviations for review.
 5. Emit `seed_foods.json` (+ a Supabase seed migration) with full `source/license/confidence`.
-6. Produce the filtered **Indian OFF snapshot** from the OFF bulk dump (Parquet/JSONL), source-tagged.
+6. ~~Produce the filtered Indian OFF snapshot from the OFF bulk dump.~~ **NOT DONE — rejected by [ADR 0014](../adr/0014-off-live-lookup-only.md)**: OFF is live-lookup-only with a per-scan cache, so no OFF bulk pipeline exists.
 
 Pipeline scripts live in `supabase/seed/` and are re-runnable as sources update.

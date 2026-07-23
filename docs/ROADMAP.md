@@ -56,9 +56,9 @@ The whole thesis rests on "a VLM estimates an Indian meal's macros usefully." Te
 - Barcode scanning (`mobile_scanner` + openfoodfacts-dart / Smooth App scanner) → lookup + cache +
   attribution.
 - Custom meals / favourites / quick-add.
-- **Open decision (settle here):** Open Food Facts **live-lookup-only** (ODbL-safe) vs. **bundled OFF
-  snapshot** (offline, ODbL-exposed). Every food row carries `source`/`licence`/`confidence`; OFF stays
-  in its own table.
+- **SETTLED ([ADR 0014](adr/0014-off-live-lookup-only.md)):** Open Food Facts is **live-lookup-only
+  with a per-scan cache**. We do NOT bundle an OFF snapshot, so no derived database is distributed.
+  Every food row carries `source`/`licence`/`confidence`; OFF stays in its own table.
 - **Exit test:** search finds Indian dishes offline; a real barcode resolves and logs correctly.
 
 ## M3 — The AI moat  →  **v1 LAUNCH** · [ADR 0011](adr/0011-serverless-ai-gateway.md) · [ADR 0009](adr/0009-freemium-monetization.md)
@@ -100,8 +100,9 @@ The whole thesis rests on "a VLM estimates an Indian meal's macros usefully." Te
 
 ## M7 — Ongoing hardening (much pulled into M3 for launch)
 - Security review (RLS coverage, key redaction, storage policies, OWASP M1).
-- **Licensing:** finalize permissive attributions + creator credits on the product website; resolve the
-  Open Food Facts ODbL posture with counsel. (INDB is resolved: unusable — do not bundle.)
+- **Licensing:** finalize permissive attributions + creator credits on the product website.
+  (OFF ODbL posture resolved by [ADR 0014](adr/0014-off-live-lookup-only.md): live-only, no derived
+  database distributed. INDB resolved: unusable — do not bundle.)
 - Privacy policy, App Store / Play data-safety, DPDP/GDPR alignment.
 
 ---
@@ -116,7 +117,7 @@ The whole thesis rests on "a VLM estimates an Indian meal's macros usefully." Te
 
 ## Known decisions still open (tracked)
 - Vision model — decided by the **Phase 0 spike**.
-- Open Food Facts **live vs. bundled** (M2). Indian-dish source: AI estimation + which commercial
+- ~~Open Food Facts live vs. bundled~~ SETTLED: live-only (ADR 0014). Indian-dish source: AI estimation + which commercial
   licence (FatSecret vs Bon Happetee). (INDB is closed: unusable — unlicensed + IFCT-derived.)
 - Subscription tooling (RevenueCat vs. native billing) for Sakama Plus.
 - Privacy-respecting analytics (no health PII).

@@ -18,6 +18,7 @@ skill (`.agents/skills/domain-modeling/ADR-FORMAT.md`).
 | [0011](0011-serverless-ai-gateway.md) | Serverless AI gateway (Edge Fn + managed gateway) | Accepted |
 | [0012](0012-ship-bundled-food-data.md) | Ship-bundled food data for v1 (defer recompute) | Accepted |
 | [0013](0013-validate-photosnap-before-build.md) | Validate PhotoSnap before build (spike-first) | Accepted |
+| [0014](0014-off-live-lookup-only.md) | Open Food Facts: live lookup + per-scan cache; ship NO snapshot | Accepted |
 
 **Grilling session (2026-07):** 0009–0013 came out of a `/grilling` pass that pressure-tested the plan
 for a solo builder. It reversed/sharpened five decisions and reaffirmed one (PowerSync, 0003).
