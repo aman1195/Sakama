@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../features/capture/data/food_log_repository.dart';
 import '../../features/foods/data/food_repository.dart';
 import '../../features/foods/data/food_seed.dart';
+import '../../features/settings/data/attribution_repository.dart';
 import '../../features/onboarding/data/profile_repository.dart';
 import '../../features/water/data/water_repository.dart';
 import '../../features/weight/data/weight_repository.dart';
@@ -69,6 +70,15 @@ final foodRepositoryProvider = FutureProvider<FoodRepository>((ref) async {
   final repo = FoodRepository(db);
   await repo.ensureSeeded(ref.watch(foodSeedSourceProvider));
   return repo;
+});
+
+/// Attribution derived FROM the provenance columns, so no bundled dataset can
+/// ship uncredited (ASSET_CREDITS.md is a legal obligation, not a courtesy).
+/// Depends on foodRepositoryProvider so the seed has loaded before we read it.
+final usedDataSourcesProvider = FutureProvider<List<SourceUsage>>((ref) async {
+  await ref.watch(foodRepositoryProvider.future); // ensure seeded
+  final db = await ref.watch(databaseProvider.future);
+  return AttributionRepository(db).usedSources();
 });
 
 /// The persisted profile, live. Null until onboarding writes it.
