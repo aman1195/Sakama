@@ -33,6 +33,6 @@ rather than recomputing. (The original plan named INDB as that ready data; that 
 - Data quality is "good enough to test the wedge", not "gold-standard recomputed". Acceptable pre-launch.
 - **Deferred (post-launch, if quality is the blocker):** the recompute pipeline, and commercial coverage
   via **FatSecret** (free under $1M revenue, India locale) or **Bon Happetee** (India-native dump).
-- **Open M2 decision:** Open Food Facts **live-lookup-only** (ODbL-safe, needs connectivity) vs. a
-  **bundled Indian OFF snapshot** (works offline, but is a derived database with ODbL share-alike). Fud
-  AI avoids it by live-lookup-only. Settle when building M2.
+- **CLOSED ([ADR 0014](0014-off-live-lookup-only.md), 2026-07-22):** Open Food Facts is
+  **live-lookup-only with a per-scan cache**. No OFF snapshot is bundled, so no derived database is
+  distributed. Logging copies values into `food_logs`, so the diary still renders offline.

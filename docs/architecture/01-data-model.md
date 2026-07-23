@@ -29,7 +29,7 @@ auth.users (Supabase)
    └─ coach_messages (1:N)        Vita chat history + context snapshots
    └─ user_ai_keys (1:1/opt)      encrypted BYOK reference (never plaintext)
    └─ ai_usage (1:N)              spend/meter mirror from LiteLLM
-foods (global reference)          curated + OFF snapshot + AI estimates
+foods (global reference)          USDA/licensed + AI estimates   (OFF is SEPARATE: off_foods)
 food_favorites / custom_meals     user-defined templates
 ```
 
@@ -134,7 +134,8 @@ promotion pipeline.
 ## Sync mapping (PowerSync)
 - All user tables replicate into local Drift on a per-`user_id` sync rule.
 - `foods` replicates a **filtered subset** (India + user's recently used) to keep the local DB small;
-  the rest is fetched on demand and cached. The OFF snapshot ships as seed data, refreshed
+  the rest is fetched on demand and cached. NO OFF snapshot ships (ADR 0014) — OFF rows are cached
+  per scanned barcode into the separate off_foods table. The USDA seed ships as app data, refreshed
   periodically.
 - Append-mostly logs → few conflicts. `diary_days.totals` is recomputed locally from logs and treated
   as derived (server merge recomputes rather than blind LWW).
