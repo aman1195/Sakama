@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/env/env.dart';
@@ -18,6 +19,22 @@ class MePage extends ConsumerWidget {
         padding: const EdgeInsets.all(16),
         children: [
           const WeightSection(),
+          // Attribution surface — a legal obligation for licensed data
+          // (ASSET_CREDITS.md), plus the OSS dependency notices.
+          Card(
+            margin: const EdgeInsets.only(top: 16),
+            child: Semantics(
+              identifier: 'nav-data-sources',
+              button: true,
+              child: ListTile(
+                leading: const Icon(Icons.dataset_outlined),
+                title: const Text('Data sources & licences'),
+                subtitle: const Text('Where our nutrition data comes from'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/data-sources'),
+              ),
+            ),
+          ),
           // Debug-only: the real auth UI is M1. This exists so the M0 exit test
           // and the two-account isolation test can obtain a session at all.
           if (kDebugMode && Env.isConfigured) const _DevSignInCard(),

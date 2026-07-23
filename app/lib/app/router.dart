@@ -10,6 +10,7 @@ import '../features/home/domain/day_totals.dart';
 import '../features/home/presentation/home_page.dart';
 import '../features/me/presentation/me_page.dart';
 import '../features/onboarding/presentation/onboarding_page.dart';
+import '../features/settings/presentation/data_sources_page.dart';
 
 /// Router with an onboarding gate:
 ///   profile loading  -> /splash (never flash onboarding at a returning user)
@@ -38,6 +39,9 @@ final routerProvider = Provider<GoRouter>((ref) {
             const Scaffold(body: Center(child: CircularProgressIndicator())),
       ),
       GoRoute(path: '/onboarding', builder: (_, _) => const OnboardingPage()),
+      GoRoute(
+          path: '/data-sources',
+          builder: (_, _) => const DataSourcesPage()),
       GoRoute(
         path: '/add',
         builder: (context, state) {
