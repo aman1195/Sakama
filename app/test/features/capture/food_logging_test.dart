@@ -191,5 +191,62 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(milliseconds: 50));
     });
+
+    testWidgets('editing a MACRO after a pick also reverts to manual (#32)',
+        (tester) async {
+      await pumpTall(tester, Meal.lunch);
+      await tester.enterText(
+          find.bySemanticsIdentifier('qa-search'), 'cooked rice');
+      for (var i = 0;
+          i < 40 && find.text('Cooked Rice').evaluate().isEmpty;
+          i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await tester.tap(find.text('Cooked Rice'));
+      await tester.pump();
+      expect(find.bySemanticsIdentifier('qa-grams'), findsOneWidget);
+
+      // Hand-edit the CALORIES: the row no longer equals scaleTo(grams) of the
+      // picked food, so keeping loggedVia='search' would be false provenance.
+      await tester.enterText(find.bySemanticsIdentifier('qa-kcal'), '999');
+      await tester.pump();
+      expect(find.bySemanticsIdentifier('qa-grams'), findsNothing,
+          reason: 'the picked-food link is dropped on a nutrition edit');
+
+      await tester.tap(find.bySemanticsIdentifier('qa-save'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      final rows = await db.select(db.foodLogs).get();
+      expect(rows.single.energyKcal, 999);
+      expect(rows.single.loggedVia, 'manual',
+          reason: 'hand-edited macros must not claim corpus provenance');
+      expect(rows.single.grams, isNull);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 50));
+    });
+
+    testWidgets('search is debounced — no results before the delay elapses',
+        (tester) async {
+      await pumpTall(tester, Meal.lunch);
+      await tester.enterText(
+          find.bySemanticsIdentifier('qa-search'), 'cooked rice');
+      // Well inside the 250ms debounce window: the query must not have run.
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.text('Cooked Rice'), findsNothing,
+          reason: 'a keystroke should not fire a query immediately');
+
+      // After the window (plus async seed+search), results arrive.
+      for (var i = 0;
+          i < 40 && find.text('Cooked Rice').evaluate().isEmpty;
+          i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(find.text('Cooked Rice'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 50));
+    });
   });
 }
