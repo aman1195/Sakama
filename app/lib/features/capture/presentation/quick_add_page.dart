@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -42,6 +44,12 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
   Food? _picked;
   List<Food> _results = const [];
   int _searchToken = 0; // drops stale async results
+  Timer? _debounce;
+
+  /// Search fires one query per keystroke without this. Fine over the tiny
+  /// local corpus, but the corpus is ~8k rows now and grows with OFF (2.3),
+  /// so coalesce bursts of typing (issue #32).
+  static const _debounceDelay = Duration(milliseconds: 250);
 
   static Meal _defaultMeal() {
     final h = DateTime.now().hour;
@@ -53,6 +61,7 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
     for (final c in [_search, _name, _grams, _kcal, _protein, _carb, _fat]) {
       c.dispose();
     }
@@ -65,7 +74,18 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
         '${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}';
   }
 
-  Future<void> _onSearchChanged(String query) async {
+  void _onSearchChanged(String query) {
+    _debounce?.cancel();
+    if (query.trim().isEmpty) {
+      // Clearing the box should feel instant — nothing to coalesce.
+      _searchToken++;
+      setState(() => _results = const []);
+      return;
+    }
+    _debounce = Timer(_debounceDelay, () => _runSearch(query));
+  }
+
+  Future<void> _runSearch(String query) async {
     final token = ++_searchToken;
     final q = query.trim();
     if (q.isEmpty) {
@@ -90,16 +110,27 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
     FocusScope.of(context).unfocus();
   }
 
+  /// A hand edit to a nutrition field breaks the derived-from-food guarantee,
+  /// so the log must record 'manual', not 'search'. Ignored while we are the
+  /// ones writing those fields (see [_recomputeFromGrams]).
+  void _dropPickedProvenance(String _) {
+    if (_picked != null && !_deriving) setState(() => _picked = null);
+  }
+
+  bool _deriving = false;
+
   /// Derive the portion macros from the picked food's per-100g values.
   void _recomputeFromGrams() {
     final food = _picked;
     if (food == null) return;
     final grams = double.tryParse(_grams.text.trim()) ?? 0;
     final m = food.per100g.scaleTo(grams);
+    _deriving = true; // our own writes must not look like a hand edit
     _kcal.text = m.energyKcal.toStringAsFixed(0);
     _protein.text = m.proteinG.toStringAsFixed(1);
     _carb.text = m.carbG.toStringAsFixed(1);
     _fat.text = m.fatG.toStringAsFixed(1);
+    _deriving = false;
   }
 
   Future<void> _save() async {
@@ -171,11 +202,18 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
                 _field(_grams, 'Amount (g)', id: 'qa-grams',
                     number: true, required: true, positive: true,
                     onChanged: (_) => _recomputeFromGrams()),
+              // Hand-editing ANY nutrition value means the row no longer
+              // equals scaleTo(grams) of the picked food, so it must not keep
+              // that food's provenance (issue #32).
               _field(_kcal, 'Calories (kcal)', id: 'qa-kcal',
-                  number: true, required: true, positive: true),
-              _field(_protein, 'Protein (g)', id: 'qa-protein', number: true),
-              _field(_carb, 'Carbs (g)', id: 'qa-carb', number: true),
-              _field(_fat, 'Fat (g)', id: 'qa-fat', number: true),
+                  number: true, required: true, positive: true,
+                  onChanged: _dropPickedProvenance),
+              _field(_protein, 'Protein (g)', id: 'qa-protein', number: true,
+                  onChanged: _dropPickedProvenance),
+              _field(_carb, 'Carbs (g)', id: 'qa-carb', number: true,
+                  onChanged: _dropPickedProvenance),
+              _field(_fat, 'Fat (g)', id: 'qa-fat', number: true,
+                  onChanged: _dropPickedProvenance),
               const SizedBox(height: 24),
               Semantics(
                 identifier: 'qa-save',
