@@ -129,6 +129,22 @@ jobs:
               r'\b(insert\s+into|copy|merge\s+into|update)\s+' + PROPRIETARY + r'\b', re.I)
           OFF = re.compile(r"openfoodfacts|open_food_facts|off_(staging|foods|raw)|\bodbl\b", re.I)
 
+          # The rule above is SQL-shaped. Since M2.3a, OFF data is handled in
+          # DART/DRIFT on the client, where a merge reads
+          #   _db.into(_db.foods).insert(FoodsCompanion.insert(
+          #       ..., source: 'openfoodfacts'))
+          # and matches NO SQL pattern. Without the rule below, the automated
+          # backstop for the biggest legal risk in the stack covers only the
+          # seed pipeline, and a Drift-side contamination passes every gate
+          # green. Case-SENSITIVE so `_db.foods` matches but `_db.offFoods`
+          # (the legitimate, segregated table) does not.
+          DRIFT_WRITE = re.compile(
+              r'\b(into|update|delete)\s*\(\s*[\w.]*\bfoods\s*\)'
+              r'|\binsertAll\s*\(\s*[\w.]*\bfoods\b')
+          # FILE-level, not statement-level: a violation can build the
+          # companion in one statement and insert it in the next, which
+          # splitting on ';' would miss. Conservative by design.
+
           SCAN_EXT = ('.sql', '.py', '.ts', '.js', '.dart')
           SKIP_DIRS = {'.git', '.github', '.agents', '.claude', 'node_modules'}
 
@@ -150,6 +166,18 @@ jobs:
                       if WRITE.search(stmt) and OFF.search(stmt):
                           one = ' '.join(stmt.split())[:160]
                           hits.append(f"{p}: {one}")
+                  # SHIPPED Dart only (a `lib/` path). Test code is not
+                  # distributed, so it carries no share-alike risk, and test
+                  # fixtures legitimately seed `foods` while exercising
+                  # `off_foods` — scanning them would be a false positive.
+                  if f.endswith('.dart') and f'{os.sep}lib{os.sep}' in p:
+                      # Dart line comments survive the strip above, so re-strip.
+                      dart = re.sub(r'//[^\n]*', ' ', body)
+                      m = DRIFT_WRITE.search(dart)
+                      if m and OFF.search(dart):
+                          hits.append(
+                              f"{p}: Drift write to `foods` in a file that "
+                              f"handles OFF data -> {m.group(0)}")
 
           for h in hits:
               print(f"::error::ODbL contamination: {h}")

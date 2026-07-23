@@ -37,6 +37,30 @@ over it, the pre-launch counsel review B required, and the app-size/downloadable
 A cache of individually-requested lookups is a materially weaker claim to a "Derivative Database"
 than a shipped bulk export — a distinction ASSET_CREDITS.md itself already drew.
 
+## Scope boundary: logged values, and the explicit non-goal
+
+Be precise about one thing, because "we distribute nothing" is true of `off_foods` but not
+literally true of every OFF-derived byte. **Logging an OFF product copies its name and macros into
+`food_logs`, which syncs to our server.**
+
+That is **not** a share-alike problem as it stands:
+
+- those rows are **private per-user data behind RLS**, never publicly conveyed;
+- each is a **single record** — an insubstantial extract, not a database;
+- the user is recording *their own meal*, which is the ordinary use of the data.
+
+**The explicit NON-GOAL** — recorded here while the reasoning is fresh, because it is the realistic
+way this becomes a real problem later:
+
+> **We will NOT aggregate barcode-logged `food_logs` into a server-side branded-food table**
+> (e.g. "build our own product catalogue from what users scanned"). Doing so would assemble an
+> OFF-derived **Derivative Database** on our infrastructure, and the ODbL share-alike question would
+> reopen in a much harder form than the one this ADR closes.
+
+If branded-food coverage on the server is ever wanted, it must come from a **separately licensed
+source** or from OFF **under a deliberate, counsel-reviewed ODbL posture** — never as a silent
+by-product of user logging.
+
 ## Consequences
 
 - **ODbL containment is unchanged and still mandatory** (CLAUDE.md rule 5): cached OFF rows live in
