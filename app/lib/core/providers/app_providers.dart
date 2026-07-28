@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/capture/data/food_log_repository.dart';
 import '../../features/foods/data/food_repository.dart';
+import '../../features/foods/data/ai_estimator.dart';
 import '../../features/foods/data/food_seed.dart';
 import '../../features/foods/data/off_client.dart';
 import '../../features/foods/data/off_repository.dart';
@@ -98,6 +99,11 @@ final offRepositoryProvider = FutureProvider<OffRepository>((ref) async {
   final client = await ref.watch(offClientProvider.future);
   return OffRepository(db, client);
 });
+
+/// AI nutrition estimation (ADR 0011: Edge Function -> managed gateway).
+/// Injectable so tests use a fake and the UI works before deployment.
+final aiEstimatorProvider =
+    Provider<AiEstimator>((ref) => EdgeFunctionAiEstimator());
 
 /// Resolve one scanned [barcode] into an explicit [BarcodeResult]. Failure
 /// modes are VALUES, not thrown errors, so they stay off Riverpod's auto-retry
