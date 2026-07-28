@@ -5,6 +5,7 @@ import '../../../core/db/database.dart';
 import '../domain/food.dart';
 import '../domain/food_search.dart';
 import '../domain/food_serving.dart';
+import '../domain/food_estimate.dart';
 import 'food_seed.dart';
 
 /// Reads the local `foods` reference table (offline-first, CLAUDE.md rule 1).
@@ -59,6 +60,34 @@ class FoodRepository {
       });
     });
     await prefs.setInt(_seedVersionKey, seedVersion);
+  }
+
+  /// Persist an AI estimate into the reference corpus so it is findable in
+  /// later searches. Tagged source='ai_estimate', licence='generated' — the
+  /// provenance columns are the audit trail (rule 7), and its sub-floor
+  /// confidence means ranking demotes it below verified data (#27). NOT a
+  /// seed row: survives seedVersion reloads only by being re-estimated, which
+  /// is acceptable for generated data.
+  Future<Food> saveEstimate(FoodEstimate e) async {
+    final id = 'ai-${e.name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}';
+    await _db.into(_db.foods).insertOnConflictUpdate(FoodsCompanion.insert(
+          id: id,
+          name: e.name,
+          type: 'dish',
+          energyKcal: e.energyKcal,
+          proteinG: e.proteinG,
+          carbG: e.carbG,
+          fatG: e.fatG,
+          fiberG: Value(e.fiberG),
+          defaultServingLabel: Value(e.servingLabel),
+          defaultServingGrams: Value(e.servingGrams),
+          source: 'ai_estimate',
+          licence: 'generated',
+          confidence: e.confidence,
+        ));
+    final row = await (_db.select(_db.foods)..where((t) => t.id.equals(id)))
+        .getSingle();
+    return _toFood(row);
   }
 
   /// Ranked search results for [query]. Empty query => no results.

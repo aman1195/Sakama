@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/app_providers.dart';
+import '../../foods/data/ai_estimator.dart';
 import '../../foods/domain/food.dart';
 import '../../home/domain/day_totals.dart';
 
@@ -44,6 +45,11 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
   /// name by hand (it is no longer that food).
   Food? _picked;
   List<Food> _results = const [];
+
+  /// The query that produced zero results — shows the AI-estimate offer.
+  String? _noResultQuery;
+  bool _estimating = false;
+  String? _estimateError;
   int _searchToken = 0; // drops stale async results
   Timer? _debounce;
 
@@ -80,7 +86,11 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
     if (query.trim().isEmpty) {
       // Clearing the box should feel instant — nothing to coalesce.
       _searchToken++;
-      setState(() => _results = const []);
+      setState(() {
+        _results = const [];
+        _noResultQuery = null;
+        _estimateError = null;
+      });
       return;
     }
     _debounce = Timer(_debounceDelay, () => _runSearch(query));
@@ -96,7 +106,39 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
     final repo = await ref.read(foodRepositoryProvider.future);
     final results = await repo.search(q, limit: 8);
     if (!mounted || token != _searchToken) return; // a newer query superseded us
-    setState(() => _results = results);
+    setState(() {
+      _results = results;
+      _noResultQuery = results.isEmpty ? q : null;
+      _estimateError = null;
+    });
+  }
+
+  Future<void> _estimate() async {
+    final dish = _noResultQuery;
+    if (dish == null || _estimating) return;
+    setState(() { _estimating = true; _estimateError = null; });
+    try {
+      final estimator = ref.read(aiEstimatorProvider);
+      final estimate = await estimator.estimate(dish);
+      // Persist with ai_estimate provenance so it is findable next time, then
+      // flow into the normal picked-food path (grams -> derived macros).
+      final foodRepo = await ref.read(foodRepositoryProvider.future);
+      final food = await foodRepo.saveEstimate(estimate);
+      if (!mounted) return;
+      _pick(food);
+      if (estimate.assumptions != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('AI estimate — assumed: ${estimate.assumptions}')));
+      }
+    } on EstimateException catch (e) {
+      if (mounted) {
+        setState(() => _estimateError = e.budgetExhausted
+            ? 'Daily AI limit reached. Try again tomorrow, or enter it manually.'
+            : 'Could not estimate right now. Enter it manually below.');
+      }
+    } finally {
+      if (mounted) setState(() => _estimating = false);
+    }
   }
 
   void _pick(Food food) {
@@ -195,6 +237,38 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
                 ),
               ),
               if (_results.isNotEmpty) _resultsList(),
+              if (_noResultQuery != null && _results.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Semantics(
+                        identifier: 'qa-estimate',
+                        child: OutlinedButton.icon(
+                          icon: _estimating
+                              ? const SizedBox(
+                                  width: 16, height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.auto_awesome),
+                          label: Text(_estimating
+                              ? 'Estimating…'
+                              : 'Estimate "$_noResultQuery" with AI'),
+                          onPressed: _estimating ? null : _estimate,
+                        ),
+                      ),
+                      if (_estimateError != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Semantics(
+                            identifier: 'qa-estimate-error',
+                            child: Text(_estimateError!,
+                                style: Theme.of(context).textTheme.bodySmall),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               const SizedBox(height: 16),
               // Meal slot.
               SegmentedButton<Meal>(
