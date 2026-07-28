@@ -26,10 +26,23 @@ class OffRepository {
   /// sit below verified reference data but at/above the unverified floor.
   static const double _offConfidence = 0.6;
 
+  /// In-flight lookups keyed by barcode. A rapid camera can emit the same code
+  /// many times before the first request returns; without this, each emission
+  /// fires its own network call. Concurrent identical scans share one future.
+  final _inFlight = <String, Future<Food?>>{};
+
   /// Resolve [barcode]. Returns null when neither the cache nor OFF knows it.
   /// Rethrows [OffLookupException] only when the cache missed AND the network
   /// failed, so the caller can distinguish "not found" from "offline".
-  Future<Food?> lookup(String barcode) async {
+  Future<Food?> lookup(String barcode) => _inFlight.putIfAbsent(barcode, () async {
+        try {
+          return await _lookup(barcode);
+        } finally {
+          _inFlight.remove(barcode);
+        }
+      });
+
+  Future<Food?> _lookup(String barcode) async {
     final cached = await _cached(barcode);
     if (cached != null) return cached;
 

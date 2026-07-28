@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/app_providers.dart';
 import '../../foods/domain/food.dart';
@@ -161,7 +162,20 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
     return Semantics(
       identifier: 'quick-add-page',
       child: Scaffold(
-        appBar: AppBar(title: const Text('Add food')),
+        appBar: AppBar(
+          title: const Text('Add food'),
+          actions: [
+            Semantics(
+              identifier: 'qa-scan',
+              button: true,
+              child: IconButton(
+                icon: const Icon(Icons.qr_code_scanner),
+                tooltip: 'Scan barcode',
+                onPressed: () => context.push('/scan'),
+              ),
+            ),
+          ],
+        ),
         body: Form(
           key: _formKey,
           child: ListView(

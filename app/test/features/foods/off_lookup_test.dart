@@ -92,7 +92,31 @@ void main() {
     test('server/network failure throws (distinct from not-found)', () async {
       final c = OffClient(
           httpClient: MockClient((_) async => http.Response('boom', 500)));
-      expect(() => c.fetch('000'), throwsA(isA<OffLookupException>()));
+      await expectLater(c.fetch('000'), throwsA(isA<OffLookupException>()));
+    });
+
+    test('429 throws OffRateLimitException carrying Retry-After (#44)', () async {
+      final c = OffClient(
+          httpClient: MockClient((_) async =>
+              http.Response('', 429, headers: {'retry-after': '30'})));
+      try {
+        await c.fetch('000');
+        fail('should have thrown');
+      } on OffRateLimitException catch (e) {
+        expect(e.retryAfter, const Duration(seconds: 30));
+      }
+    });
+
+    test('uses the injected app version in the User-Agent (#44)', () async {
+      String? ua;
+      final c = OffClient(
+          appVersion: '2.5.1',
+          httpClient: MockClient((req) async {
+            ua = req.headers['User-Agent'];
+            return http.Response(_productJson(), 200);
+          }));
+      await c.fetch('8901719101083');
+      expect(ua, contains('Sakama/2.5.1'));
     });
   });
 
@@ -140,6 +164,26 @@ void main() {
       expect(await db.select(db.offFoods).get(), hasLength(1));
     });
 
+    test('concurrent identical scans share ONE network call (#44 dedupe)',
+        () async {
+      var calls = 0;
+      final repo = OffRepository(
+          db,
+          OffClient(httpClient: MockClient((_) async {
+            calls++;
+            await Future<void>.delayed(const Duration(milliseconds: 20));
+            return http.Response(_productJson(), 200);
+          })));
+      // Fire three lookups for the same barcode before the first resolves.
+      final results = await Future.wait([
+        repo.lookup('8901719101083'),
+        repo.lookup('8901719101083'),
+        repo.lookup('8901719101083'),
+      ]);
+      expect(results.every((f) => f != null), isTrue);
+      expect(calls, 1, reason: 'a rapid camera must not fan out into 3 requests');
+    });
+
     test('unknown barcode returns null without writing a row', () async {
       final repo = OffRepository(
           db, OffClient(httpClient: MockClient((_) async => http.Response('', 404))));
@@ -153,7 +197,7 @@ void main() {
           db,
           OffClient(
               httpClient: MockClient((_) async => throw Exception('no net'))));
-      expect(() => repo.lookup('999'), throwsA(isA<OffLookupException>()));
+      await expectLater(repo.lookup('999'), throwsA(isA<OffLookupException>()));
     });
   });
 }

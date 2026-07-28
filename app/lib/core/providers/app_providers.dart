@@ -1,9 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/capture/data/food_log_repository.dart';
 import '../../features/foods/data/food_repository.dart';
 import '../../features/foods/data/food_seed.dart';
+import '../../features/foods/data/off_client.dart';
+import '../../features/foods/data/off_repository.dart';
+import '../../features/foods/domain/barcode_result.dart';
 import '../../features/settings/data/attribution_repository.dart';
 import '../../features/onboarding/data/profile_repository.dart';
 import '../../features/water/data/water_repository.dart';
@@ -79,6 +83,37 @@ final usedDataSourcesProvider = FutureProvider<List<SourceUsage>>((ref) async {
   await ref.watch(foodRepositoryProvider.future); // ensure seeded
   final db = await ref.watch(databaseProvider.future);
   return AttributionRepository(db).usedSources();
+});
+
+/// OFF barcode lookup (ADR 0014: live + per-scan cache, ODbL-contained). The
+/// client sends OFF the REAL app version in its User-Agent (OFF may block
+/// clients it cannot identify). Overridable in tests with a mock http client.
+final offClientProvider = FutureProvider<OffClient>((ref) async {
+  final info = await PackageInfo.fromPlatform();
+  return OffClient(appVersion: info.version);
+});
+
+final offRepositoryProvider = FutureProvider<OffRepository>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  final client = await ref.watch(offClientProvider.future);
+  return OffRepository(db, client);
+});
+
+/// Resolve one scanned [barcode] into an explicit [BarcodeResult]. Failure
+/// modes are VALUES, not thrown errors, so they stay off Riverpod's auto-retry
+/// path (a thrown "rate limited" would loop in loading forever) and the UI is a
+/// plain switch over states.
+final barcodeLookupProvider =
+    FutureProvider.family<BarcodeResult, String>((ref, barcode) async {
+  final repo = await ref.watch(offRepositoryProvider.future);
+  try {
+    final food = await repo.lookup(barcode);
+    return food == null ? const BarcodeNotFound() : BarcodeFound(food);
+  } on OffRateLimitException {
+    return const BarcodeRateLimited();
+  } on OffLookupException {
+    return const BarcodeOffline();
+  }
 });
 
 /// The persisted profile, live. Null until onboarding writes it.

@@ -41,6 +41,15 @@ class OffLookupException implements Exception {
   String toString() => 'OffLookupException: $message';
 }
 
+/// OFF's product endpoint allows ~100 req/min. A 429 is a distinct, recoverable
+/// condition (back off and retry) — not the same as a network failure — so the
+/// UI can say "too many scans, try again shortly" rather than a generic error.
+class OffRateLimitException extends OffLookupException {
+  OffRateLimitException(this.retryAfter) : super('rate limited (429)');
+  /// From the Retry-After header when present; null if OFF did not say.
+  final Duration? retryAfter;
+}
+
 /// Read-only Open Food Facts API client.
 ///
 /// LIVE LOOKUP ONLY — we do NOT ship an OFF-derived snapshot. Individually
@@ -83,6 +92,9 @@ class OffClient {
       throw OffLookupException('network error: $e');
     }
     if (res.statusCode == 404) return null; // v2 uses 404 for unknown codes
+    if (res.statusCode == 429) {
+      throw OffRateLimitException(_retryAfter(res.headers['retry-after']));
+    }
     if (res.statusCode != 200) {
       throw OffLookupException('HTTP ${res.statusCode}');
     }
@@ -125,6 +137,14 @@ class OffClient {
       servingLabel: (serving == null || serving.isEmpty) ? null : serving,
       servingGrams: _gramsFrom(serving),
     );
+  }
+
+  /// Retry-After is either a delta-seconds integer or an HTTP date. We only act
+  /// on the integer form (the common case); a date form yields null.
+  static Duration? _retryAfter(String? header) {
+    if (header == null) return null;
+    final secs = int.tryParse(header.trim());
+    return secs == null ? null : Duration(seconds: secs);
   }
 
   static double? _num(Object? v) {
