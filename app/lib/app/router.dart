@@ -10,6 +10,7 @@ import '../features/home/domain/day_totals.dart';
 import '../features/home/presentation/home_page.dart';
 import '../features/me/presentation/me_page.dart';
 import '../features/onboarding/presentation/onboarding_page.dart';
+import '../features/foods/presentation/scan_page.dart';
 import '../features/settings/presentation/data_sources_page.dart';
 
 /// Router with an onboarding gate:
@@ -42,6 +43,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
           path: '/data-sources',
           builder: (_, _) => const DataSourcesPage()),
+      GoRoute(path: '/scan', builder: (_, _) => const ScanPage()),
       GoRoute(
         path: '/add',
         builder: (context, state) {

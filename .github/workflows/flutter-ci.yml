@@ -30,7 +30,15 @@ jobs:
               analyzer plugins, i.e. riverpod_lint; verified by probe. --fatal-infos
               because plugin rules emit warnings, which exit 0 by default)
         working-directory: app
-        run: dart analyze --fatal-infos
+        # EXPLICIT PATHS, not no-arg: since mobile_scanner entered the tree
+        # (M2.3b), the no-arg `dart analyze` HANGS indefinitely — the
+        # riverpod_lint native plugin pathologically stalls on the whole-package
+        # context the larger dependency graph produces (reproduced locally +
+        # on CI with a watchdog). Naming the source dirs bounds the context and
+        # completes in seconds with the SAME coverage (these are the only Dart
+        # source dirs) and the SAME plugin loaded. If a new top-level Dart source
+        # dir is added, add it here.
+        run: dart analyze --fatal-infos lib test integration_test
       - name: Tests (includes test/migration — mandatory per docs/MOBILE.md)
         working-directory: app
         run: flutter test

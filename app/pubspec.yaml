@@ -50,6 +50,7 @@ dependencies:
   package_info_plus: ^10.2.1
   shared_preferences: ^2.5.5
   http: ^1.6.0
+  mobile_scanner: ^7.4.0
 
 dev_dependencies:
   flutter_test:
