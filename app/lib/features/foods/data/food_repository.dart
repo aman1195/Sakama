@@ -68,8 +68,17 @@ class FoodRepository {
   /// confidence means ranking demotes it below verified data (#27). NOT a
   /// seed row: survives seedVersion reloads only by being re-estimated, which
   /// is acceptable for generated data.
-  Future<Food> saveEstimate(FoodEstimate e) async {
-    final id = 'ai-${e.name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}';
+  /// [query] is what the USER typed — the id is keyed on it, not on the
+  /// model's returned name, because (a) a Devanagari query has no [a-z0-9]
+  /// chars, so a name-slug degenerates to 'ai--' and every native-script dish
+  /// collides (review #46 finding 2), and (b) the model need not name a dish
+  /// identically across calls, which would break the upsert promise (finding
+  /// 3). Slug + stable FNV-1a hash of the normalized query: same query always
+  /// updates the same row; distinct queries never collide.
+  Future<Food> saveEstimate(FoodEstimate e, {required String query}) async {
+    final norm = query.trim().toLowerCase();
+    final slug = norm.replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+    final id = 'ai-$slug-${_fnv1a(norm)}';
     await _db.into(_db.foods).insertOnConflictUpdate(FoodsCompanion.insert(
           id: id,
           name: e.name,
@@ -102,6 +111,17 @@ class FoodRepository {
     final foods = rows.map(_toFood).toList();
     final ranked = rankFoods(q, foods);
     return ranked.take(limit).toList();
+  }
+
+  /// Stable 32-bit FNV-1a over code units — deterministic across runs
+  /// (unlike String.hashCode), cheap, and fine for id-uniqueness.
+  static String _fnv1a(String input) {
+    var h = 0x811c9dc5;
+    for (final c in input.codeUnits) {
+      h ^= c;
+      h = (h * 0x01000193) & 0xFFFFFFFF;
+    }
+    return h.toRadixString(16);
   }
 
   Food _toFood(FoodRow r) => Food(

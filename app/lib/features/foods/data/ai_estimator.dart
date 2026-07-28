@@ -7,11 +7,15 @@ import '../domain/food_search.dart';
 
 /// Thrown when estimation is unavailable (offline, gateway down, budget hit).
 class EstimateException implements Exception {
-  EstimateException(this.message, {this.budgetExhausted = false});
+  EstimateException(this.message,
+      {this.budgetExhausted = false, this.notFood = false});
   final String message;
   /// True when the server said the user's daily cap is spent (rule 9) —
   /// the UI words that differently from a transient failure.
   final bool budgetExhausted;
+  /// True when the model said the input is not a food — "that doesn't look
+  /// like a food" beats a generic failure message (review #46, minor).
+  final bool notFood;
   @override
   String toString() => 'EstimateException: $message';
 }
@@ -48,10 +52,23 @@ class EdgeFunctionAiEstimator implements AiEstimator {
       throw EstimateException('network error: $e');
     }
     final data = res.data;
-    final parsed = parseEstimate(
-        data is String ? data : jsonEncode(data), fallbackName: dishName);
+    final raw = data is String ? data : jsonEncode(data);
+    if (isNotFood(raw)) {
+      throw EstimateException('not a food', notFood: true);
+    }
+    final parsed = parseEstimate(raw, fallbackName: dishName);
     if (parsed == null) throw EstimateException('malformed estimate');
     return parsed;
+  }
+
+  /// The model's in-band "this is not a food" signal.
+  static bool isNotFood(String raw) {
+    try {
+      final j = jsonDecode(raw);
+      return j is Map && j['error'] == 'not_food';
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Parse + VALIDATE a gateway response. Model output is untrusted input:
@@ -87,6 +104,13 @@ class EdgeFunctionAiEstimator implements AiEstimator {
     final confidence = rawConf.clamp(0.2, 0.4).toDouble();
     assert(confidence < verifiedConfidenceFloor);
 
+    // Serving fields get bounds too (review #46, minor — symmetry with the
+    // macros): a plausible single serving is 1..2000 g, else drop it and let
+    // the user enter an amount.
+    final servingGrams = num_(j['serving_grams']);
+    final servingOk =
+        servingGrams != null && servingGrams >= 1 && servingGrams <= 2000;
+
     final name = (j['name'] as String?)?.trim();
     return FoodEstimate(
       name: (name == null || name.isEmpty) ? fallbackName : name,
@@ -96,7 +120,7 @@ class EdgeFunctionAiEstimator implements AiEstimator {
       fatG: fat,
       fiberG: num_(j['fiber_g_100g']),
       servingLabel: (j['serving_label'] as String?)?.trim(),
-      servingGrams: num_(j['serving_grams']),
+      servingGrams: servingOk ? servingGrams : null,
       confidence: confidence,
       assumptions: (j['assumptions'] as String?)?.trim(),
     );

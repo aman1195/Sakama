@@ -91,7 +91,7 @@ void main() {
       const est = FoodEstimate(
           name: 'Misal Pav', energyKcal: 180, proteinG: 7, carbG: 20, fatG: 8,
           servingLabel: '1 plate', servingGrams: 250, confidence: 0.35);
-      final food = await repo.saveEstimate(est);
+      final food = await repo.saveEstimate(est, query: 'misal pav');
       expect(food.source, 'ai_estimate');
       expect(food.licence, 'generated');
       expect(food.confidence, lessThan(verifiedConfidenceFloor));
@@ -104,18 +104,56 @@ void main() {
       expect(results.map((f) => f.name), contains('Misal Pav'));
     });
 
-    test('re-estimating the same dish upserts, not duplicates', () async {
+    test('re-estimating the same QUERY upserts even if the model renames (#46.3)', () async {
       const a = FoodEstimate(
           name: 'Misal Pav', energyKcal: 180, proteinG: 7, carbG: 20, fatG: 8,
           confidence: 0.3);
       const b = FoodEstimate(
-          name: 'Misal Pav', energyKcal: 200, proteinG: 8, carbG: 22, fatG: 9,
+          name: 'Misal Pav (restaurant style)', // model renamed it — id must not care
+          energyKcal: 200, proteinG: 8, carbG: 22, fatG: 9,
           confidence: 0.35);
-      await repo.saveEstimate(a);
-      await repo.saveEstimate(b);
+      await repo.saveEstimate(a, query: 'misal pav');
+      await repo.saveEstimate(b, query: 'Misal Pav '); // same query, different case/space
       final rows = await db.select(db.foods).get();
       expect(rows, hasLength(1));
       expect(rows.single.energyKcal, 200);
+    });
+
+    test('native-script queries never collide (#46.2 — Devanagari slugs)',
+        () async {
+      const dal = FoodEstimate(
+          name: 'Dal', energyKcal: 120, proteinG: 6, carbG: 15, fatG: 4,
+          confidence: 0.3);
+      const paneer = FoodEstimate(
+          name: 'Paneer', energyKcal: 265, proteinG: 18, carbG: 1.2, fatG: 21,
+          confidence: 0.3);
+      final a = await repo.saveEstimate(dal, query: 'दाल');
+      final b = await repo.saveEstimate(paneer, query: 'पनीर');
+      expect(a.id, isNot(b.id),
+          reason: 'a bare a-z slug degenerates to ai-- for Devanagari; the '
+              'stable query hash must keep them distinct');
+      expect(await db.select(db.foods).get(), hasLength(2));
+    });
+  });
+
+  group('review #46 minors', () {
+    test('not_food is detected as its own signal', () {
+      expect(EdgeFunctionAiEstimator.isNotFood('{"error":"not_food"}'), isTrue);
+      expect(EdgeFunctionAiEstimator.isNotFood('{"name":"Dal"}'), isFalse);
+      expect(EdgeFunctionAiEstimator.isNotFood('garbage'), isFalse);
+    });
+
+    test('absurd serving_grams is dropped, macros kept (#46.4)', () {
+      final e = EdgeFunctionAiEstimator.parseEstimate(
+          jsonEncode({
+            'name': 'Dal', 'energy_kcal_100g': 120, 'protein_g_100g': 6.0,
+            'carb_g_100g': 15.0, 'fat_g_100g': 4.0,
+            'serving_grams': 99999, 'serving_label': '1 katori',
+            'confidence': 0.3,
+          }),
+          fallbackName: 'dal')!;
+      expect(e.servingGrams, isNull);
+      expect(e.energyKcal, 120);
     });
   });
 }

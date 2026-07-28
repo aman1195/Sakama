@@ -32,23 +32,22 @@ Deno.serve(async (req) => {
   if (userErr || !userData?.user) {
     return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 });
   }
-  const userId = userData.user.id;
 
   const { dish } = await req.json().catch(() => ({}));
   if (typeof dish !== "string" || dish.trim().length < 2 || dish.length > 120) {
     return new Response(JSON.stringify({ error: "bad_request" }), { status: 400 });
   }
 
-  // Budget check (service role bypasses RLS; ai_usage is server-owned).
-  const admin = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
-  const day = new Date().toISOString().slice(0, 10);
-  const { data: usage } = await admin.from("ai_usage")
-    .select("count").eq("user_id", userId).eq("day", day)
-    .eq("feature", "estimate").maybeSingle();
-  if ((usage?.count ?? 0) >= DAILY_CAP) {
+  // Budget: ATOMIC check-and-increment in Postgres (review #46 — the previous
+  // read-check-write here was TOCTOU-racy under concurrency). Runs as the
+  // CALLER (auth.uid() = user), charge-on-attempt, BEFORE the provider call.
+  // No row back = cap spent.
+  const { data: newCount, error: usageErr } = await supabase
+    .rpc("increment_ai_usage", { p_feature: "estimate", p_cap: DAILY_CAP });
+  if (usageErr) {
+    return new Response(JSON.stringify({ error: "usage_error" }), { status: 500 });
+  }
+  if (newCount === null || newCount === undefined) {
     return new Response(JSON.stringify({ error: "budget_exhausted" }), { status: 429 });
   }
 
@@ -77,13 +76,6 @@ Deno.serve(async (req) => {
   if (typeof content !== "string") {
     return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
   }
-
-  // Count usage AFTER a successful provider call (a failed call costs the user
-  // nothing), atomically via upsert.
-  await admin.from("ai_usage").upsert(
-    { user_id: userId, day, feature: "estimate", count: (usage?.count ?? 0) + 1 },
-    { onConflict: "user_id,day,feature" },
-  );
 
   // Pass the model JSON through; the CLIENT validates hard (untrusted input).
   return new Response(content, {

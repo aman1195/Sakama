@@ -123,7 +123,7 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
       // Persist with ai_estimate provenance so it is findable next time, then
       // flow into the normal picked-food path (grams -> derived macros).
       final foodRepo = await ref.read(foodRepositoryProvider.future);
-      final food = await foodRepo.saveEstimate(estimate);
+      final food = await foodRepo.saveEstimate(estimate, query: dish);
       if (!mounted) return;
       _pick(food);
       if (estimate.assumptions != null && mounted) {
@@ -134,7 +134,9 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
       if (mounted) {
         setState(() => _estimateError = e.budgetExhausted
             ? 'Daily AI limit reached. Try again tomorrow, or enter it manually.'
-            : 'Could not estimate right now. Enter it manually below.');
+            : e.notFood
+                ? "That doesn't look like a food. Try a different name."
+                : 'Could not estimate right now. Enter it manually below.');
       }
     } finally {
       if (mounted) setState(() => _estimating = false);
