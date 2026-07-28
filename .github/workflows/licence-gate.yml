@@ -127,7 +127,13 @@ jobs:
           PROPRIETARY = r'(foods|indian_foods|indian_food)'
           WRITE = re.compile(
               r'\b(insert\s+into|copy|merge\s+into|update)\s+' + PROPRIETARY + r'\b', re.I)
-          OFF = re.compile(r"openfoodfacts|open_food_facts|off_(staging|foods|raw)|\bodbl\b", re.I)
+          # `offFoods` (camelCase) covers the Drift accessor `_db.offFoods`, so
+          # READING from the OFF table is itself an OFF signal — a future merge
+          # that reads `_db.offFoods` and writes `_db.foods` without spelling an
+          # 'openfoodfacts'/'odbl' literal is still caught (re-review nit, #40).
+          OFF = re.compile(
+              r"openfoodfacts|open_food_facts|off_(staging|foods|raw)|offFoods|\bodbl\b",
+              re.I)
 
           # The rule above is SQL-shaped. Since M2.3a, OFF data is handled in
           # DART/DRIFT on the client, where a merge reads
