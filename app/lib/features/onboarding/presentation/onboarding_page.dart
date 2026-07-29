@@ -338,11 +338,20 @@ class _NumberField extends StatelessWidget {
 
 /// The wow moment: the AI-free default targets, computed live, before any
 /// account. (AI plan generation for Type-2 users is M4.)
-class _PreviewStep extends ConsumerWidget {
+class _PreviewStep extends ConsumerStatefulWidget {
   const _PreviewStep();
+  @override
+  ConsumerState<_PreviewStep> createState() => _PreviewStepState();
+}
+
+class _PreviewStepState extends ConsumerState<_PreviewStep> {
+  /// Re-entry guard (PR #49): defense-in-depth over the transactional save —
+  /// a double-tap must never fire two finish() calls, and the spinner tells
+  /// the user something is happening.
+  bool _finishing = false;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final draft = ref.watch(onboardingControllerProvider);
     final now = DateTime.now();
     if (!draft.complete(now)) {
@@ -373,15 +382,28 @@ class _PreviewStep extends ConsumerWidget {
         Semantics(
           identifier: 'onboarding-finish',
           child: FilledButton(
-            onPressed: () async {
-              final ok = await ref.read(onboardingControllerProvider.notifier).finish();
-              if (!ok && context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please complete every step.')));
-              }
-              // On success the router gate swaps to the app automatically.
-            },
-            child: const Text('Start tracking'),
+            onPressed: _finishing
+                ? null
+                : () async {
+                    setState(() => _finishing = true);
+                    try {
+                      final ok = await ref
+                          .read(onboardingControllerProvider.notifier)
+                          .finish();
+                      if (!ok && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('Please complete every step.')));
+                      }
+                      // On success the router gate swaps to the app.
+                    } finally {
+                      if (mounted) setState(() => _finishing = false);
+                    }
+                  },
+            child: _finishing
+                ? const SizedBox(
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Start tracking'),
           ),
         ),
       ],

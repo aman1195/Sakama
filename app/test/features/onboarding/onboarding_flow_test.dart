@@ -9,6 +9,8 @@ import 'package:sakama/features/onboarding/domain/enums.dart';
 import 'package:sakama/features/onboarding/presentation/onboarding_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sakama/features/onboarding/presentation/onboarding_page.dart';
+import 'package:sakama/features/onboarding/domain/profile_record.dart';
+import 'package:sakama/features/onboarding/data/profile_repository.dart';
 import 'package:sakama/features/onboarding/presentation/onboarding_draft.dart';
 
 void main() {
@@ -110,6 +112,28 @@ void main() {
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(milliseconds: 100));
+  });
+
+  test('concurrent save() calls produce exactly ONE profile row (PR #49 race)',
+      () async {
+    // Pre-transaction, a double-tap interleaved two saves at the first await:
+    // both saw an empty table, minted different uuids, both INSERTed — and two
+    // rows make watchSingleOrNull/getSingleOrNull throw forever (onboarding
+    // permanently wedged on device). The transaction serializes them.
+    final db = SakamaDatabase.withExecutor(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repo = ProfileRepository(db);
+    final record = ProfileRecord(
+        dob: DateTime(1994, 1, 1), weightKg: 70, heightCm: 175, sex: Sex.male,
+        activity: ActivityLevel.moderate, goal: Goal.maintain,
+        diet: DietPreference.veg, cuisine: CuisinePreference.both,
+        onboardingComplete: true);
+    await Future.wait([repo.save(record), repo.save(record)]);
+    final rows = await db.select(db.profiles).get();
+    expect(rows, hasLength(1),
+        reason: 'two interleaved saves must serialize into one row');
+    // And the single-row invariants still hold for readers.
+    expect(await repo.get(), isNotNull);
   });
 
   testWidgets('numeric-field focus is released on step navigation (iOS keypad '
