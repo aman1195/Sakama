@@ -79,7 +79,12 @@ class FoodRepository {
     final norm = query.trim().toLowerCase();
     final slug = norm.replaceAll(RegExp(r'[^a-z0-9]+'), '-');
     final id = 'ai-$slug-${_fnv1a(norm)}';
-    await _db.into(_db.foods).insertOnConflictUpdate(FoodsCompanion.insert(
+    // View-safe upsert (SAK-34: PowerSync tables are views; no UPSERT).
+    final existing = await (_db.select(_db.foods)
+          ..where((t) => t.id.equals(id))
+          ..limit(1))
+        .getSingleOrNull();
+    final companion = FoodsCompanion.insert(
           id: id,
           name: e.name,
           type: 'dish',
@@ -93,7 +98,13 @@ class FoodRepository {
           source: 'ai_estimate',
           licence: 'generated',
           confidence: e.confidence,
-        ));
+        );
+    if (existing != null) {
+      await (_db.update(_db.foods)..where((t) => t.id.equals(id)))
+          .write(companion);
+    } else {
+      await _db.into(_db.foods).insert(companion);
+    }
     final row = await (_db.select(_db.foods)..where((t) => t.id.equals(id)))
         .getSingle();
     return _toFood(row);

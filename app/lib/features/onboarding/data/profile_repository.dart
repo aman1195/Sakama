@@ -38,7 +38,19 @@ class ProfileRepository {
       createdAt: Value(existing?.createdAt ?? now),
       updatedAt: Value(now),
     );
-    await _db.into(_db.profiles).insertOnConflictUpdate(row);
+    // NOT insertOnConflictUpdate: in production the PowerSync tables are
+    // SQLite VIEWS (INSTEAD OF triggers), and SQLite cannot UPSERT a view —
+    // the save THREW on device and "Start tracking" silently did nothing
+    // (found on first real-device test; widget tests use plain Drift tables
+    // where upsert is legal). Plain UPDATE and INSERT both pass through the
+    // triggers, so branch explicitly.
+    if (existing != null) {
+      await (_db.update(_db.profiles)
+            ..where((t) => t.id.equals(existing.id)))
+          .write(row);
+    } else {
+      await _db.into(_db.profiles).insert(row);
+    }
   }
 
   static String _ymd(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'

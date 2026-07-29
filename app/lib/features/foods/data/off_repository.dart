@@ -85,9 +85,15 @@ class OffRepository {
   }
 
   Future<void> _cache(OffProduct p) async {
-    await _db.into(_db.offFoods).insertOnConflictUpdate(
-          OffFoodsCompanion.insert(
-            id: _idFor(p.barcode),
+    // View-safe upsert (PowerSync tables are views; SQLite cannot UPSERT a
+    // view — same class as the on-device onboarding bug, SAK-34).
+    final id = _idFor(p.barcode);
+    final exists = await (_db.select(_db.offFoods)
+          ..where((t) => t.id.equals(id))
+          ..limit(1))
+        .getSingleOrNull();
+    final row = OffFoodsCompanion.insert(
+            id: id,
             name: p.displayName,
             barcode: Value(p.barcode),
             type: 'branded',
@@ -102,8 +108,13 @@ class OffRepository {
             licence: 'ODbL',
             confidence: _offConfidence,
             sourceRef: Value('OFF:${p.barcode}'),
-          ),
-        );
+          );
+    if (exists != null) {
+      await (_db.update(_db.offFoods)..where((t) => t.id.equals(id)))
+          .write(row);
+    } else {
+      await _db.into(_db.offFoods).insert(row);
+    }
   }
 
   Food _toFood({
