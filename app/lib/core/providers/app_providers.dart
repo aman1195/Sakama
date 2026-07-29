@@ -14,6 +14,7 @@ import '../../features/onboarding/data/profile_repository.dart';
 import '../../features/water/data/water_repository.dart';
 import '../../features/weight/data/weight_repository.dart';
 import '../../features/onboarding/domain/profile_record.dart';
+import '../auth/auth_service.dart';
 import '../config/remote_config.dart';
 import '../config/remote_config_service.dart';
 import '../db/database.dart';
@@ -33,6 +34,11 @@ final currentUserIdProvider = Provider<String?>((ref) {
     return null; // not initialized
   }
 });
+
+/// Anonymous-first auth (M3.1). ensureSession is fired on startup by
+/// SakamaApp and before AI calls; it never blocks or throws.
+final authServiceProvider =
+    Provider<AuthService>((ref) => AuthService(ref.watch(syncServiceProvider)));
 
 /// The one database handle the UI reads (offline-first, CLAUDE.md rule 1).
 /// Overridden with an in-memory instance in widget tests.
