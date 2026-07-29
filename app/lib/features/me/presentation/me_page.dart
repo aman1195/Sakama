@@ -95,7 +95,7 @@ class _DevSignInCardState extends ConsumerState<_DevSignInCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('DEV sign-in (debug builds only)',
+            Text('DEV sign-in (stopgap until real auth in M3)',
                 style: Theme.of(context).textTheme.labelLarge),
             Semantics(
               identifier: 'dev-email',
