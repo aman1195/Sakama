@@ -335,6 +335,46 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     });
 
+    testWidgets('as a TAB root, save resets the form and can log AGAIN (#SAK-36)',
+        (tester) async {
+      // Device round 4: on the Log tab there is nothing to pop, and the old
+      // save left _saving stuck true — "Log it" permanently disabled after
+      // the first save. The harness here mounts QuickAddPage as home (a root
+      // with nothing to pop), which is exactly the tab situation.
+      await pumpTall(tester, Meal.lunch);
+
+      await tester.enterText(find.bySemanticsIdentifier('qa-name'), 'chai');
+      await tester.enterText(find.bySemanticsIdentifier('qa-kcal'), '60');
+      await tester.tap(find.bySemanticsIdentifier('qa-save'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect((await db.select(db.foodLogs).get()), hasLength(1));
+      // Form reset: fields cleared, button ENABLED again.
+      final nameField = tester.widget<TextFormField>(
+          find.descendant(
+              of: find.bySemanticsIdentifier('qa-name'),
+              matching: find.byType(TextFormField)));
+      expect(nameField.controller!.text, isEmpty,
+          reason: 'the form must reset for the next entry');
+      final btn = tester.widget<FilledButton>(find.descendant(
+          of: find.bySemanticsIdentifier('qa-save'),
+          matching: find.byType(FilledButton)));
+      expect(btn.onPressed, isNotNull,
+          reason: '"Log it" must be tappable again — was stuck disabled');
+
+      // And a SECOND log works.
+      await tester.enterText(find.bySemanticsIdentifier('qa-name'), 'coffee');
+      await tester.enterText(find.bySemanticsIdentifier('qa-kcal'), '55');
+      await tester.tap(find.bySemanticsIdentifier('qa-save'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect((await db.select(db.foodLogs).get()), hasLength(2));
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 50));
+    });
+
     testWidgets('search is debounced — no results before the delay elapses',
         (tester) async {
       await pumpTall(tester, Meal.lunch);
