@@ -9,6 +9,7 @@ import '../../onboarding/domain/target_calculator.dart';
 import '../../water/presentation/water_chip.dart';
 import '../domain/day_totals.dart';
 import 'widgets/calorie_budget_ring.dart';
+import 'widgets/empty_day_card.dart';
 import 'widgets/macro_bars.dart';
 import 'widgets/meal_slot_card.dart';
 
@@ -57,34 +58,52 @@ class HomePage extends ConsumerWidget {
           data: (logs) {
             final totals = DayTotals.fromLogs(logs);
             final byMeal = groupByMeal(logs);
+            // Ring + macros belong together — one "today" card, one hero
+            // number (visual pass SAK-37, HealthifyMe structure).
             return ListView(
-              padding: const EdgeInsets.all(16),
+              // Extra bottom inset so the FAB never sits on the last meal
+              // card's "+" (seen in the eyes-on pass).
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
               children: [
-                Center(
-                  child: CalorieBudgetRing(
-                    target: targets?.calories ?? 0,
-                    eaten: totals.calories,
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+                    child: Column(
+                      children: [
+                        CalorieBudgetRing(
+                          target: targets?.calories ?? 0,
+                          eaten: totals.calories,
+                        ),
+                        if (targets != null) ...[
+                          const SizedBox(height: 20),
+                          MacroBars(
+                            proteinEaten: totals.proteinG,
+                            proteinTarget: targets.proteinG,
+                            carbEaten: totals.carbG,
+                            carbTarget: targets.carbG,
+                            fatEaten: totals.fatG,
+                            fatTarget: targets.fatG,
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(height: 24),
-                if (targets != null)
-                  MacroBars(
-                    proteinEaten: totals.proteinG,
-                    proteinTarget: targets.proteinG,
-                    carbEaten: totals.carbG,
-                    carbTarget: targets.carbG,
-                    fatEaten: totals.fatG,
-                    fatTarget: targets.fatG,
-                  ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 if (targets != null) WaterChip(targetMl: targets.waterMl),
-                const SizedBox(height: 16),
-                for (final meal in Meal.values)
+                const SizedBox(height: 20),
+                if (logs.isEmpty) ...[
+                  EmptyDayCard(onLog: () => context.push('/add')),
+                  const SizedBox(height: 20),
+                ],
+                for (final meal in Meal.values) ...[
                   MealSlotCard(
                     meal: meal,
                     entries: byMeal[meal]!,
                     onAdd: () => context.push('/add?meal=${meal.key}'),
                   ),
+                  const SizedBox(height: 12),
+                ],
               ],
             );
           },

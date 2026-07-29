@@ -22,7 +22,7 @@ void main() {
       (tester) async {
     // Tall surface so all four meal cards lay out (ListView builds sliver
     // children lazily — off-screen cards otherwise aren't in the tree).
-    await tester.binding.setSurfaceSize(const Size(500, 2200));
+    await tester.binding.setSurfaceSize(const Size(500, 3000));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final db = SakamaDatabase.withExecutor(NativeDatabase.memory());
     addTearDown(db.close);
@@ -60,7 +60,7 @@ void main() {
     // The seeded lunch entry shows in its slot.
     expect(find.text('dal tadka'), findsOneWidget);
     // The ring reflects the seeded 180 kcal against the maintain target.
-    expect(find.textContaining('180 /'), findsOneWidget);
+    expect(find.textContaining('180 of'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(milliseconds: 50));

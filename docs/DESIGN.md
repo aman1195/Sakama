@@ -47,6 +47,22 @@ HealthifyMe's strength is that it makes a **daily habit** feel obvious and India
 | **Streaks / consistency** | Gentle habit reinforcement. | ✅ Adopt, **without** loss-shaming. |
 | **Quick-add / recents / favourites** | Yesterday's dal is one tap away. | ✅ Adopt. Huge friction win. |
 
+### Home-screen teardown (screenshot-driven, 2026-07-29)
+
+Owner-supplied screenshots of HealthifyMe's live home screen. What actually makes it feel great,
+and what Sakama adopts vs. rejects (visual pass SAK-37 implements the adopts):
+
+| Observation | Verdict |
+|---|---|
+| **One hero number per card** ("Eat 1,650 Cal") — everything else subordinated | ✅ Adopted: the calorie ring's remaining-kcal is the single display-size number on Home. |
+| **Progress rings as the shared visual language** across trackers (workout, steps) | ✅ Adopted for calories now; rings for future trackers (steps, fasting) as they land. |
+| **Scannable tracker rows**: leading icon in a circle, name + one fact, ONE action on the right | ✅ Adopted for meal-slot cards (per-meal icon circle, kcal + item count, a "+"). |
+| **Warm illustrated empty state** ("Nothing Tracked Yet!") with a single CTA | ✅ Adopted, assetless (tilted tinted tiles) — teaches the first action instead of a blank list. |
+| **Per-tracker accent colors** giving each metric a stable identity | ✅ Adopted for macros (protein/carbs/fat identity colors, used ONLY for those macros). |
+| Sparkle-FAB AI affordance on every screen | ❌ Rejected — PRODUCT.md anti-reference ("a sparkle icon on everything"). Vita is a *tab*, not chrome. |
+| "Free Trial Expired" pill + premium framing on the home screen | ❌ Rejected — no premium wall on basics, ever. |
+| Unread-message marketing hero occupying the top third | ❌ Rejected — Home opens on *today*, not on a message from us. |
+
 ### What we reject from HealthifyMe
 - **The premium wall.** Core tracking, the food database, and basic AI stay free. Always.
 - **Nutritionist upsell pressure.** Vita replaces it, free.
