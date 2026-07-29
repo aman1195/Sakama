@@ -92,18 +92,20 @@ class HomePage extends ConsumerWidget {
                 const SizedBox(height: 12),
                 if (targets != null) WaterChip(targetMl: targets.waterMl),
                 const SizedBox(height: 20),
-                if (logs.isEmpty) ...[
-                  EmptyDayCard(onLog: () => context.push('/add')),
-                  const SizedBox(height: 20),
-                ],
-                for (final meal in Meal.values) ...[
-                  MealSlotCard(
-                    meal: meal,
-                    entries: byMeal[meal]!,
-                    onAdd: () => context.push('/add?meal=${meal.key}'),
-                  ),
-                  const SizedBox(height: 12),
-                ],
+                // Empty day: the teaching card REPLACES the four empty
+                // slots (review #53 — card + four "Nothing yet" rows was
+                // redundant). Slots appear from the first log onward.
+                if (logs.isEmpty)
+                  EmptyDayCard(onLog: () => context.push('/add'))
+                else
+                  for (final meal in Meal.values) ...[
+                    MealSlotCard(
+                      meal: meal,
+                      entries: byMeal[meal]!,
+                      onAdd: () => context.push('/add?meal=${meal.key}'),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
               ],
             );
           },
