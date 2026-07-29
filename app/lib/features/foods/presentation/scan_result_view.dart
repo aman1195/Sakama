@@ -146,6 +146,7 @@ class _ConfirmFormState extends ConsumerState<_ConfirmForm> {
             identifier: 'scan-grams',
             child: TextField(
               controller: _grams,
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))

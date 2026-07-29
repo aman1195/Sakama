@@ -90,6 +90,7 @@ class WeightSection extends ConsumerWidget {
             child: TextFormField(
               controller: controller,
               autofocus: true,
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))

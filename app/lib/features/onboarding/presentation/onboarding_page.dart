@@ -31,6 +31,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   }
 
   void _go(int page) {
+    // Dismiss the keyboard on every step change — iOS's decimal pad has no
+    // Done key, and a surviving keyboard covers the next step's content
+    // (found on first real-device test).
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _page = page);
     _controller.animateToPage(page,
         duration: const Duration(milliseconds: 250), curve: Curves.easeInOut);
@@ -64,7 +68,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
             : null,
         title: LinearProgressIndicator(value: (_page + 1) / (_lastStep + 1)),
       ),
-      body: PageView(
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: PageView(
         controller: _controller,
         physics: const NeverScrollableScrollPhysics(),
         children: const [
@@ -76,6 +83,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           _ActivityStep(),
           _PreviewStep(),
         ],
+        ),
       ),
       bottomNavigationBar: _page < _lastStep
           ? SafeArea(
@@ -315,6 +323,7 @@ class _NumberField extends StatelessWidget {
         child: TextFormField(
           initialValue: value?.toString(),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
           decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
           validator: (_) => null,
           onChanged: (t) {
