@@ -24,8 +24,9 @@ void main() {
       expect(items.first.name, 'Dal Tadka');
       expect(items.first.portionLabel, '1 katori');
       expect(items.first.energyKcal, 180);
-      expect(items.first.confidence, 0.6); // 0.8 clamped
-      expect(items.first.confidence, lessThanOrEqualTo(0.6));
+      expect(items.first.confidence, 0.49); // 0.8 clamped below the floor
+      expect(items.first.confidence, lessThan(0.5),
+          reason: 'photo items must rank-demote below verified data (rule 7)');
     });
 
     test('a hallucinated item is DROPPED, the good ones survive', () {
@@ -47,6 +48,13 @@ void main() {
     test('caps at 8 items', () {
       final many = List.generate(20, (i) => {..._thali(), 'name': 'Item $i'});
       expect(EdgeFunctionPhotoSnap.parseItems(_items(many)).length, 8);
+    });
+
+    test('omitted grams is kept as null (confirm sheet asks), not 0', () {
+      final noGrams = Map<String, Object?>.from(_thali())..remove('grams');
+      final items = EdgeFunctionPhotoSnap.parseItems(_items([noGrams]));
+      expect(items, hasLength(1));
+      expect(items.first.grams, isNull);
     });
 
     test('garbage / no items key / non-JSON -> empty', () {

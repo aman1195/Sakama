@@ -80,14 +80,14 @@ class EdgeFunctionPhotoSnap implements PhotoSnapService {
         v is num ? v.toDouble() : (v is String ? double.tryParse(v) : null);
 
     final out = <SnappedItem>[];
-    for (final raw in list.take(8)) {
-      if (raw is! Map) continue;
-      final name = (raw['name'] as String?)?.trim();
-      final kcal = n(raw['energy_kcal']);
-      final protein = n(raw['protein_g']);
-      final carb = n(raw['carb_g']);
-      final fat = n(raw['fat_g']);
-      final grams = n(raw['grams']);
+    for (final entry in list.take(8)) {
+      if (entry is! Map) continue;
+      final name = (entry['name'] as String?)?.trim();
+      final kcal = n(entry['energy_kcal']);
+      final protein = n(entry['protein_g']);
+      final carb = n(entry['carb_g']);
+      final fat = n(entry['fat_g']);
+      final grams = n(entry['grams']);
       if (name == null || name.isEmpty) continue;
       if (kcal == null || protein == null || carb == null || fat == null) {
         continue;
@@ -101,16 +101,16 @@ class EdgeFunctionPhotoSnap implements PhotoSnapService {
       final atwater = protein * 4 + carb * 4 + fat * 9;
       if (atwater > 0 && (kcal - atwater).abs() / atwater > 0.45) continue;
 
-      final rawConf = n(raw['confidence']) ?? 0.4;
+      final rawConf = n(entry['confidence']) ?? 0.4;
       out.add(SnappedItem(
         name: name,
-        portionLabel: (raw['portion_label'] as String?)?.trim() ?? '1 serving',
-        grams: grams ?? 0,
+        portionLabel: (entry['portion_label'] as String?)?.trim() ?? '1 serving',
+        grams: grams, // nullable — confirm sheet asks when absent
         energyKcal: kcal,
         proteinG: protein,
         carbG: carb,
         fatG: fat,
-        confidence: rawConf.clamp(0.2, 0.6).toDouble(),
+        confidence: rawConf.clamp(0.2, 0.49).toDouble(),
       ));
     }
     return out;
