@@ -231,6 +231,8 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
                 child: TextField(
                   controller: _search,
                   onChanged: _onSearchChanged,
+                  onTapOutside: (_) =>
+                      FocusManager.instance.primaryFocus?.unfocus(),
                   decoration: const InputDecoration(
                     labelText: 'Search foods',
                     prefixIcon: Icon(Icons.search),
@@ -357,6 +359,7 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
         child: TextFormField(
           controller: c,
           onChanged: onChanged,
+          onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
           keyboardType: number
               ? const TextInputType.numberWithOptions(decimal: true)
               : TextInputType.text,

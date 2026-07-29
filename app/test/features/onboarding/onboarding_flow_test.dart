@@ -7,6 +7,8 @@ import 'package:sakama/core/db/database.dart';
 import 'package:sakama/core/providers/app_providers.dart';
 import 'package:sakama/features/onboarding/domain/enums.dart';
 import 'package:sakama/features/onboarding/presentation/onboarding_controller.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sakama/features/onboarding/presentation/onboarding_page.dart';
 import 'package:sakama/features/onboarding/presentation/onboarding_draft.dart';
 
 void main() {
@@ -109,6 +111,37 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(milliseconds: 100));
   });
+
+  testWidgets('numeric-field focus is released on step navigation (iOS keypad '
+      'has no Done key — a surviving keyboard blocks the flow)', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final db = SakamaDatabase.withExecutor(NativeDatabase.memory());
+    addTearDown(db.close);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [databaseProvider.overrideWith((ref) async => db)],
+      child: const MaterialApp(home: OnboardingPage()),
+    ));
+    await tester.pump();
+
+    // Step 0: pick a goal, continue to the profile step.
+    await tester.tap(find.bySemanticsIdentifier('goal-loseWeight'));
+    await tester.pump();
+    await tester.tap(find.bySemanticsIdentifier('onboarding-next'));
+    await tester.pumpAndSettle();
+
+    // Focus the weight field (keyboard would be up on a device).
+    await tester.tap(find.bySemanticsIdentifier('profile-weight'));
+    await tester.pump();
+    expect(tester.binding.focusManager.primaryFocus?.context?.widget,
+        isNotNull);
+    final focusedBefore = tester.binding.focusManager.primaryFocus;
+    expect(focusedBefore, isNotNull);
+
+    // Navigate BACK — focus (and with it the keyboard) must be released.
+    await tester.tap(find.bySemanticsIdentifier('onboarding-back'));
+    await tester.pumpAndSettle();
+    final focused = tester.binding.focusManager.primaryFocus;
+    expect(focused?.context?.widget is EditableText, isFalse,
+        reason: 'no text field may keep focus after leaving the step');
+  });
 }
-
-
