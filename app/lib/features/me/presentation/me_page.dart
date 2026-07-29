@@ -56,7 +56,8 @@ class _DevSignInCard extends ConsumerStatefulWidget {
 class _DevSignInCardState extends ConsumerState<_DevSignInCard> {
   final _email = TextEditingController();
   final _password = TextEditingController();
-  String _status = '';
+  String _error = '';
+  bool _busy = false;
 
   @override
   void dispose() {
@@ -66,73 +67,116 @@ class _DevSignInCardState extends ConsumerState<_DevSignInCard> {
   }
 
   Future<void> _signIn() async {
+    setState(() { _busy = true; _error = ''; });
     try {
-      final res = await Supabase.instance.client.auth
-          .signInWithPassword(email: _email.text.trim(), password: _password.text);
+      await Supabase.instance.client.auth.signInWithPassword(
+          email: _email.text.trim(), password: _password.text);
       // A fresh session must (re)attach replication.
       await ref.read(syncServiceProvider).connect();
-      setState(() => _status = 'signed in: ${res.user?.id ?? '?'}');
+      if (mounted) setState(() {});
     } on AuthException catch (e) {
-      setState(() => _status = 'auth error: ${e.message}');
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _signOut() async {
-    // Dev harness uses user-SWITCH semantics: clear local synced data so the
-    // next signer-in cannot see the previous user's rows.
-    await ref.read(syncServiceProvider).disconnectAndClear();
-    await Supabase.instance.client.auth.signOut();
-    setState(() => _status = 'signed out');
+    setState(() => _busy = true);
+    try {
+      // Dev harness uses user-SWITCH semantics: clear local synced data so the
+      // next signer-in cannot see the previous user's rows.
+      await ref.read(syncServiceProvider).disconnectAndClear();
+      await Supabase.instance.client.auth.signOut();
+      if (mounted) setState(() {});
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final session = Supabase.instance.client.auth.currentSession;
+    final text = Theme.of(context).textTheme;
     return Card(
       margin: const EdgeInsets.only(top: 24),
       child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('DEV sign-in (stopgap until real auth in M3)',
-                style: Theme.of(context).textTheme.labelLarge),
-            Semantics(
-              identifier: 'dev-email',
-              child: TextField(
-                controller: _email,
-                decoration: const InputDecoration(hintText: 'email'),
+        padding: const EdgeInsets.all(16),
+        child: session == null
+            // ---- signed OUT: the sign-in form ----
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Sign in', style: text.titleMedium),
+                  Text('Dev sign-in — real accounts arrive in M3.',
+                      style: text.bodySmall),
+                  const SizedBox(height: 8),
+                  Semantics(
+                    identifier: 'dev-email',
+                    child: TextField(
+                      controller: _email,
+                      keyboardType: TextInputType.emailAddress,
+                      autocorrect: false,
+                      onTapOutside: (_) =>
+                          FocusManager.instance.primaryFocus?.unfocus(),
+                      decoration: const InputDecoration(labelText: 'Email'),
+                    ),
+                  ),
+                  Semantics(
+                    identifier: 'dev-password',
+                    child: TextField(
+                      controller: _password,
+                      obscureText: true,
+                      onTapOutside: (_) =>
+                          FocusManager.instance.primaryFocus?.unfocus(),
+                      decoration: const InputDecoration(labelText: 'Password'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Semantics(
+                    identifier: 'dev-sign-in',
+                    child: FilledButton(
+                      onPressed: _busy ? null : _signIn,
+                      child: _busy
+                          ? const SizedBox(
+                              width: 20, height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Text('Sign in'),
+                    ),
+                  ),
+                  if (_error.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(_error,
+                          style: text.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.error)),
+                    ),
+                ],
+              )
+            // ---- signed IN: account summary + sign out ----
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Account', style: text.titleMedium),
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    const Icon(Icons.check_circle_outline, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                        child: Text(session.user.email ?? 'Signed in',
+                            style: text.bodyMedium)),
+                  ]),
+                  Text('Synced across your devices.', style: text.bodySmall),
+                  const SizedBox(height: 12),
+                  Semantics(
+                    identifier: 'dev-sign-out',
+                    child: OutlinedButton(
+                      onPressed: _busy ? null : _signOut,
+                      child: const Text('Sign out'),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            Semantics(
-              identifier: 'dev-password',
-              child: TextField(
-                controller: _password,
-                obscureText: true,
-                decoration: const InputDecoration(hintText: 'password'),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Semantics(
-                  identifier: 'dev-sign-in',
-                  child: FilledButton(onPressed: _signIn, child: const Text('Sign in')),
-                ),
-                const SizedBox(width: 8),
-                Semantics(
-                  identifier: 'dev-sign-out',
-                  child: OutlinedButton(onPressed: _signOut, child: const Text('Sign out')),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              session == null ? 'no session\n$_status' : 'uid: ${session.user.id}\n$_status',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
-        ),
       ),
     );
   }

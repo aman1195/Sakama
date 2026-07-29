@@ -181,24 +181,48 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
-    final repo = await ref.read(foodLogRepositoryProvider.future);
-    await repo.add(
-      date: _today(),
-      meal: _meal.key,
-      name: _name.text.trim(),
-      energyKcal: double.parse(_kcal.text),
-      proteinG: double.tryParse(_protein.text) ?? 0,
-      carbG: double.tryParse(_carb.text) ?? 0,
-      fatG: double.tryParse(_fat.text) ?? 0,
-      grams: _picked == null ? null : double.tryParse(_grams.text.trim()),
-      loggedVia: _picked == null ? 'manual' : 'search',
-      userId: ref.read(currentUserIdProvider),
-    );
-    if (mounted) {
-      Navigator.of(context).maybePop();
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Logged ${_name.text.trim()}')));
+    try {
+      final repo = await ref.read(foodLogRepositoryProvider.future);
+      final name = _name.text.trim();
+      await repo.add(
+        date: _today(),
+        meal: _meal.key,
+        name: name,
+        energyKcal: double.parse(_kcal.text),
+        proteinG: double.tryParse(_protein.text) ?? 0,
+        carbG: double.tryParse(_carb.text) ?? 0,
+        fatG: double.tryParse(_fat.text) ?? 0,
+        grams: _picked == null ? null : double.tryParse(_grams.text.trim()),
+        loggedVia: _picked == null ? 'manual' : 'search',
+        userId: ref.read(currentUserIdProvider),
+      );
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      // Pushed as /add -> pop back. As the LOG TAB root there is nothing to
+      // pop — maybePop returns false — so reset for the next entry instead.
+      // (Device dogfood round 4: the old code assumed the pop always worked,
+      // leaving _saving stuck true on the tab — 'Log it' permanently disabled
+      // after the first save.)
+      final popped = await Navigator.of(context).maybePop();
+      if (!popped && mounted) _resetForm();
+      messenger.showSnackBar(SnackBar(content: Text('Logged $name')));
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// Clear everything for the next entry (tab context, where the page stays).
+  void _resetForm() {
+    _formKey.currentState?.reset();
+    for (final c in [_search, _name, _grams, _kcal, _protein, _carb, _fat]) {
+      c.clear();
+    }
+    setState(() {
+      _picked = null;
+      _results = const [];
+      _noResultQuery = null;
+      _estimateError = null;
+    });
   }
 
   @override
