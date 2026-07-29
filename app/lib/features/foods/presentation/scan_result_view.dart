@@ -41,9 +41,12 @@ class ScanResultView extends ConsumerWidget {
               icon: Icons.help_outline,
               text: 'No product found for this barcode — common for Indian '
                   'products, our packaged-food data is still growing.',
-              // The dead-end was reported twice in dogfood (#51): hand off to
-              // Quick-Add, where search + the AI-estimate offer take over.
-              action: ('Add it manually', () => context.pushReplacement('/add')),
+              // The dead-end was reported twice in dogfood (#51): hand back
+              // to Quick-Add, where search + the AI-estimate offer take over.
+              // pop(), not pushReplacement: /scan is only ever entered FROM
+              // Quick-Add, so popping returns to the origin page without
+              // stacking a duplicate (review #54 nit).
+              action: ('Add it manually', () => context.pop()),
               onDone: onDone),
           BarcodeRateLimited() => _Message(
               id: 'scan-rate-limited',
