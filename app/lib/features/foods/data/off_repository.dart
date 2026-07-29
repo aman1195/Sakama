@@ -86,8 +86,10 @@ class OffRepository {
 
   Future<void> _cache(OffProduct p) async {
     // View-safe upsert (PowerSync tables are views; SQLite cannot UPSERT a
-    // view — same class as the on-device onboarding bug, SAK-34).
+    // view — SAK-34), inside a TRANSACTION so the select-then-write is atomic
+    // independent of the in-flight dedupe guard (PR #49 review).
     final id = _idFor(p.barcode);
+    await _db.transaction(() async {
     final exists = await (_db.select(_db.offFoods)
           ..where((t) => t.id.equals(id))
           ..limit(1))
@@ -115,6 +117,7 @@ class OffRepository {
     } else {
       await _db.into(_db.offFoods).insert(row);
     }
+    });
   }
 
   Food _toFood({

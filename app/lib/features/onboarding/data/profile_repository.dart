@@ -20,6 +20,14 @@ class ProfileRepository {
   /// Upsert the one profile row. Reuses the existing id (and created_at) so
   /// this stays a single, stable, syncable row rather than accumulating.
   Future<void> save(ProfileRecord r, {String? userId}) async {
+    // TRANSACTIONAL read-modify-write (PR #49 review): without it, a
+    // double-tap on "Start tracking" interleaves two saves at the first
+    // await — both see an empty table, mint different uuids, and both
+    // INSERT. Two rows make watchSingleOrNull/getSingleOrNull throw forever:
+    // onboarding permanently wedged, recoverable only by reinstall. Drift
+    // serializes transactions on its single connection, so the second call
+    // sees the first call's row and takes the UPDATE branch.
+    await _db.transaction(() async {
     final existing = await _db.select(_db.profiles).getSingleOrNull();
     final now = DateTime.now().millisecondsSinceEpoch;
     final row = ProfilesCompanion(
@@ -51,6 +59,7 @@ class ProfileRepository {
     } else {
       await _db.into(_db.profiles).insert(row);
     }
+    });
   }
 
   static String _ymd(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'

@@ -79,7 +79,9 @@ class FoodRepository {
     final norm = query.trim().toLowerCase();
     final slug = norm.replaceAll(RegExp(r'[^a-z0-9]+'), '-');
     final id = 'ai-$slug-${_fnv1a(norm)}';
-    // View-safe upsert (SAK-34: PowerSync tables are views; no UPSERT).
+    // View-safe upsert (SAK-34) in a TRANSACTION so the select-then-write
+    // is atomic independent of the UI's _estimating guard (PR #49 review).
+    await _db.transaction(() async {
     final existing = await (_db.select(_db.foods)
           ..where((t) => t.id.equals(id))
           ..limit(1))
@@ -105,6 +107,7 @@ class FoodRepository {
     } else {
       await _db.into(_db.foods).insert(companion);
     }
+    });
     final row = await (_db.select(_db.foods)..where((t) => t.id.equals(id)))
         .getSingle();
     return _toFood(row);
