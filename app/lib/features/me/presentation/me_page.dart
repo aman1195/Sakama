@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -35,9 +34,12 @@ class MePage extends ConsumerWidget {
               ),
             ),
           ),
-          // Debug-only: the real auth UI is M1. This exists so the M0 exit test
-          // and the two-account isolation test can obtain a session at all.
-          if (kDebugMode && Env.isConfigured) const _DevSignInCard(),
+          // Stopgap sign-in until the real auth slice (M3): release device
+          // builds need a session too — without one, sync stays off and the
+          // AI gateway correctly 401s (found in device dogfood round 3; the
+          // kDebugMode gate hid sign-in entirely in release). Env-gated so
+          // an unconfigured checkout still runs fully offline.
+          if (Env.isConfigured) const _DevSignInCard(),
         ],
       ),
     );
@@ -93,7 +95,7 @@ class _DevSignInCardState extends ConsumerState<_DevSignInCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('DEV sign-in (debug builds only)',
+            Text('DEV sign-in (stopgap until real auth in M3)',
                 style: Theme.of(context).textTheme.labelLarge),
             Semantics(
               identifier: 'dev-email',
