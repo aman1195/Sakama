@@ -6,11 +6,25 @@ import '../core/providers/app_providers.dart';
 import 'router.dart';
 import 'theme.dart';
 
-class SakamaApp extends ConsumerWidget {
+class SakamaApp extends ConsumerStatefulWidget {
   const SakamaApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SakamaApp> createState() => _SakamaAppState();
+}
+
+class _SakamaAppState extends ConsumerState<SakamaApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Anonymous-first (M3.1): grab a silent session so AI + budgets work with
+    // zero signup friction. Fire-and-forget — offline first launch stays
+    // fully usable locally.
+    Future.microtask(() => ref.read(authServiceProvider).ensureSession());
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return MaterialApp.router(
       title: 'Sakama',
       theme: sakamaTheme(Brightness.light),

@@ -118,6 +118,8 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
     if (dish == null || _estimating) return;
     setState(() { _estimating = true; _estimateError = null; });
     try {
+      // Anonymous-first: if startup was offline, grab the session now.
+      await ref.read(authServiceProvider).ensureSession();
       final estimator = ref.read(aiEstimatorProvider);
       final estimate = await estimator.estimate(dish);
       // Persist with ai_estimate provenance so it is findable next time, then

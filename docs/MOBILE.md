@@ -138,3 +138,17 @@ And these do **not** apply and have been removed or rewritten:
 - `benchmark` skill (Core Web Vitals / Next.js) — **deleted**
 - `web-design-guidelines` skill (Web Interface Guidelines) — **deleted**
 - `impeccable` and `emil-design-eng` — kept, but their examples are **web**. Take the *taste*, not the CSS.
+
+## Pre-release routine addendum (learned in device dogfood, 2026-07)
+
+Before every device deploy / release build, run the **production-stack integration test on a
+simulator** in addition to the unit/widget suite:
+
+```
+flutter test integration_test/ -d <simulator>
+```
+
+Widget tests override `databaseProvider` with plain Drift tables; the REAL app runs on PowerSync
+**views**. That gap hid two shipped-quality bugs the simulator run catches structurally
+(`cannot UPSERT a view`; anything touching view semantics, triggers, or the sync-attached DB path).
+The integration suite drives real flows (onboarding → shell) with zero provider overrides.
