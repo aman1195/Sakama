@@ -85,6 +85,10 @@ void main() {
         harness(MockClient((_) async => http.Response('', 404))));
     await settle(tester, find.bySemanticsIdentifier('scan-not-found'));
     expect(find.bySemanticsIdentifier('scan-not-found'), findsOneWidget);
+    // #51 handoff: a dead end twice reported in dogfood — the not-found state
+    // must offer a way into Quick-Add.
+    expect(find.bySemanticsIdentifier('scan-not-found-action'), findsOneWidget);
+    expect(find.text('Add it manually'), findsOneWidget);
     expect(await db.select(db.foodLogs).get(), isEmpty);
   });
 
