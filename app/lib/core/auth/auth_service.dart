@@ -83,8 +83,17 @@ class AuthService {
     required String password,
   }) async {
     await _sync.disconnectAndClear();
-    await _supabase.auth
-        .signInWithPassword(email: emailAddress, password: password);
+    try {
+      await _supabase.auth
+          .signInWithPassword(email: emailAddress, password: password);
+    } catch (e) {
+      // Review #55 blocking finding: a mistyped password after the clear left
+      // the guest with wiped local data and replication down until restart.
+      // The OLD session is still current, so reattach — the guest's data
+      // re-syncs from the server — and rethrow for the friendly error.
+      await _sync.connect();
+      rethrow;
+    }
     await _sync.connect();
   }
 

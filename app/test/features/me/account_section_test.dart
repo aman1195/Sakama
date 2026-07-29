@@ -79,7 +79,7 @@ void main() {
   testWidgets('offline (no session): honest note + retry', (tester) async {
     await tester.pumpWidget(_harness(null));
     await tester.pump();
-    expect(find.textContaining('offline'), findsOneWidget);
+    expect(find.textContaining("Can't reach Sakama"), findsOneWidget);
     expect(find.bySemanticsIdentifier('account-retry'), findsOneWidget);
   });
 }

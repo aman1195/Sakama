@@ -28,11 +28,14 @@ class _FakeGoTrue extends Fake implements GoTrueClient {
     return UserResponse.fromJson({'user': null}) ;
   }
 
+  bool failPassword = false;
+
   @override
   Future<AuthResponse> signInWithPassword(
       {String? email, String? phone, required String password,
       String? captchaToken}) async {
     calls.add('signInWithPassword');
+    if (failPassword) throw const AuthException('Invalid login credentials');
     sessionValue = _session(anonymous: false, email: email);
     return AuthResponse(session: sessionValue);
   }
@@ -129,6 +132,20 @@ void main() {
     expect(goTrue.calls, ['signOut', 'signInAnonymously'],
         reason: 'anonymous-first: the app keeps working after sign-out');
     expect(auth.isAnonymous, isTrue);
+  });
+
+  test('WRONG PASSWORD: guest data comes back — reconnect on failure (#55)',
+      () async {
+    goTrue.sessionValue = _session(anonymous: true);
+    goTrue.failPassword = true;
+    await expectLater(
+        auth.signInExisting(emailAddress: 'a@b.c', password: 'typo'),
+        throwsA(isA<AuthException>()));
+    expect(sync.calls, ['disconnectAndClear', 'connect'],
+        reason: 'the still-current anonymous session must reattach so the '
+            'guest\'s data re-syncs; otherwise a typo wipes their day '
+            'until an app restart');
+    expect(auth.isAnonymous, isTrue, reason: 'old session still current');
   });
 
   test('saveAccount converts the anonymous user (updateUser), keeping uid',

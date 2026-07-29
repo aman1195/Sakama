@@ -33,8 +33,28 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
     super.dispose();
   }
 
+  /// Cheap local checks so obvious mistakes never round-trip to the server
+  /// (review #55 nit): the form promises 8+ chars, so enforce it here.
+  String? _validateForm() {
+    final email = _email.text.trim();
+    if (!email.contains('@') || !email.contains('.')) {
+      return 'Enter a valid email address.';
+    }
+    if (_password.text.length < 8) {
+      return 'Password must be at least 8 characters.';
+    }
+    return null;
+  }
+
   Future<void> _run(Future<void> Function(AuthService) op,
-      {String? success}) async {
+      {String? success, bool validate = false}) async {
+    if (validate) {
+      final v = _validateForm();
+      if (v != null) {
+        setState(() => _error = v);
+        return;
+      }
+    }
     setState(() { _busy = true; _error = ''; });
     try {
       await op(ref.read(authServiceProvider));
@@ -80,8 +100,8 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
         children: [
           Text('Account', style: text.titleMedium),
           const SizedBox(height: 8),
-          Text("You're offline — tracking works as always. We'll set up "
-              'sync when you reconnect.',
+          Text("Can't reach Sakama right now — tracking works as always. "
+              "We'll set up sync when we get through.",
               style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
           const SizedBox(height: 8),
           Semantics(
@@ -135,7 +155,8 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
                 (a) => a.saveAccount(
                     emailAddress: _email.text.trim(),
                     password: _password.text),
-                success: 'Check your email to confirm your account.'),
+                success: 'Check your email to confirm your account.',
+                validate: true),
           ),
         _Mode.signIn => _form(
             title: 'Sign in',
@@ -145,7 +166,8 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
                 (a) => a.signInExisting(
                     emailAddress: _email.text.trim(),
                     password: _password.text),
-                success: 'Signed in.'),
+                success: 'Signed in.',
+                validate: true),
           ),
       };
     } else {
