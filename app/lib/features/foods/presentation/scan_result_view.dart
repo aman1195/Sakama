@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/app_providers.dart';
 import '../../home/domain/day_totals.dart';
@@ -38,8 +39,14 @@ class ScanResultView extends ConsumerWidget {
           BarcodeNotFound() => _Message(
               id: 'scan-not-found',
               icon: Icons.help_outline,
-              text:
-                  'No product found for $barcode.\nYou can add it manually.',
+              text: 'No product found for this barcode — common for Indian '
+                  'products, our packaged-food data is still growing.',
+              // The dead-end was reported twice in dogfood (#51): hand back
+              // to Quick-Add, where search + the AI-estimate offer take over.
+              // pop(), not pushReplacement: /scan is only ever entered FROM
+              // Quick-Add, so popping returns to the origin page without
+              // stacking a duplicate (review #54 nit).
+              action: ('Add it manually', () => context.pop()),
               onDone: onDone),
           BarcodeRateLimited() => _Message(
               id: 'scan-rate-limited',
@@ -189,9 +196,12 @@ class _Message extends StatelessWidget {
       {required this.id,
       required this.icon,
       required this.text,
+      this.action,
       this.onDone});
   final String id, text;
   final IconData icon;
+  /// Optional primary action (label, handler) shown above "Scan again".
+  final (String, VoidCallback)? action;
   final VoidCallback? onDone;
 
   @override
@@ -206,6 +216,12 @@ class _Message extends StatelessWidget {
             const SizedBox(height: 12),
             Text(text, textAlign: TextAlign.center),
             const SizedBox(height: 16),
+            if (action != null)
+              Semantics(
+                identifier: '$id-action',
+                child: FilledButton(
+                    onPressed: action!.$2, child: Text(action!.$1)),
+              ),
             TextButton(
                 onPressed: onDone, child: const Text('Scan again')),
           ],

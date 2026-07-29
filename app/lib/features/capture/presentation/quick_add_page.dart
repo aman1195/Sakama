@@ -300,9 +300,20 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
               const SizedBox(height: 16),
               // Meal slot.
               SegmentedButton<Meal>(
+                // No checkmark: it stole ~24px and wrapped "Lunch" onto two
+                // lines on device (SAK-38). Selection reads via fill color.
+                showSelectedIcon: false,
+                style: const ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                  padding: WidgetStatePropertyAll(
+                      EdgeInsets.symmetric(horizontal: 8)),
+                ),
                 segments: [
                   for (final m in Meal.values)
-                    ButtonSegment(value: m, label: Text(m.label)),
+                    ButtonSegment(
+                        value: m,
+                        label: Text(m.label,
+                            maxLines: 1, overflow: TextOverflow.ellipsis)),
                 ],
                 selected: {_meal},
                 onSelectionChanged: (s) => setState(() => _meal = s.first),
