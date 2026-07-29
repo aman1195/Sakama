@@ -81,7 +81,10 @@ void main() {
   setUp(() {
     goTrue = _FakeGoTrue();
     sync = _FakeSync();
-    auth = AuthService(sync, client: _FakeClient(goTrue));
+    // configuredOverride: CI runs with placeholder .env (Env.isConfigured
+    // false), local runs with real creds — the tests must not depend on that.
+    auth = AuthService(sync,
+        client: _FakeClient(goTrue), configuredOverride: true);
   });
 
   test('ensureSession: creates an anonymous session and attaches sync',
