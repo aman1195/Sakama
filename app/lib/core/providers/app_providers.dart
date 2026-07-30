@@ -16,6 +16,7 @@ import '../../features/onboarding/data/profile_repository.dart';
 import '../../features/water/data/water_repository.dart';
 import '../../features/weight/data/weight_repository.dart';
 import '../../features/onboarding/domain/profile_record.dart';
+import '../ai/ai_consent_store.dart';
 import '../ai/byok_store.dart';
 import '../auth/auth_service.dart';
 import '../config/remote_config.dart';
@@ -115,6 +116,26 @@ final byokStoreProvider = Provider<ByokStore>((ref) => ByokStore());
 /// Whether a BYOK key is present, live (drives the "unlimited" UI + skips caps).
 final hasByokProvider = FutureProvider<bool>((ref) async =>
     ref.watch(byokStoreProvider).has());
+
+/// AI-data consent store (#60): device-local tri-state for whether AI features
+/// may send logged data to the provider.
+final aiConsentStoreProvider = Provider<AiConsentStore>((ref) => AiConsentStore());
+
+/// The user's AI-data consent: `null` never-asked, `true` on, `false` off.
+/// Mutated via [AiConsentController]; the first-use gate and the settings
+/// toggle both read this.
+class AiConsentController extends AsyncNotifier<bool?> {
+  @override
+  Future<bool?> build() => ref.read(aiConsentStoreProvider).read();
+
+  Future<void> set(bool enabled) async {
+    await ref.read(aiConsentStoreProvider).write(enabled);
+    state = AsyncData(enabled);
+  }
+}
+
+final aiConsentProvider =
+    AsyncNotifierProvider<AiConsentController, bool?>(AiConsentController.new);
 
 /// Vita coach service (M3.3). Injectable so tests use a fake.
 final vitaServiceProvider =

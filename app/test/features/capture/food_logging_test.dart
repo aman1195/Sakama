@@ -73,7 +73,9 @@ void main() {
   group('QuickAddPage', () {
     late SakamaDatabase db;
     setUp(() {
-      SharedPreferences.setMockInitialValues({});
+      // AI consent granted (#60) so the estimate gate passes straight through;
+      // the consent gate itself is covered in ai_consent_test.dart.
+      SharedPreferences.setMockInitialValues({'ai_data_enabled': true});
       db = SakamaDatabase.withExecutor(NativeDatabase.memory());
     });
     tearDown(() => db.close());

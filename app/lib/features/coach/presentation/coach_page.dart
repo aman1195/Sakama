@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../settings/presentation/ai_disclosure.dart';
 import '../domain/coach_message.dart';
 import 'coach_controller.dart';
 
@@ -25,6 +26,9 @@ class _CoachPageState extends ConsumerState<CoachPage> {
   Future<void> _send() async {
     final text = _input.text;
     if (text.trim().isEmpty) return;
+    // #60: consent before sending the log + profile (incl. health conditions).
+    if (!await ensureAiConsent(context, ref)) return;
+    if (!mounted) return;
     _input.clear();
     await ref.read(coachControllerProvider.notifier).send(text);
     if (mounted && _scroll.hasClients) {

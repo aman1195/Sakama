@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../settings/presentation/ai_disclosure.dart';
 import '../domain/snap_draft.dart';
 import '../domain/snap_flow.dart';
 import 'snap_controller.dart';
@@ -29,6 +30,13 @@ class _SnapPageState extends ConsumerState<SnapPage> {
   }
 
   Future<void> _snap() async {
+    // #60: consent before the camera opens — PhotoSnap sends the photo off
+    // device. Declining leaves the page without taking a picture.
+    if (!await ensureAiConsent(context, ref)) {
+      if (mounted) Navigator.of(context).maybePop();
+      return;
+    }
+    if (!mounted) return;
     final ctl = ref.read(snapControllerProvider.notifier);
     await ctl.snap();
     // If the user backed out of the camera before taking a photo, leave.
