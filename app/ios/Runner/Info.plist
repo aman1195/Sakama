@@ -2,8 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Sakama can read a meal photo you choose to estimate its nutrition.</string>
+
 	<key>NSCameraUsageDescription</key>
-	<string>Sakama uses the camera to scan food barcodes so you can log packaged foods quickly.</string>
+	<string>Sakama uses the camera to photograph your meals for instant nutrition estimates, and to scan food barcodes.</string>
 
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>

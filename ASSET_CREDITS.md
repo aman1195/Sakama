@@ -58,6 +58,7 @@ Open Source Licenses screen at build time. Notable:
 | `openfoodfacts-dart`, Smooth App scanner | Apache-2.0 | Preserve NOTICE files. |
 | `drift`, `fl_chart`, `supabase_flutter`, `health`, LiteLLM | MIT | Preserve copyright notices. |
 | `mobile_scanner` | BSD-3 | |
+| `image_picker` | BSD-3 | Meal photo capture for PhotoSnap |
 
 **Never used** (recorded so nobody re-introduces them): OpenNutriTracker / wger / FoodYou / Waistline
 (copyleft), `Best-Flutter-UI-Templates` (not actually MIT), LiteLLM's `enterprise/` directory (proprietary).
