@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sakama/core/db/database.dart';
+import '../../helpers/fake_byok.dart';
 import 'package:sakama/core/providers/app_providers.dart';
 import 'package:sakama/features/capture/data/food_log_repository.dart';
 import 'package:sakama/features/capture/presentation/quick_add_page.dart';
@@ -24,7 +25,7 @@ class _FakeEstimator implements AiEstimator {
   final bool fail;
   int calls = 0;
   @override
-  Future<FoodEstimate> estimate(String dishName) async {
+  Future<FoodEstimate> estimate(String dishName, {String? byok}) async {
     calls++;
     if (fail) throw EstimateException('daily limit', budgetExhausted: true);
     return const FoodEstimate(
@@ -254,6 +255,7 @@ void main() {
             _seed('sample-rice', 'Cooked Rice', 130, 150),
           ])),
           aiEstimatorProvider.overrideWithValue(fake),
+          byokStoreProvider.overrideWithValue(FakeByokStore()),
         ],
         child: const MaterialApp(home: QuickAddPage(initialMeal: Meal.lunch)),
       ));
@@ -307,6 +309,7 @@ void main() {
             _seed('sample-rice', 'Cooked Rice', 130, 150),
           ])),
           aiEstimatorProvider.overrideWithValue(_FakeEstimator(fail: true)),
+          byokStoreProvider.overrideWithValue(FakeByokStore()),
         ],
         child: const MaterialApp(home: QuickAddPage(initialMeal: Meal.lunch)),
       ));

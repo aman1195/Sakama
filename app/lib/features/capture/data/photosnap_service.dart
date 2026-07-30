@@ -18,7 +18,7 @@ class PhotoSnapException implements Exception {
 /// items. Injectable so the UI + tests never touch the network.
 abstract class PhotoSnapService {
   /// [imageBytesBase64] is the JPEG bytes, base64-encoded (no data: prefix).
-  Future<List<SnappedItem>> analyze(String imageBytesBase64);
+  Future<List<SnappedItem>> analyze(String imageBytesBase64, {String? byok});
 }
 
 class EdgeFunctionPhotoSnap implements PhotoSnapService {
@@ -29,12 +29,12 @@ class EdgeFunctionPhotoSnap implements PhotoSnapService {
   static const _function = 'photosnap';
 
   @override
-  Future<List<SnappedItem>> analyze(String imageBytesBase64) async {
+  Future<List<SnappedItem>> analyze(String imageBytesBase64, {String? byok}) async {
     final supabase = _client ?? Supabase.instance.client;
     final FunctionResponse res;
     try {
       res = await supabase.functions
-          .invoke(_function, body: {'image': imageBytesBase64});
+          .invoke(_function, body: {'image': imageBytesBase64, 'byok': ?byok});
     } on FunctionException catch (e) {
       if (e.status == 429) {
         throw PhotoSnapException('daily photo limit reached',

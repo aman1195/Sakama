@@ -43,6 +43,10 @@ Deno.serve(async (req) => {
   }
 
   const body = await req.json().catch(() => ({}));
+  // BYOK (ADR 0011): a user's own OpenRouter key. Present => use it upstream
+  // and DO NOT charge our budget (they pay their provider). Never logged.
+  const byokRaw = typeof body?.byok === "string" ? body.byok.trim() : "";
+  const byok = byokRaw.startsWith("sk-") && byokRaw.length > 20 ? byokRaw : "";
   const image = body?.image; // base64 (no data: prefix) or a data URL
   const mime = typeof body?.mime === "string" ? body.mime : "image/jpeg";
   if (typeof image !== "string" || image.length < 100) {
@@ -55,19 +59,21 @@ Deno.serve(async (req) => {
   const dataUrl = image.startsWith("data:") ? image : `data:${mime};base64,${image}`;
 
   // ATOMIC budget check-and-increment (rule 9), charge-on-attempt, as the caller.
-  const { data: newCount, error: usageErr } = await supabase
-    .rpc("increment_ai_usage", { p_feature: "photosnap", p_cap: DAILY_CAP });
-  if (usageErr) {
-    return new Response(JSON.stringify({ error: "usage_error" }), { status: 500 });
-  }
-  if (newCount === null || newCount === undefined) {
-    return new Response(JSON.stringify({ error: "budget_exhausted" }), { status: 429 });
+  if (!byok) {
+    const { data: newCount, error: usageErr } = await supabase
+      .rpc("increment_ai_usage", { p_feature: "photosnap", p_cap: DAILY_CAP });
+    if (usageErr) {
+      return new Response(JSON.stringify({ error: "usage_error" }), { status: 500 });
+    }
+    if (newCount === null || newCount === undefined) {
+      return new Response(JSON.stringify({ error: "budget_exhausted" }), { status: 429 });
+    }
   }
 
   const orRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${Deno.env.get("OPENROUTER_API_KEY")}`,
+      "Authorization": `Bearer ${byok || Deno.env.get("OPENROUTER_API_KEY")}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({

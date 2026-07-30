@@ -33,7 +33,11 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 });
   }
 
-  const { dish } = await req.json().catch(() => ({}));
+  const parsed = await req.json().catch(() => ({}));
+  const dish = parsed?.dish;
+  // BYOK (ADR 0011): user's own OpenRouter key -> use upstream + skip our cap.
+  const byokRaw = typeof parsed?.byok === "string" ? parsed.byok.trim() : "";
+  const byok = byokRaw.startsWith("sk-") && byokRaw.length > 20 ? byokRaw : "";
   if (typeof dish !== "string" || dish.trim().length < 2 || dish.length > 120) {
     return new Response(JSON.stringify({ error: "bad_request" }), { status: 400 });
   }
@@ -42,20 +46,22 @@ Deno.serve(async (req) => {
   // read-check-write here was TOCTOU-racy under concurrency). Runs as the
   // CALLER (auth.uid() = user), charge-on-attempt, BEFORE the provider call.
   // No row back = cap spent.
-  const { data: newCount, error: usageErr } = await supabase
-    .rpc("increment_ai_usage", { p_feature: "estimate", p_cap: DAILY_CAP });
-  if (usageErr) {
-    return new Response(JSON.stringify({ error: "usage_error" }), { status: 500 });
-  }
-  if (newCount === null || newCount === undefined) {
-    return new Response(JSON.stringify({ error: "budget_exhausted" }), { status: 429 });
+  if (!byok) {
+    const { data: newCount, error: usageErr } = await supabase
+      .rpc("increment_ai_usage", { p_feature: "estimate", p_cap: DAILY_CAP });
+    if (usageErr) {
+      return new Response(JSON.stringify({ error: "usage_error" }), { status: 500 });
+    }
+    if (newCount === null || newCount === undefined) {
+      return new Response(JSON.stringify({ error: "budget_exhausted" }), { status: 429 });
+    }
   }
 
   // Provider call via OpenRouter (managed gateway; key is a function secret).
   const orRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${Deno.env.get("OPENROUTER_API_KEY")}`,
+      "Authorization": `Bearer ${byok || Deno.env.get("OPENROUTER_API_KEY")}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({

@@ -16,6 +16,7 @@ import '../../features/onboarding/data/profile_repository.dart';
 import '../../features/water/data/water_repository.dart';
 import '../../features/weight/data/weight_repository.dart';
 import '../../features/onboarding/domain/profile_record.dart';
+import '../ai/byok_store.dart';
 import '../auth/auth_service.dart';
 import '../config/remote_config.dart';
 import '../config/remote_config_service.dart';
@@ -107,6 +108,13 @@ final offRepositoryProvider = FutureProvider<OffRepository>((ref) async {
   final client = await ref.watch(offClientProvider.future);
   return OffRepository(db, client);
 });
+
+/// The user's BYOK OpenRouter key store (M3.4, on-device secure storage).
+final byokStoreProvider = Provider<ByokStore>((ref) => ByokStore());
+
+/// Whether a BYOK key is present, live (drives the "unlimited" UI + skips caps).
+final hasByokProvider = FutureProvider<bool>((ref) async =>
+    ref.watch(byokStoreProvider).has());
 
 /// Vita coach service (M3.3). Injectable so tests use a fake.
 final vitaServiceProvider =
