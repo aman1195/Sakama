@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../foods/data/ai_estimator.dart';
 import '../../foods/domain/food.dart';
+import '../../settings/presentation/ai_disclosure.dart';
 import '../../home/domain/day_totals.dart';
 
 /// Quick-add food logging (M1 manual entry + M2.1b corpus search).
@@ -116,6 +117,9 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
   Future<void> _estimate() async {
     final dish = _noResultQuery;
     if (dish == null || _estimating) return;
+    // #60: consent before sending the dish name to the AI provider.
+    if (!await ensureAiConsent(context, ref)) return;
+    if (!mounted) return;
     setState(() { _estimating = true; _estimateError = null; });
     try {
       // Anonymous-first: if startup was offline, grab the session now.

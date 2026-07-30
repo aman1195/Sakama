@@ -31,6 +31,23 @@ class MePage extends ConsumerWidget {
               ),
             ),
           ),
+          // AI & privacy: the data-disclosure surface + the master AI toggle
+          // (#60). Legally required before shipping AI that sends logged data
+          // (incl. health conditions) off-device.
+          Card(
+            margin: const EdgeInsets.only(top: 16),
+            child: Semantics(
+              identifier: 'nav-ai-privacy',
+              button: true,
+              child: ListTile(
+                leading: const Icon(Icons.shield_outlined),
+                title: const Text('AI & privacy'),
+                subtitle: const Text('What AI sends, and an on/off switch'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/ai-privacy'),
+              ),
+            ),
+          ),
           // Attribution surface — a legal obligation for licensed data
           // (ASSET_CREDITS.md), plus the OSS dependency notices.
           Card(

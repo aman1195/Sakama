@@ -12,6 +12,7 @@ import '../features/me/presentation/me_page.dart';
 import '../features/onboarding/presentation/onboarding_page.dart';
 import '../features/capture/presentation/snap_page.dart';
 import '../features/foods/presentation/scan_page.dart';
+import '../features/settings/presentation/ai_privacy_page.dart';
 import '../features/settings/presentation/byok_page.dart';
 import '../features/settings/presentation/data_sources_page.dart';
 
@@ -48,6 +49,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/scan', builder: (_, _) => const ScanPage()),
       GoRoute(path: '/snap', builder: (_, _) => const SnapPage()),
       GoRoute(path: '/byok', builder: (_, _) => const ByokPage()),
+      GoRoute(path: '/ai-privacy', builder: (_, _) => const AiPrivacyPage()),
       GoRoute(
         path: '/add',
         builder: (context, state) {
