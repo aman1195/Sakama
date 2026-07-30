@@ -23,7 +23,7 @@ class EstimateException implements Exception {
 /// Estimates nutrition for a dish name. Injectable so tests never touch the
 /// network and the UI can be built before the gateway is deployed.
 abstract class AiEstimator {
-  Future<FoodEstimate> estimate(String dishName);
+  Future<FoodEstimate> estimate(String dishName, {String? byok});
 }
 
 /// Production path per ADR 0011: Supabase Edge Function -> managed gateway ->
@@ -37,12 +37,12 @@ class EdgeFunctionAiEstimator implements AiEstimator {
   static const _function = 'estimate-food';
 
   @override
-  Future<FoodEstimate> estimate(String dishName) async {
+  Future<FoodEstimate> estimate(String dishName, {String? byok}) async {
     final supabase = _client ?? Supabase.instance.client;
     final FunctionResponse res;
     try {
       res = await supabase.functions
-          .invoke(_function, body: {'dish': dishName.trim()});
+          .invoke(_function, body: {'dish': dishName.trim(), 'byok': ?byok});
     } on FunctionException catch (e) {
       if (e.status == 429) {
         throw EstimateException('daily limit reached', budgetExhausted: true);

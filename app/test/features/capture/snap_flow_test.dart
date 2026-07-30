@@ -2,6 +2,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sakama/core/db/database.dart';
+import '../../helpers/fake_byok.dart';
 import 'package:sakama/core/providers/app_providers.dart';
 import 'package:sakama/features/capture/data/photosnap_service.dart';
 import 'package:sakama/features/capture/domain/snap_draft.dart';
@@ -15,7 +16,7 @@ class _FakeSnap implements PhotoSnapService {
   final Object _result; // List<SnappedItem> or a PhotoSnapException to throw
   int calls = 0;
   @override
-  Future<List<SnappedItem>> analyze(String imageBytesBase64) async {
+  Future<List<SnappedItem>> analyze(String imageBytesBase64, {String? byok}) async {
     calls++;
     if (_result is PhotoSnapException) throw _result;
     return _result as List<SnappedItem>;
@@ -32,6 +33,7 @@ SnappedItem _item(String name,
 ProviderContainer _container(PhotoSnapService svc, SakamaDatabase db) =>
     ProviderContainer(overrides: [
       databaseProvider.overrideWith((ref) async => db),
+      byokStoreProvider.overrideWithValue(FakeByokStore()),
       photoSnapServiceProvider.overrideWithValue(svc),
     ]);
 

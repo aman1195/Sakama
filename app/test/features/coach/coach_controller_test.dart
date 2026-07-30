@@ -2,6 +2,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sakama/core/db/database.dart';
+import '../../helpers/fake_byok.dart';
 import 'package:sakama/core/providers/app_providers.dart';
 import 'package:sakama/features/coach/data/vita_service.dart';
 import 'package:sakama/features/coach/domain/coach_message.dart';
@@ -14,7 +15,7 @@ class _FakeVita implements VitaService {
   List<CoachMessage>? lastHistory;
   @override
   Future<String> reply(List<CoachMessage> history,
-      {required String context}) async {
+      {required String context, String? byok}) async {
     lastContext = context;
     lastHistory = history;
     if (_reply is VitaException) throw _reply;
@@ -31,7 +32,7 @@ class _SwapVita implements VitaService {
   List<CoachMessage>? lastHistory;
   @override
   Future<String> reply(List<CoachMessage> history,
-      {required String context}) async {
+      {required String context, String? byok}) async {
     lastHistory = history;
     if (_n++ == 0) throw _first;
     return _ok;
@@ -41,6 +42,7 @@ class _SwapVita implements VitaService {
 ProviderContainer _c(VitaService vita, SakamaDatabase db) =>
     ProviderContainer(overrides: [
       databaseProvider.overrideWith((ref) async => db),
+      byokStoreProvider.overrideWithValue(FakeByokStore()),
       vitaServiceProvider.overrideWithValue(vita),
     ]);
 
@@ -80,7 +82,7 @@ void main() {
     await c.read(coachControllerProvider.notifier).send('hi');
     final msgs = c.read(coachControllerProvider).messages;
     expect(msgs.map((m) => m.role), [CoachRole.user, CoachRole.vita]);
-    expect(msgs.last.content, contains('resets tomorrow'));
+    expect(msgs.last.content, contains('reset tomorrow'));
     expect(c.read(coachControllerProvider).sending, isFalse);
   });
 

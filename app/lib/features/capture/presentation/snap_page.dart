@@ -57,7 +57,8 @@ class _SnapPageState extends ConsumerState<SnapPage> {
               id: 'snap-budget',
               icon: Icons.timer_outlined,
               text: "You've used today's photo estimates. They reset tomorrow "
-                  '— you can still search or estimate by name.',
+                  '— or add your own AI key (Me → Your own AI key) to go '
+                  'unlimited.',
               onRetry: null),
           SnapError() => _Retry(
               id: 'snap-error',

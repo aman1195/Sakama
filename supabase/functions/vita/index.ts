@@ -46,6 +46,10 @@ Deno.serve(async (req) => {
   }
 
   const body = await req.json().catch(() => ({}));
+  // BYOK (ADR 0011): a user's own OpenRouter key. Present => use it upstream
+  // and DO NOT charge our budget (they pay their provider). Never logged.
+  const byokRaw = typeof body?.byok === "string" ? body.byok.trim() : "";
+  const byok = byokRaw.startsWith("sk-") && byokRaw.length > 20 ? byokRaw : "";
   const turns = Array.isArray(body?.messages) ? body.messages : null;
   const context = typeof body?.context === "string" ? body.context : "";
   if (!turns || turns.length === 0) {
@@ -68,13 +72,15 @@ Deno.serve(async (req) => {
   }
 
   // Budget (atomic, charge-on-attempt, before the provider call).
-  const { data: newCount, error: usageErr } = await supabase
-    .rpc("increment_ai_usage", { p_feature: "vita", p_cap: DAILY_CAP });
-  if (usageErr) {
-    return new Response(JSON.stringify({ error: "usage_error" }), { status: 500 });
-  }
-  if (newCount === null || newCount === undefined) {
-    return new Response(JSON.stringify({ error: "budget_exhausted" }), { status: 429 });
+  if (!byok) {
+    const { data: newCount, error: usageErr } = await supabase
+      .rpc("increment_ai_usage", { p_feature: "vita", p_cap: DAILY_CAP });
+    if (usageErr) {
+      return new Response(JSON.stringify({ error: "usage_error" }), { status: 500 });
+    }
+    if (newCount === null || newCount === undefined) {
+      return new Response(JSON.stringify({ error: "budget_exhausted" }), { status: 429 });
+    }
   }
 
   const system = context
@@ -84,7 +90,7 @@ Deno.serve(async (req) => {
   const orRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${Deno.env.get("OPENROUTER_API_KEY")}`,
+      "Authorization": `Bearer ${byok || Deno.env.get("OPENROUTER_API_KEY")}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({

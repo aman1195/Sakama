@@ -36,11 +36,13 @@ class CoachController extends Notifier<CoachState> {
     state = state.copyWith(messages: history, sending: true);
     try {
       await ref.read(authServiceProvider).ensureSession(); // anon-first
+      final byok = await ref.read(byokStoreProvider).read();
       final context = await _groundingSnapshot();
       // Only real turns go upstream — synthetic app-chrome is display-only.
       final wire = history.where((m) => !m.synthetic).toList();
-      final reply =
-          await ref.read(vitaServiceProvider).reply(wire, context: context);
+      final reply = await ref
+          .read(vitaServiceProvider)
+          .reply(wire, context: context, byok: byok);
       state = state.copyWith(
           messages: [...history, CoachMessage(CoachRole.vita, reply)],
           sending: false);
@@ -65,8 +67,8 @@ class CoachController extends Notifier<CoachState> {
   }
 
   static String _friendly(VitaException e) => e.budgetExhausted
-      ? "We've chatted a lot today — the coach resets tomorrow. Your tracking "
-          'keeps working in the meantime.'
+      ? "We've chatted a lot today — I reset tomorrow. Add your own AI key "
+          '(Me → Your own AI key) to chat without limits.'
       : "Something went wrong reaching me. Try again in a moment.";
 
   Future<String> _groundingSnapshot() async {

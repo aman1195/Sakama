@@ -13,7 +13,7 @@ class VitaException implements Exception {
 /// Sends the conversation + grounding snapshot to the Vita Edge Function.
 /// Injectable so the chat UI + tests never touch the network.
 abstract class VitaService {
-  Future<String> reply(List<CoachMessage> history, {required String context});
+  Future<String> reply(List<CoachMessage> history, {required String context, String? byok});
 }
 
 class EdgeFunctionVita implements VitaService {
@@ -24,13 +24,14 @@ class EdgeFunctionVita implements VitaService {
 
   @override
   Future<String> reply(List<CoachMessage> history,
-      {required String context}) async {
+      {required String context, String? byok}) async {
     final supabase = _client ?? Supabase.instance.client;
     final FunctionResponse res;
     try {
       res = await supabase.functions.invoke(_function, body: {
         'messages': history.map((m) => m.toWire()).toList(),
         'context': context,
+        'byok': ?byok,
       });
     } on FunctionException catch (e) {
       if (e.status == 429) {

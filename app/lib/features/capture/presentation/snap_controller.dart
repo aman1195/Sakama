@@ -54,8 +54,9 @@ class SnapController extends Notifier<SnapState> {
     state = const SnapAnalyzing();
     try {
       await ref.read(authServiceProvider).ensureSession(); // anon-first
+      final byok = await ref.read(byokStoreProvider).read();
       final service = ref.read(photoSnapServiceProvider);
-      final items = await service.analyze(image);
+      final items = await service.analyze(image, byok: byok);
       state = SnapReady(items.map(SnapDraft.new).toList());
     } on PhotoSnapException catch (e) {
       state = e.budgetExhausted

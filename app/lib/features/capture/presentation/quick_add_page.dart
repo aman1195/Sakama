@@ -120,8 +120,9 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
     try {
       // Anonymous-first: if startup was offline, grab the session now.
       await ref.read(authServiceProvider).ensureSession();
+      final byok = await ref.read(byokStoreProvider).read();
       final estimator = ref.read(aiEstimatorProvider);
-      final estimate = await estimator.estimate(dish);
+      final estimate = await estimator.estimate(dish, byok: byok);
       // Persist with ai_estimate provenance so it is findable next time, then
       // flow into the normal picked-food path (grams -> derived macros).
       final foodRepo = await ref.read(foodRepositoryProvider.future);
@@ -135,7 +136,7 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
     } on EstimateException catch (e) {
       if (mounted) {
         setState(() => _estimateError = e.budgetExhausted
-            ? 'Daily AI limit reached. Try again tomorrow, or enter it manually.'
+            ? 'Daily AI limit reached. Add your own key in Me → Your own AI key to go unlimited, or enter it manually.'
             : e.notFood
                 ? "That doesn't look like a food. Try a different name."
                 : 'Could not estimate right now. Enter it manually below.');
