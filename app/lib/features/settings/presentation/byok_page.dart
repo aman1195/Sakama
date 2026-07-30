@@ -18,6 +18,7 @@ class ByokPage extends ConsumerStatefulWidget {
 class _ByokPageState extends ConsumerState<ByokPage> {
   final _key = TextEditingController();
   bool _busy = false;
+  bool _reveal = false; // masked by default; toggle to verify a paste
   String _error = '';
 
   @override
@@ -92,15 +93,29 @@ class _ByokPageState extends ConsumerState<ByokPage> {
                 identifier: 'byok-input',
                 child: TextField(
                   controller: _key,
+                  // A secret: masked by default, autocorrect/suggestions off so
+                  // the keyboard never caches it. The toggle lets a user verify
+                  // a paste without leaving it on screen.
+                  obscureText: !_reveal,
                   autocorrect: false,
                   enableSuggestions: false,
                   inputFormatters: [
                     FilteringTextInputFormatter.deny(RegExp(r'\s'))
                   ],
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'OpenRouter API key',
                     hintText: 'sk-or-...',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: Semantics(
+                      identifier: 'byok-reveal',
+                      child: IconButton(
+                        icon: Icon(_reveal
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined),
+                        tooltip: _reveal ? 'Hide key' : 'Show key',
+                        onPressed: () => setState(() => _reveal = !_reveal),
+                      ),
+                    ),
                   ),
                 ),
               ),
