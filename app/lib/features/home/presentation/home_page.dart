@@ -46,10 +46,11 @@ class HomePage extends ConsumerWidget {
       child: Scaffold(
         appBar: AppBar(title: const Text('Today')),
         floatingActionButton: Semantics(
-          identifier: 'home-add-food',
-          child: FloatingActionButton(
-            onPressed: () => context.push('/add'),
-            child: const Icon(Icons.add),
+          identifier: 'home-photosnap',
+          child: FloatingActionButton.extended(
+            onPressed: () => context.push('/snap'),
+            icon: const Icon(Icons.photo_camera_outlined),
+            label: const Text('Snap'),
           ),
         ),
         body: logsAsync.when(

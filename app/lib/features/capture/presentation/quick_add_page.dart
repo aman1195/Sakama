@@ -236,6 +236,15 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
           title: const Text('Add food'),
           actions: [
             Semantics(
+              identifier: 'qa-snap',
+              button: true,
+              child: IconButton(
+                icon: const Icon(Icons.photo_camera_outlined),
+                tooltip: 'PhotoSnap',
+                onPressed: () => context.push('/snap'),
+              ),
+            ),
+            Semantics(
               identifier: 'qa-scan',
               button: true,
               child: IconButton(

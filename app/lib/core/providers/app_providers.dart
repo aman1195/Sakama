@@ -3,6 +3,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/capture/data/food_log_repository.dart';
+import '../../features/capture/data/photosnap_service.dart';
 import '../../features/foods/data/food_repository.dart';
 import '../../features/foods/data/ai_estimator.dart';
 import '../../features/foods/data/food_seed.dart';
@@ -105,6 +106,10 @@ final offRepositoryProvider = FutureProvider<OffRepository>((ref) async {
   final client = await ref.watch(offClientProvider.future);
   return OffRepository(db, client);
 });
+
+/// PhotoSnap vision service (M3.2). Injectable so tests use a fake.
+final photoSnapServiceProvider =
+    Provider<PhotoSnapService>((ref) => EdgeFunctionPhotoSnap());
 
 /// AI nutrition estimation (ADR 0011: Edge Function -> managed gateway).
 /// Injectable so tests use a fake and the UI works before deployment.
