@@ -35,3 +35,9 @@ class SnapBudgetExhausted extends SnapState {
 class SnapError extends SnapState {
   const SnapError();
 }
+
+/// The camera/photo permission was denied — a Settings-flavoured message, not
+/// the network-flavoured SnapError (review #57).
+class SnapPermissionDenied extends SnapState {
+  const SnapPermissionDenied();
+}

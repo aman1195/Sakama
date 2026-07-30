@@ -65,6 +65,12 @@ class _SnapPageState extends ConsumerState<SnapPage> {
               text: "Couldn't read that photo. Check your connection and try "
                   'again, or add it manually.',
               onRetry: _snap),
+          SnapPermissionDenied() => _Retry(
+              id: 'snap-permission',
+              icon: Icons.no_photography_outlined,
+              text: 'Sakama needs camera access to read your meal. Enable it '
+                  'in Settings, or add your food manually.',
+              onRetry: _snap),
         },
       ),
     );
@@ -102,11 +108,16 @@ class _ConfirmListState extends ConsumerState<_ConfirmList> {
 
   Future<void> _log() async {
     setState(() => _saving = true);
-    final n = await ref.read(snapControllerProvider.notifier).logKept(_today());
-    if (!mounted) return;
-    Navigator.of(context).maybePop();
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(n == 1 ? 'Logged 1 item' : 'Logged $n items')));
+    try {
+      final n =
+          await ref.read(snapControllerProvider.notifier).logKept(_today());
+      if (!mounted) return;
+      Navigator.of(context).maybePop();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(n == 1 ? 'Logged 1 item' : 'Logged $n items')));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -133,6 +144,7 @@ class _ConfirmListState extends ConsumerState<_ConfirmList> {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             itemCount: widget.drafts.length,
             itemBuilder: (context, i) => _DraftTile(
+              index: i,
               draft: widget.drafts[i],
               onChanged: () => setState(() {}),
             ),
@@ -159,7 +171,9 @@ class _ConfirmListState extends ConsumerState<_ConfirmList> {
 }
 
 class _DraftTile extends StatelessWidget {
-  const _DraftTile({required this.draft, required this.onChanged});
+  const _DraftTile(
+      {required this.index, required this.draft, required this.onChanged});
+  final int index; // for a stable, collision-free semantics id (review #57)
   final SnapDraft draft;
   final VoidCallback onChanged;
 
@@ -168,7 +182,7 @@ class _DraftTile extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
     return Semantics(
-      identifier: 'snap-item-${draft.item.name}',
+      identifier: 'snap-item-$index',
       child: Card(
         margin: const EdgeInsets.only(bottom: 8),
         child: Opacity(
@@ -185,7 +199,7 @@ class _DraftTile extends StatelessWidget {
                             style: text.titleSmall
                                 ?.copyWith(fontWeight: FontWeight.w600))),
                     Semantics(
-                      identifier: 'snap-item-${draft.item.name}-keep',
+                      identifier: 'snap-item-$index-keep',
                       child: Checkbox(
                         value: draft.keep,
                         onChanged: (v) {
@@ -215,16 +229,23 @@ class _DraftTile extends StatelessWidget {
                 ),
                 if (draft.keep)
                   Semantics(
-                    identifier: 'snap-item-${draft.item.name}-grams',
-                    child: Slider(
-                      value: draft.grams.clamp(10, 600),
-                      min: 10,
-                      max: 600,
-                      onChanged: (v) {
-                        draft.grams = v.roundToDouble();
-                        onChanged();
-                      },
-                    ),
+                    identifier: 'snap-item-$index-grams',
+                    child: Builder(builder: (context) {
+                      // Max adapts so a large portion isn't silently pinned
+                      // (review #57): headroom above the current grams.
+                      final max = (((draft.grams / 100).ceil() + 1) * 100)
+                          .clamp(600, 2000)
+                          .toDouble();
+                      return Slider(
+                        value: draft.grams.clamp(10, max),
+                        min: 10,
+                        max: max,
+                        onChanged: (v) {
+                          draft.grams = v.roundToDouble();
+                          onChanged();
+                        },
+                      );
+                    }),
                   ),
               ],
             ),

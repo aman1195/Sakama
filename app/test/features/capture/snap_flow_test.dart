@@ -7,6 +7,7 @@ import 'package:sakama/features/capture/data/photosnap_service.dart';
 import 'package:sakama/features/capture/domain/snap_draft.dart';
 import 'package:sakama/features/capture/domain/snap_flow.dart';
 import 'package:sakama/features/capture/domain/snapped_item.dart';
+import 'package:flutter/services.dart';
 import 'package:sakama/features/capture/presentation/snap_controller.dart';
 
 class _FakeSnap implements PhotoSnapService {
@@ -95,6 +96,28 @@ void main() {
       await c.read(snapControllerProvider.notifier).snap(imageBase64: 'z');
       expect(c.read(snapControllerProvider), matcher);
     }
+  });
+
+  test('camera permission denied -> SnapPermissionDenied, not a hung spinner '
+      '(#57 blocking)', () async {
+    final c = _container(_FakeSnap(const []), db);
+    addTearDown(c.dispose);
+    await c.read(snapControllerProvider.notifier).snap(
+        capture: () async =>
+            throw PlatformException(code: 'camera_access_denied'));
+    final s = c.read(snapControllerProvider);
+    expect(s, isA<SnapPermissionDenied>());
+    expect(s, isNot(isA<SnapIdle>()));
+    expect(s, isNot(isA<SnapAnalyzing>()));
+  });
+
+  test('other camera failure -> SnapError (still not a hung spinner)',
+      () async {
+    final c = _container(_FakeSnap(const []), db);
+    addTearDown(c.dispose);
+    await c.read(snapControllerProvider.notifier).snap(
+        capture: () async => throw StateError('no camera'));
+    expect(c.read(snapControllerProvider), isA<SnapError>());
   });
 
   test('cancelled camera (null image) leaves state Idle', () async {

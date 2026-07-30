@@ -36,7 +36,20 @@ class SnapController extends Notifier<SnapState> {
     Future<String?> Function()? capture,
     String? imageBase64,
   }) async {
-    final image = imageBase64 ?? await (capture ?? _captureFromCamera)();
+    // Capture is INSIDE error handling (review #57): pickImage throws on a
+    // denied permission (PlatformException 'camera_access_denied'), no camera,
+    // or a concurrent request. Unhandled, that left the flagship FAB hung on
+    // the analyzing spinner forever. Map it to a Settings-flavoured state.
+    final String? image;
+    try {
+      image = imageBase64 ?? await (capture ?? _captureFromCamera)();
+    } catch (e) {
+      debugPrint('camera unavailable: $e');
+      state = _isPermissionError(e)
+          ? const SnapPermissionDenied()
+          : const SnapError();
+      return;
+    }
     if (image == null) return; // user cancelled the camera
     state = const SnapAnalyzing();
     try {
@@ -54,6 +67,13 @@ class SnapController extends Notifier<SnapState> {
       debugPrint('snap failed: $e');
       state = const SnapError();
     }
+  }
+
+  static bool _isPermissionError(Object e) {
+    final s = e.toString().toLowerCase();
+    return s.contains('access_denied') ||
+        s.contains('permission') ||
+        s.contains('denied');
   }
 
   void reset() => state = const SnapIdle();
