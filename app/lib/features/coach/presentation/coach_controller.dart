@@ -37,14 +37,19 @@ class CoachController extends Notifier<CoachState> {
     try {
       await ref.read(authServiceProvider).ensureSession(); // anon-first
       final context = await _groundingSnapshot();
+      // Only real turns go upstream — synthetic app-chrome is display-only.
+      final wire = history.where((m) => !m.synthetic).toList();
       final reply =
-          await ref.read(vitaServiceProvider).reply(history, context: context);
+          await ref.read(vitaServiceProvider).reply(wire, context: context);
       state = state.copyWith(
           messages: [...history, CoachMessage(CoachRole.vita, reply)],
           sending: false);
     } on VitaException catch (e) {
       state = state.copyWith(
-          messages: [...history, CoachMessage(CoachRole.vita, _friendly(e))],
+          messages: [
+            ...history,
+            CoachMessage(CoachRole.vita, _friendly(e), synthetic: true)
+          ],
           sending: false);
     } catch (e) {
       debugPrint('coach send failed: $e');
@@ -52,7 +57,8 @@ class CoachController extends Notifier<CoachState> {
           messages: [
             ...history,
             const CoachMessage(CoachRole.vita,
-                "I couldn't reach the network just now. Try again in a moment.")
+                "I couldn't reach the network just now. Try again in a moment.",
+                synthetic: true)
           ],
           sending: false);
     }

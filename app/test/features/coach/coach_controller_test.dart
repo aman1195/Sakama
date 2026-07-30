@@ -22,6 +22,22 @@ class _FakeVita implements VitaService {
   }
 }
 
+/// Throws on the first call, returns [_ok] after.
+class _SwapVita implements VitaService {
+  _SwapVita(this._first, this._ok);
+  final VitaException _first;
+  final String _ok;
+  int _n = 0;
+  List<CoachMessage>? lastHistory;
+  @override
+  Future<String> reply(List<CoachMessage> history,
+      {required String context}) async {
+    lastHistory = history;
+    if (_n++ == 0) throw _first;
+    return _ok;
+  }
+}
+
 ProviderContainer _c(VitaService vita, SakamaDatabase db) =>
     ProviderContainer(overrides: [
       databaseProvider.overrideWith((ref) async => db),
@@ -66,6 +82,21 @@ void main() {
     expect(msgs.map((m) => m.role), [CoachRole.user, CoachRole.vita]);
     expect(msgs.last.content, contains('resets tomorrow'));
     expect(c.read(coachControllerProvider).sending, isFalse);
+  });
+
+  test('synthetic error/budget messages are NOT replayed to the model (#58)',
+      () async {
+    final failThenOk = _SwapVita(
+        VitaException('boom'), 'Here to help.');
+    final c = _c(failThenOk, db);
+    addTearDown(c.dispose);
+    final ctl = c.read(coachControllerProvider.notifier);
+    await ctl.send('hi');            // -> user 'hi' + synthetic error
+    await ctl.send('you there?');    // -> should NOT send the synthetic turn
+    final wire = failThenOk.lastHistory!;
+    expect(wire.any((m) => m.content.contains("couldn't reach")), isFalse,
+        reason: 'app chrome must not be replayed as a model turn');
+    expect(wire.map((m) => m.content), ['hi', 'you there?']);
   });
 
   test('network error surfaces as a message, not a stuck sending state',
