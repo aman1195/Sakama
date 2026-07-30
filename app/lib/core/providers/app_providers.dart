@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/capture/data/food_log_repository.dart';
 import '../../features/capture/data/photosnap_service.dart';
+import '../../features/coach/data/vita_service.dart';
 import '../../features/foods/data/food_repository.dart';
 import '../../features/foods/data/ai_estimator.dart';
 import '../../features/foods/data/food_seed.dart';
@@ -106,6 +107,10 @@ final offRepositoryProvider = FutureProvider<OffRepository>((ref) async {
   final client = await ref.watch(offClientProvider.future);
   return OffRepository(db, client);
 });
+
+/// Vita coach service (M3.3). Injectable so tests use a fake.
+final vitaServiceProvider =
+    Provider<VitaService>((ref) => EdgeFunctionVita());
 
 /// PhotoSnap vision service (M3.2). Injectable so tests use a fake.
 final photoSnapServiceProvider =
