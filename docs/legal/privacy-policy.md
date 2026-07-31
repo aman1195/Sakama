@@ -92,8 +92,9 @@ stored by Sakama after the response is returned.
 You can turn all AI features off at any time in **Me → AI & privacy**. Turning them off stops all of the
 above; the rest of Sakama keeps working offline.
 
-If you add **your own AI key** (BYOK), your requests go to OpenRouter under your own key. Your key stays
-on your device and is used only to authorize those requests.
+If you add **your own AI key** (BYOK), your requests go to OpenRouter under your own key. Your key is kept
+only in your device's secure storage and is sent with your AI request to authorize it. It is never stored
+on our servers and never written to our logs.
 
 ### 3. Product lookups (Open Food Facts)
 

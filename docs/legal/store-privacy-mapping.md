@@ -52,6 +52,11 @@ Declare the following data types. For each, Apple asks: collected? linked to ide
 | App activity — in-app actions (food log) | Yes | With backend processor for sync | App functionality | — |
 | Device or other IDs | Yes | With Open Food Facts (IP on lookups) | Product lookup | — |
 
+> **Taxonomy note (confirm in the legal pass):** the device-IP-to-Open-Food-Facts flow is mapped here
+> under "Device or other IDs," but that Play category targets advertising/device identifiers, which an IP
+> address is a loose fit for. Confirm the correct Play taxonomy (it may belong under a different category,
+> or none, since no identifier is attached) during the operator/legal review.
+
 - Declare data **encrypted in transit**.
 - Declare a way for users to **request deletion**. **_[confirm the deletion path.]_**
 - Mark AI-related sharing as tied to an **optional feature** the user turns on.
@@ -82,6 +87,11 @@ The public privacy policy is the durable artefact for this; link it from the app
 - [ ] Account/data **deletion path** implemented or documented, with a stated turnaround.
 - [ ] Both external recipients (**AI provider** and **Open Food Facts**) named in **every** artefact:
       policy, App Store, Play, DPDP notice.
+- [ ] **AI-provider terms confirmed:** the "no training, no human review" claim verified against
+      OpenRouter's and Google's current **paid-tier terms**, ideally backed by a signed DPA. This is the
+      one claim to never ship unverified — do not publish the wording until it is confirmed from source.
+- [ ] **Recipients re-verified at ship:** confirm no analytics, ads, or crash-reporting SDK has been added
+      since this draft. If one has, update **both** docs **and** both store forms before submitting.
 - [ ] Minimum-age / children handling confirmed for the target markets.
 
 ## Cross-references
