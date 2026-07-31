@@ -6,6 +6,7 @@ import '../../../core/db/database.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../onboarding/domain/nutrition_targets.dart';
 import '../../onboarding/domain/target_calculator.dart';
+import '../../plans/application/plan_providers.dart';
 import '../../water/presentation/water_chip.dart';
 import '../domain/day_totals.dart';
 import 'widgets/calorie_budget_ring.dart';
@@ -19,12 +20,21 @@ String _today() {
       '${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}';
 }
 
-/// Today's targets, derived from the onboarded profile. Null only if there is
-/// no profile (the gate makes that unreachable in the shell, but handle it).
+/// Today's targets. Base = the computed maintenance targets from the onboarded
+/// profile; when an active plan is in force, its day-type targets overlay that
+/// base (each field the plan leaves silent falls back to computed — the last
+/// link in the plan engine's day type → targets_default → computed chain).
+/// Null only if there is no profile (the gate makes that unreachable in the
+/// shell, but handle it).
 final targetsProvider = Provider<NutritionTargets?>((ref) {
   final profile = ref.watch(profileProvider).value;
   if (profile == null) return null;
-  return const TargetCalculator().targets(profile.toCalculatorInput(DateTime.now()));
+  final computed =
+      const TargetCalculator().targets(profile.toCalculatorInput(DateTime.now()));
+  final planDay = ref.watch(activePlanDayProvider);
+  return planDay == null
+      ? computed
+      : planDay.targets.toNutritionTargets(computed);
 });
 
 /// Today's food logs, live.
