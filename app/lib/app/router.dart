@@ -10,6 +10,7 @@ import '../features/home/domain/day_totals.dart';
 import '../features/home/presentation/home_page.dart';
 import '../features/me/presentation/me_page.dart';
 import '../features/onboarding/presentation/onboarding_page.dart';
+import '../features/plans/presentation/plan_import_page.dart';
 import '../features/capture/presentation/snap_page.dart';
 import '../features/foods/presentation/scan_page.dart';
 import '../features/settings/presentation/ai_privacy_page.dart';
@@ -46,6 +47,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
           path: '/data-sources',
           builder: (_, _) => const DataSourcesPage()),
+      GoRoute(
+          path: '/plans/import', builder: (_, _) => const PlanImportPage()),
       GoRoute(path: '/scan', builder: (_, _) => const ScanPage()),
       GoRoute(path: '/snap', builder: (_, _) => const SnapPage()),
       GoRoute(path: '/byok', builder: (_, _) => const ByokPage()),
