@@ -104,5 +104,9 @@ Two sections: **Data collection & sharing**, then **Security practices.**
 5. Play **taxonomy** for the OFF device-IP flow.
 6. Any **required-reason API** strings beyond UserDefaults pulled in by plugins.
 7. Re-confirm **no analytics/ads/crash SDK** has been added since this sheet (would change several rows).
+8. **Verify the AI-provider claim before pasting it.** Section C states the provider "does not train on
+   your data or use it for human review." Confirm that against OpenRouter's and Google's current
+   **paid-tier terms**, ideally a signed DPA, before entering it on any store form. Do not submit this
+   wording unverified — it is the one assertion least safe to ship unchecked.
 
 See the release gate in [launch-checklist.md](launch-checklist.md).
