@@ -14,6 +14,13 @@ final activePlanRowProvider = StreamProvider<UserPlanRow?>((ref) async* {
   yield* repo.watchActiveRow();
 });
 
+/// Every saved plan, newest first (the plan library). Drives the management
+/// list where the user switches between or deletes plans.
+final savedPlansProvider = StreamProvider<List<UserPlanRow>>((ref) async* {
+  final repo = await ref.watch(planRepositoryProvider.future);
+  yield* repo.watchAll();
+});
+
 /// Today's resolved [PlanDay] for the active plan, or null when there is no
 /// active plan (or its stored config is unparseable). This is the single engine
 /// output the dashboard, the log-enforcement surfaces, and Vita all read.
