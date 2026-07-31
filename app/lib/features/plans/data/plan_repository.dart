@@ -21,22 +21,55 @@ class PlanRepository {
 
   int get _now => DateTime.now().millisecondsSinceEpoch;
 
+  /// A query for THE active plan: newest-activated first, capped at one row.
+  ///
+  /// Single-active is a soft CLIENT invariant, not a DB constraint (so an
+  /// offline switch is never rejected mid-sync). Two devices each activating a
+  /// plan offline therefore CAN sync into two `active` rows. The readers must
+  /// not assume the invariant: `limit(1)` makes the result provably ≤1 so
+  /// `*SingleOrNull` can never throw (the #49 class), and `updatedAt desc`
+  /// (id-tiebroken for determinism) resolves to the most-recently-activated
+  /// plan — self-consistent with LWW. [reconcileActive] then heals the DB.
+  SimpleSelectStatement<$UserPlansTable, UserPlanRow> _activeQuery() =>
+      _db.select(_db.userPlans)
+        ..where((t) => t.active.equals(true))
+        ..orderBy([
+          (t) => OrderingTerm.desc(t.updatedAt),
+          (t) => OrderingTerm.desc(t.id),
+        ])
+        ..limit(1);
+
   /// The active plan row, decoded to a [Plan], or null when there is none or
   /// its stored config is unparseable (defensive — the row still exists and can
   /// be inspected/deleted via [watchAll]).
-  Stream<Plan?> watchActivePlan() =>
-      (_db.select(_db.userPlans)..where((t) => t.active.equals(true)))
-          .watchSingleOrNull()
-          .map((row) => row == null ? null : Plan.tryParse(row.config));
+  Stream<Plan?> watchActivePlan() => _activeQuery()
+      .watchSingleOrNull()
+      .map((row) => row == null ? null : Plan.tryParse(row.config));
 
   /// The active row itself (config string intact), for editing/inspection.
-  Stream<UserPlanRow?> watchActiveRow() =>
-      (_db.select(_db.userPlans)..where((t) => t.active.equals(true)))
-          .watchSingleOrNull();
+  Stream<UserPlanRow?> watchActiveRow() => _activeQuery().watchSingleOrNull();
 
-  Future<UserPlanRow?> getActiveRow() =>
-      (_db.select(_db.userPlans)..where((t) => t.active.equals(true)))
-          .getSingleOrNull();
+  Future<UserPlanRow?> getActiveRow() => _activeQuery().getSingleOrNull();
+
+  /// Self-heal a split-brain active state (two devices each activated offline):
+  /// keep the most-recently-activated plan, deactivate the rest so the DB
+  /// converges to the single-active invariant. Safe to call on plan-surface
+  /// load; a no-op when ≤1 plan is active.
+  Future<void> reconcileActive() async {
+    final actives = await (_db.select(_db.userPlans)
+          ..where((t) => t.active.equals(true))
+          ..orderBy([
+            (t) => OrderingTerm.desc(t.updatedAt),
+            (t) => OrderingTerm.desc(t.id),
+          ]))
+        .get();
+    if (actives.length <= 1) return;
+    final keep = actives.first.id;
+    await (_db.update(_db.userPlans)
+          ..where((t) => t.active.equals(true) & t.id.equals(keep).not()))
+        .write(UserPlansCompanion(
+            active: const Value(false), updatedAt: Value(_now)));
+  }
 
   /// All saved plans, newest first (the plan library / history).
   Stream<List<UserPlanRow>> watchAll() => (_db.select(_db.userPlans)

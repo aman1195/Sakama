@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sakama/core/db/database.dart';
@@ -74,6 +75,54 @@ void main() {
     await repo.savePlan(name: 'bad', config: 'not json at all {{{');
     expect(await repo.watchActivePlan().first, isNull,
         reason: 'tryParse guards malformed JSON (review #68 note 1)');
+  });
+
+  group('split-brain active state (two devices activated offline, review #69)', () {
+    // Insert two active rows DIRECTLY, bypassing savePlan's single-active
+    // enforcement — this is exactly what sync merges from two offline devices.
+    // Config name matches the row name so newest-wins is provable at the plan
+    // level (the decoded Plan.name comes from the JSON, not the row column).
+    Future<void> insertActive(String id, String name, int updatedAt) =>
+        db.into(db.userPlans).insert(UserPlansCompanion.insert(
+              id: id,
+              name: name,
+              config: '{"schema_version":1,"id":"$id","name":"$name",'
+                  '"day_types":{"normal":{"label":"n"}},'
+                  '"schedule":{"type":"weekly","map":{"mon":"normal"}}}',
+              active: const Value(true),
+              createdAt: 1,
+              updatedAt: updatedAt,
+            ));
+
+    test('readers never throw on >1 active; newest-activated wins', () async {
+      await insertActive('older', 'Older', 100);
+      await insertActive('newer', 'Newer', 200);
+
+      // Would throw with watchSingleOrNull on two rows before the fix.
+      final plan = await repo.watchActivePlan().first;
+      final row = await repo.getActiveRow();
+      expect(row?.id, 'newer', reason: 'most-recently-activated wins (LWW)');
+      expect(plan?.name, 'Newer');
+    });
+
+    test('reconcileActive collapses to the newest single active row', () async {
+      await insertActive('older', 'Older', 100);
+      await insertActive('newer', 'Newer', 200);
+
+      await repo.reconcileActive();
+
+      final rows = await repo.watchAll().first;
+      final active = rows.where((r) => r.active).toList();
+      expect(active.map((r) => r.id), ['newer']);
+      // The loser is retained as history, just deactivated.
+      expect(rows.firstWhere((r) => r.id == 'older').active, isFalse);
+    });
+
+    test('reconcileActive is a no-op with one active plan', () async {
+      await repo.savePlan(name: 'solo', config: _planJson);
+      await repo.reconcileActive();
+      expect((await repo.watchAll().first).where((r) => r.active).length, 1);
+    });
   });
 
   group('Plan.tryParse (string guard)', () {
