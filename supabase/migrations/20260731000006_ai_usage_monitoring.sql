@@ -29,7 +29,8 @@ group by day, feature;
 revoke all on public.admin_ai_usage_daily from anon, authenticated;
 
 comment on view public.admin_ai_usage_daily is
-  'Operator monitoring (3.5d). Read in the dashboard SQL editor as service_role. '
+  'Operator monitoring (3.5d). Read in the dashboard SQL editor (runs as postgres) '
+  'or via service_role; both bypass RLS and see the true cross-user aggregate. '
   'Abuse signal: distinct_users rising sharply day-over-day for a feature while '
   'max_user_calls sits at the cap = likely anon farming. Per-user drill-down: '
   'select day, feature, user_id, count from public.ai_usage '
