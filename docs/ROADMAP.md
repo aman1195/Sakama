@@ -1,14 +1,23 @@
 # Sakama — Build Roadmap
 
 > **Revised after the 2026-07 grilling session** (see [adr/README.md](adr/README.md), ADRs 0009–0013).
-> The north star is still the full vision, but **v1 is a wedge: Phase 0 → M3.** Build
-> milestone-by-milestone; never breadth-first. Each milestone leaves the app shippable and dogfoodable.
+> The north star is still the full vision. Build milestone-by-milestone; never breadth-first. Each
+> milestone leaves the app shippable and dogfoodable.
+
+> **⚠ RELEASE STRATEGY UPDATED 2026-07-31.** The original plan drew the store-release line after M3 (a
+> wedge launch, M4–M7 as fast-follow). That is superseded: **the app is released only when it is fully
+> complete — M4–M7 first, then submit.** The M3.5 launch artefacts (privacy policy, store-form sheet,
+> [launch-checklist](legal/launch-checklist.md), anon-abuse monitoring) are DONE and simply wait for
+> that point; do not treat them as an imminent submission gate. The milestone build order below is
+> unchanged; only the release point moved.
 
 ## Sequencing principle
 
-**Prove the moat → foundation → daily-usable core → the moat itself → LAUNCH → fast-follow the rest.**
+**Prove the moat → foundation → daily-usable core → the moat itself → complete the vision → LAUNCH.**
 
-The v1 launch line is drawn **after M3**, not M7. M4–M7 ship to users who are already on the app.
+The build order (Phase 0 → M7) is unchanged. What changed (2026-07-31) is the release point: it is drawn
+**after the app is fully complete**, not after M3. M3 remains the point where the AI moat is done and the
+app is fully dogfoodable, but store submission waits for M4–M7.
 
 ```
 Phase 0   M0          M1            M2           M3          │  M4        M5         M6        M7
@@ -61,7 +70,7 @@ The whole thesis rests on "a VLM estimates an Indian meal's macros usefully." Te
   Every food row carries `source`/`licence`/`confidence`; OFF stays in its own table.
 - **Exit test:** search finds Indian dishes offline; a real barcode resolves and logs correctly.
 
-## M3 — The AI moat  →  **v1 LAUNCH** · [ADR 0011](adr/0011-serverless-ai-gateway.md) · [ADR 0009](adr/0009-freemium-monetization.md)
+## M3 — The AI moat  (AI complete + fully dogfoodable; release deferred to post-M7) · [ADR 0011](adr/0011-serverless-ai-gateway.md) · [ADR 0009](adr/0009-freemium-monetization.md)
 - AI entry = **Supabase Edge Function (Deno)** → **Cloudflare AI Gateway / OpenRouter** → provider on a
   **paid tier** (no training on health data). **No self-hosted proxy.** Port Helium's `tier_router` pattern.
 - **PhotoSnap**: photo → structured items → confirm sheet → log; confidence + correction capture.
@@ -72,10 +81,12 @@ The whole thesis rests on "a VLM estimates an Indian meal's macros usefully." Te
   launch monetization surface.
 - **Exit test:** photograph a thali → useful macros; Vita answers with today's real data; a free user
   hits the cap and sees the Plus/BYOK prompt; a Plus user is unlimited.
-- **► This is the v1 launch: TestFlight → App Store.** (Pull the M7 hardening items forward for this.)
+- **► M3 outcome:** the AI moat is done and the app is fully dogfoodable. Store submission is **deferred
+  to post-M7** per the release-strategy update above; the M3.5 launch artefacts are built and parked.
+  (Much of the M7 hardening was already pulled forward into M3.)
 
 ---
-## Fast-follow (v1.1+) — to users already on the app
+## M4–M7 — complete the vision (build BEFORE release, per the 2026-07-31 strategy update)
 ---
 
 ## M4 — Plan engine (plan followers + goal setters) · [ADR 0007](adr/0007-plan-engine-as-json-data.md)
