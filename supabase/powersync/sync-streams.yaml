@@ -27,3 +27,7 @@ streams:
   user_weight:
     auto_subscribe: true
     query: SELECT * FROM weight_logs WHERE user_id = auth.user_id()
+
+  user_plans:
+    auto_subscribe: true
+    query: SELECT * FROM user_plans WHERE user_id = auth.user_id()

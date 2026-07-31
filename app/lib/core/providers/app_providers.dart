@@ -14,6 +14,7 @@ import '../../features/foods/domain/barcode_result.dart';
 import '../../features/settings/data/attribution_repository.dart';
 import '../../features/onboarding/data/profile_repository.dart';
 import '../../features/water/data/water_repository.dart';
+import '../../features/plans/data/plan_repository.dart';
 import '../../features/weight/data/weight_repository.dart';
 import '../../features/onboarding/domain/profile_record.dart';
 import '../ai/ai_consent_store.dart';
@@ -71,6 +72,12 @@ final waterRepositoryProvider = FutureProvider<WaterRepository>((ref) async {
 final weightRepositoryProvider = FutureProvider<WeightRepository>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return WeightRepository(db);
+});
+
+/// User plans store (M4). Offline-first over the synced `user_plans` table.
+final planRepositoryProvider = FutureProvider<PlanRepository>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return PlanRepository(db);
 });
 
 /// The seed corpus. Production = Indian sample + USDA asset; overridable in

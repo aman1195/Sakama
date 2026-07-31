@@ -51,6 +51,16 @@ const powersyncSchema = Schema([
     Column.integer('created_at'),
     Column.integer('updated_at'),
   ]),
+  Table('user_plans', [
+    Column.text('user_id'),
+    Column.text('name'),
+    Column.text('config'), // Plan JSON
+    Column.text('source'),
+    Column.integer('active'), // bool as 0/1 (as onboarding_complete)
+    Column.text('start_date'),
+    Column.integer('created_at'),
+    Column.integer('updated_at'),
+  ]),
   // Reference tables — LOCAL-ONLY: real SQLite tables PowerSync creates but
   // never syncs and never routes through the upload queue. They hold shipped
   // reference data, not per-user data, so there is no Supabase mirror and no

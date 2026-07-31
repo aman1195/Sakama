@@ -86,6 +86,27 @@ class WeightLogs extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// A user's saved plans (M4, ADR 0007). Plans are DATA: [config] holds the whole
+/// Plan JSON, interpreted by the plan engine. A user may keep several plans but
+/// exactly one is [active] (the repository enforces single-active); the rest are
+/// history they can switch back to. Synced per-user like the other tables.
+@DataClassName('UserPlanRow')
+class UserPlans extends Table {
+  TextColumn get id => text()();
+  TextColumn get userId => text().nullable()(); // offline-birth rule (as FoodLogs)
+  TextColumn get name => text()();
+  TextColumn get config => text()(); // the Plan JSON (jsonEncode of the config)
+  TextColumn get source =>
+      text().withDefault(const Constant('user_imported'))(); // ai_generated|user_imported|template
+  BoolColumn get active => boolean().withDefault(const Constant(false))();
+  TextColumn get startDate => text().nullable()(); // yyyy-MM-dd (cyclic/duration)
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()(); // LWW
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 /// The food reference table — the searchable corpus users log against
 /// (USDA CC0 now; Indian dishes via AI estimation + a commercial licence later.
 /// NOT INDB — unlicensed + IFCT-derived, see CLAUDE.md rule 6). READ-ONLY
@@ -151,7 +172,8 @@ class OffFoods extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-@DriftDatabase(tables: [FoodLogs, Profiles, WaterLogs, WeightLogs, Foods, OffFoods])
+@DriftDatabase(
+    tables: [FoodLogs, Profiles, WaterLogs, WeightLogs, UserPlans, Foods, OffFoods])
 class SakamaDatabase extends _$SakamaDatabase {
   SakamaDatabase()
       : managedExternally = false,
@@ -169,7 +191,7 @@ class SakamaDatabase extends _$SakamaDatabase {
   final bool managedExternally;
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => managedExternally
@@ -194,6 +216,10 @@ class SakamaDatabase extends _$SakamaDatabase {
               // user row is touched.
               await m.createTable(foods);
               await m.createTable(offFoods);
+            }
+            if (from < 5) {
+              // M4: user_plans (synced). Additive — no existing row is touched.
+              await m.createTable(userPlans);
             }
           },
         );
