@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../onboarding/domain/nutrition_targets.dart';
 
 /// The Plan JSON contract (docs/architecture/04-plan-engine.md, ADR 0007).
@@ -287,6 +289,20 @@ class Plan {
   final Map<String, DayType> dayTypes;
   final Schedule schedule;
   final List<PlanRule> rules;
+
+  /// Parse a plan from a JSON STRING. Returns null on malformed JSON or a
+  /// non-object top level — the guard the tolerant [Plan.fromJson] (which
+  /// assumes a Map) needs in front of it, so an AI- or user-authored bad string
+  /// can never crash before it reaches the tolerant parser (review #68 note 1).
+  static Plan? tryParse(String jsonStr) {
+    try {
+      final decoded = jsonDecode(jsonStr);
+      if (decoded is! Map) return null;
+      return Plan.fromJson(decoded.cast<String, dynamic>());
+    } on FormatException {
+      return null;
+    }
+  }
 
   /// Tolerant parse. Never throws on a well-formed JSON map: missing/oddly
   /// typed fields degrade to defaults so the engine always has something to run.
