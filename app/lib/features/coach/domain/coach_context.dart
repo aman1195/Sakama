@@ -2,6 +2,7 @@ import '../../../core/db/database.dart';
 import '../../home/domain/day_totals.dart';
 import '../../onboarding/domain/nutrition_targets.dart';
 import '../../onboarding/domain/profile_record.dart';
+import '../../plans/domain/plan_day.dart';
 
 /// Assembles the grounding snapshot Vita needs so every reply references real
 /// data (PRODUCT.md principle 4). Pure + deterministic, so it's fully tested —
@@ -17,6 +18,7 @@ class CoachContext {
     required NutritionTargets? targets,
     required List<FoodLog> todayLogs,
     required DateTime now,
+    PlanDay? planDay,
   }) {
     final totals = DayTotals.fromLogs(todayLogs);
     final b = StringBuffer();
@@ -30,6 +32,29 @@ class CoachContext {
           '${_goal(profile.goal.name)}, diet ${profile.diet.name}.');
       if (profile.conditions.isNotEmpty) {
         b.writeln('Conditions: ${profile.conditions.map((c) => c.name).join(', ')}.');
+      }
+    }
+
+    // Active plan (M4): the coaching wedge — Vita speaks in terms of the user's
+    // plan, not generic advice. Targets already reflect the plan (targetsProvider
+    // overlays it); this adds the qualitative rules the numbers can't carry.
+    if (planDay != null) {
+      b.writeln('Active plan today: ${planDay.label}.');
+      final w = planDay.fastingWindow;
+      if (w != null) {
+        final eating = w.isEatingAt(now.hour * 60 + now.minute);
+        b.writeln('Eating window ${w.eatStart} to ${w.eatEnd} '
+            '(${eating ? 'currently within the window' : 'currently outside it — fasting'}).');
+      }
+      if (planDay.allowedFoods != null) {
+        b.writeln('Only these foods are on-plan today: '
+            '${planDay.allowedFoods!.join(', ')}.');
+      }
+      if (planDay.blockedFoods.isNotEmpty) {
+        b.writeln('Foods to avoid today: ${planDay.blockedFoods.join(', ')}.');
+      }
+      if (planDay.checklist.isNotEmpty) {
+        b.writeln("Today's checklist: ${planDay.checklist.join(', ')}.");
       }
     }
 

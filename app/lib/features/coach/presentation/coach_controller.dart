@@ -6,6 +6,7 @@ import '../../../core/providers/app_providers.dart';
 import '../../home/presentation/home_page.dart' show targetsProvider;
 import '../../onboarding/domain/nutrition_targets.dart';
 import '../../onboarding/domain/profile_record.dart';
+import '../../plans/application/plan_providers.dart';
 import '../data/vita_service.dart';
 import '../domain/coach_context.dart';
 import '../domain/coach_message.dart';
@@ -80,8 +81,13 @@ class CoachController extends Notifier<CoachState> {
         '${now.month.toString().padLeft(2, '0')}-'
         '${now.day.toString().padLeft(2, '0')}';
     final List<FoodLog> logs = await db.watchDay(ymd).first;
+    final planDay = ref.read(activePlanDayProvider);
     return CoachContext.build(
-        profile: profile, targets: targets, todayLogs: logs, now: now);
+        profile: profile,
+        targets: targets,
+        todayLogs: logs,
+        now: now,
+        planDay: planDay);
   }
 }
 
