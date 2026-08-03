@@ -16,18 +16,18 @@ class MePage extends ConsumerWidget {
         padding: const EdgeInsets.all(16),
         children: [
           const WeightSection(),
-          // Plans (M4): import a plan that sets your daily targets (ADR 0007).
+          // Plans (M4, ADR 0007): the plan library — active plan, switch, import.
           Card(
             margin: const EdgeInsets.only(top: 16),
             child: Semantics(
-              identifier: 'nav-plan-import',
+              identifier: 'nav-plans',
               button: true,
               child: ListTile(
                 leading: const Icon(Icons.event_note_outlined),
-                title: const Text('Import a plan'),
-                subtitle: const Text('Apply a plan that sets your daily targets'),
+                title: const Text('Plans'),
+                subtitle: const Text('Your plan and daily targets'),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => context.push('/plans/import'),
+                onTap: () => context.push('/plans'),
               ),
             ),
           ),
