@@ -10,6 +10,7 @@ import '../../foods/data/ai_estimator.dart';
 import '../../foods/domain/food.dart';
 import '../../settings/presentation/ai_disclosure.dart';
 import '../../home/domain/day_totals.dart';
+import '../../plans/presentation/plan_log_notice_card.dart';
 
 /// Quick-add food logging (M1 manual entry + M2.1b corpus search).
 ///
@@ -265,6 +266,9 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              // Active-plan reminder (M4.5): outside the eating window / foods to
+              // avoid. Advisory only — never blocks logging.
+              const PlanLogNoticeCard(),
               // Corpus search — the primary path.
               Semantics(
                 identifier: 'qa-search',

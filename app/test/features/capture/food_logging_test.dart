@@ -118,6 +118,13 @@ void main() {
       await tester.pump();
       expect(find.text('Must be greater than 0'), findsOneWidget);
       expect(await db.select(db.foodLogs).get(), isEmpty);
+
+      // Let the plan-notice stream settle, then dispose the tree so its
+      // drift-stream timer is cancelled before the end-of-test invariant check
+      // (QuickAddPage now hosts PlanLogNoticeCard → activePlanDayProvider).
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 50));
     });
 
     testWidgets('a valid entry persists to the preselected meal', (tester) async {
