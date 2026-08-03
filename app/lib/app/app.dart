@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/config/update_required_screen.dart';
 import '../core/providers/app_providers.dart';
+import '../core/widgets/date_rollover_observer.dart';
 import 'router.dart';
 import 'theme.dart';
 
@@ -36,7 +37,10 @@ class _SakamaAppState extends ConsumerState<SakamaApp> {
       // Fail-open while the check loads/errors so an offline user isn't blocked.
       builder: (context, child) {
         final mustUpdate = ref.watch(mustUpdateProvider).value ?? false;
-        return mustUpdate ? const UpdateRequiredScreen() : (child ?? const SizedBox.shrink());
+        if (mustUpdate) return const UpdateRequiredScreen();
+        // Roll the app into the new day at midnight / on resume (review #70) so
+        // the dashboard, targets and active-plan day type never sit stale.
+        return DateRolloverObserver(child: child ?? const SizedBox.shrink());
       },
     );
   }

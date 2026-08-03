@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/db/database.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../core/providers/current_date_provider.dart';
 import '../../onboarding/domain/nutrition_targets.dart';
 import '../../onboarding/domain/target_calculator.dart';
 import '../../plans/application/plan_providers.dart';
@@ -14,11 +15,9 @@ import 'widgets/empty_day_card.dart';
 import 'widgets/macro_bars.dart';
 import 'widgets/meal_slot_card.dart';
 
-String _today() {
-  final n = DateTime.now();
-  return '${n.year.toString().padLeft(4, '0')}-'
-      '${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}';
-}
+String _ymd(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-'
+    '${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
 /// Today's targets. Base = the computed maintenance targets from the onboarded
 /// profile; when an active plan is in force, its day-type targets overlay that
@@ -37,10 +36,12 @@ final targetsProvider = Provider<NutritionTargets?>((ref) {
       : planDay.targets.toNutritionTargets(computed);
 });
 
-/// Today's food logs, live.
+/// Today's food logs, live. The date comes from [currentDateProvider], so the
+/// dashboard rolls over to the new day at midnight (review #70).
 final todayLogsProvider = StreamProvider<List<FoodLog>>((ref) async* {
+  final ymd = _ymd(ref.watch(currentDateProvider));
   final db = await ref.watch(databaseProvider.future);
-  yield* db.watchDay(_today());
+  yield* db.watchDay(ymd);
 });
 
 class HomePage extends ConsumerWidget {
