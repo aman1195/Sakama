@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/database.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../core/providers/current_date_provider.dart';
 import '../domain/plan.dart';
 import '../domain/plan_day.dart';
 import '../domain/plan_interpreter.dart';
@@ -26,7 +27,9 @@ final savedPlansProvider = StreamProvider<List<UserPlanRow>>((ref) async* {
 /// output the dashboard, the log-enforcement surfaces, and Vita all read.
 ///
 /// Cyclic schedules index off the row's `start_date`; a null/invalid start
-/// resolves to index 0 (the interpreter's documented default).
+/// resolves to index 0 (the interpreter's documented default). Resolves against
+/// [currentDateProvider], so the day type rolls over at midnight (review #70)
+/// rather than being pinned to whenever this first built.
 final activePlanDayProvider = Provider<PlanDay?>((ref) {
   final row = ref.watch(activePlanRowProvider).value;
   if (row == null) return null;
@@ -34,6 +37,6 @@ final activePlanDayProvider = Provider<PlanDay?>((ref) {
   if (plan == null) return null;
   final start =
       row.startDate == null ? null : DateTime.tryParse(row.startDate!);
-  return const PlanInterpreter()
-      .resolve(plan, date: DateTime.now(), planStart: start);
+  final today = ref.watch(currentDateProvider);
+  return const PlanInterpreter().resolve(plan, date: today, planStart: start);
 });
