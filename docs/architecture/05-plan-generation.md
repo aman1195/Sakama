@@ -122,12 +122,13 @@ The prompt is **long and static** → prompt-cached (cost lever, CLAUDE.md rule 
   CI** and must be smoke-tested before the client feature is enabled (a kill-switchable entry point, per
   MOBILE.md, lets us ship the client dark until the function is verified).
 
-## 8. Open questions for review
+## 8. Decisions (resolved 2026-08-03)
 
-1. **`DAILY_CAP = 2`** for `plan_gen` — right, or lower (1)? Generation is the most expensive AI call.
-2. **Model**: start on `gemini-2.5-flash`, or budget for a mid model from day one given plan quality
-   matters more than estimate quality?
-3. **One silent retry** on invalid output — acceptable, or surface the failure immediately (retry doubles
-   worst-case cost/latency)?
-4. **Ship-dark + kill switch** for the entry point until the function is smoke-tested — agree that is the
-   right way to bridge the CI verifiability gap?
+1. **`DAILY_CAP = 2`** for `plan_gen` (non-BYOK). One plan/day is the norm; the 2nd covers a retry.
+2. **Model `google/gemini-2.5-flash`** to start — cheapest capable option; config-swappable, escalate only
+   if plan quality proves weak.
+3. **One silent retry** on invalid model output before surfacing an error (JSON-mode occasionally emits an
+   unparseable/day-type-less plan). Worst case doubles that attempt's cost/latency; acceptable.
+4. **Ship the client entry dark behind a kill switch** (MOBILE.md) until the deployed function is
+   smoke-tested live — bridges the CI verifiability gap of §7. The entry gates on a remote flag so the
+   client can merge (fully unit-tested) while the function is verified out-of-band.
