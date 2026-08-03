@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/db/database.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../settings/presentation/ai_disclosure.dart';
 import '../application/plan_importer.dart';
 import '../application/plan_providers.dart';
 import '../data/plan_generator.dart';
@@ -35,6 +36,11 @@ class _PlansPageState extends ConsumerState<PlansPage> {
   Future<void> _generate() async {
     final profile = ref.read(profileProvider).value;
     if (profile == null || _generating) return;
+    // Consent gate FIRST — this ships health conditions off-device to the AI
+    // provider, so it must respect the same consent as every other AI entry
+    // point (#60/#62); the kill switch is an operator flag, not user consent.
+    if (!await ensureAiConsent(context, ref)) return;
+    if (!mounted) return;
     setState(() => _generating = true);
     try {
       final byok = await ref.read(byokStoreProvider).read();

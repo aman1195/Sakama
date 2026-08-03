@@ -11,6 +11,7 @@ import 'package:sakama/features/plans/application/plan_importer.dart';
 import 'package:sakama/features/plans/data/plan_generator.dart';
 import 'package:sakama/features/plans/data/plan_repository.dart';
 import 'package:sakama/features/plans/presentation/plans_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../helpers/fake_byok.dart';
 
@@ -29,8 +30,10 @@ class _FakeGenerator implements PlanGenerator {
   _FakeGenerator({this.result, this.error});
   final PlanImportResult? result;
   final Object? error;
+  bool called = false;
   @override
   Future<PlanImportResult> generate(ProfileRecord profile, {String? byok}) async {
+    called = true; // proves whether the consent gate let egress happen
     if (error != null) throw error!;
     return result!;
   }
@@ -88,6 +91,7 @@ void main() {
 
   testWidgets('with the switch on, a successful generation saves + applies it',
       (tester) async {
+    SharedPreferences.setMockInitialValues({'ai_data_enabled': true}); // consent
     final db = SakamaDatabase.withExecutor(NativeDatabase.memory());
     addTearDown(() => tester.runAsync(() => db.close()));
     await _mount(tester, db,
@@ -110,6 +114,7 @@ void main() {
 
   testWidgets('a budget-exhausted generation shows the limit message, saves nothing',
       (tester) async {
+    SharedPreferences.setMockInitialValues({'ai_data_enabled': true}); // consent
     final db = SakamaDatabase.withExecutor(NativeDatabase.memory());
     addTearDown(() => tester.runAsync(() => db.close()));
     await _mount(tester, db,
@@ -121,6 +126,25 @@ void main() {
     await _pumpFrames(tester);
 
     expect(find.textContaining("used today's plan generations"), findsOneWidget);
+    expect(await _all(tester, db), isEmpty);
+    await _dispose(tester);
+  });
+
+  testWidgets('AI consent OFF blocks generation — no egress, nothing saved (#60/#62)',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({'ai_data_enabled': false}); // AI off
+    final db = SakamaDatabase.withExecutor(NativeDatabase.memory());
+    addTearDown(() => tester.runAsync(() => db.close()));
+    final gen = _FakeGenerator(result: const PlanImporter().validate(_plan));
+    await _mount(tester, db, flagOn: true, generator: gen);
+
+    await tester.tap(find.bySemanticsIdentifier('plan-generate'));
+    await _pumpFrames(tester);
+
+    // The consent gate stops before the provider is ever called.
+    expect(gen.called, isFalse,
+        reason: 'health conditions must not reach the provider without consent');
+    expect(find.textContaining('AI features are turned off'), findsOneWidget);
     expect(await _all(tester, db), isEmpty);
     await _dispose(tester);
   });
