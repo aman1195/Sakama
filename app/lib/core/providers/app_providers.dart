@@ -7,6 +7,7 @@ import '../../features/capture/data/photosnap_service.dart';
 import '../../features/coach/data/vita_service.dart';
 import '../../features/foods/data/food_repository.dart';
 import '../../features/foods/data/ai_estimator.dart';
+import '../../features/plans/data/plan_generator.dart';
 import '../../features/foods/data/food_seed.dart';
 import '../../features/foods/data/off_client.dart';
 import '../../features/foods/data/off_repository.dart';
@@ -156,6 +157,12 @@ final photoSnapServiceProvider =
 /// Injectable so tests use a fake and the UI works before deployment.
 final aiEstimatorProvider =
     Provider<AiEstimator>((ref) => EdgeFunctionAiEstimator());
+
+/// AI plan generation (M4.4, ADR 0007 + 0011: Edge Function `generate-plan`).
+/// Injectable so tests use a fake; the UI entry ships dark behind a kill switch
+/// until the function is smoke-tested live (design §7).
+final planGeneratorProvider =
+    Provider<PlanGenerator>((ref) => EdgeFunctionPlanGenerator());
 
 /// Resolve one scanned [barcode] into an explicit [BarcodeResult]. Failure
 /// modes are VALUES, not thrown errors, so they stay off Riverpod's auto-retry
