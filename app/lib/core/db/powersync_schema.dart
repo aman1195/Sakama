@@ -61,6 +61,23 @@ const powersyncSchema = Schema([
     Column.integer('created_at'),
     Column.integer('updated_at'),
   ]),
+  // Vita conversations — LOCAL-ONLY by DESIGN (ADR 0016 decision 1), not
+  // because they are reference data: health conversations never leave the
+  // phone at rest, so there is deliberately no Supabase mirror, no RLS policy
+  // and no sync-streams entry. See docs/architecture/06-vita-conversations.md.
+  Table.localOnly('chat_threads', [
+    Column.text('user_id'),
+    Column.text('title'),
+    Column.integer('created_at'),
+    Column.integer('updated_at'),
+  ]),
+  Table.localOnly('chat_messages', [
+    Column.text('thread_id'),
+    Column.text('role'),
+    Column.text('content'),
+    Column.integer('synthetic'), // bool as 0/1
+    Column.integer('created_at'),
+  ]),
   // Reference tables — LOCAL-ONLY: real SQLite tables PowerSync creates but
   // never syncs and never routes through the upload queue. They hold shipped
   // reference data, not per-user data, so there is no Supabase mirror and no

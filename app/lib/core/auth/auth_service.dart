@@ -17,6 +17,12 @@ import '../sync/sync_service.dart';
 /// anonymous sign-in (offline first launch) leaves the app fully usable
 /// locally; [ensureSession] is retried opportunistically.
 class AuthService {
+  /// Called after a CONFIRMED identity change (sign-out, or a successful user
+  /// switch) to clear device-local data PowerSync does not manage — today the
+  /// Vita conversation tables. Wired in app_providers; null in tests that do
+  /// not care.
+  Future<void> Function()? onIdentityChanged;
+
   AuthService(this._sync, {SupabaseClient? client, bool? configuredOverride})
       // Private fields cannot be named constructor params, hence no
       // initializing formals here.
@@ -82,7 +88,12 @@ class AuthService {
     required String emailAddress,
     required String password,
   }) async {
-    await _sync.disconnectAndClear();
+    // clearLocal:false — local-only tables (Vita conversations) have NO server
+    // copy, so clearing them BEFORE a sign-in that may fail would destroy them
+    // irrecoverably (docs/architecture/06 §2a). Synced data still clears here
+    // for M0 isolation; conversations are cleared only once the switch is
+    // CONFIRMED, below.
+    await _sync.disconnectAndClear(clearLocal: false);
     try {
       await _supabase.auth
           .signInWithPassword(email: emailAddress, password: password);
@@ -94,14 +105,18 @@ class AuthService {
       await _sync.connect();
       rethrow;
     }
+    // Identity change confirmed: user B must not inherit user A's health
+    // conversations. Filtering is a visibility control; this is the deletion.
+    await onIdentityChanged?.call();
     await _sync.connect();
   }
 
   /// Sign out of a real account. Local data is cleared (switch semantics) and
   /// the app drops back to a FRESH anonymous session, so it keeps working.
   Future<void> signOut() async {
-    await _sync.disconnectAndClear();
+    await _sync.disconnectAndClear(clearLocal: false); // see §2a note above
     await _supabase.auth.signOut();
+    await onIdentityChanged?.call(); // drop conversations with the identity
     await ensureSession();
   }
 }

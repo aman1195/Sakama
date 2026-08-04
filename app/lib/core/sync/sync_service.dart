@@ -62,7 +62,11 @@ class SyncService {
   /// M1 auth flow must decide deliberately between plain disconnect()
   /// (same-user re-login, keeps data) and a bounded drain-then-clear for real
   /// user switches. Tracked as an M1 design decision.
-  Future<void> disconnectAndClear() async => _psDb?.disconnectAndClear();
+  /// [clearLocal] false preserves LOCAL-ONLY tables (Vita conversations, which
+  /// have no server copy to restore from). Callers clear those explicitly, and
+  /// only after a CONFIRMED identity change — docs/architecture/06 §2a.
+  Future<void> disconnectAndClear({bool clearLocal = true}) async =>
+      _psDb?.disconnectAndClear(clearLocal: clearLocal);
 
   /// Test/orchestration seams. Fail loudly if the database was never opened —
   /// a null no-op here would make "queue drained" / "first sync done" pass
