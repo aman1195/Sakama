@@ -20,6 +20,7 @@ skill (`.agents/skills/domain-modeling/ADR-FORMAT.md`).
 | [0013](0013-validate-photosnap-before-build.md) | Validate PhotoSnap before build (spike-first) | Accepted |
 | [0014](0014-off-live-lookup-only.md) | Open Food Facts: live lookup + per-scan cache; ship NO snapshot | Accepted |
 | [0015](0015-anon-abuse-posture-v1.md) | Anon sign-in abuse: caps + rate limit + monitoring, defer attestation | Accepted |
+| [0016](0016-vita-as-assistant.md) | Vita as an assistant: tools (propose-confirm), threads, on-device memory | Accepted |
 
 **Grilling session (2026-07):** 0009–0013 came out of a `/grilling` pass that pressure-tested the plan
 for a solo builder. It reversed/sharpened five decisions and reaffirmed one (PowerSync, 0003).
