@@ -59,8 +59,16 @@ class _PlanDetailPageState extends ConsumerState<PlanDetailPage> {
                 if (plan.dayTypes.isEmpty)
                   const Text('This plan declares no day types.')
                 else
-                  ...plan.dayTypes.entries
-                      .map((e) => _DayTypeCard(keyName: e.key, dayType: e.value)),
+                  ...plan.dayTypes.entries.map((e) => _DayTypeCard(
+                        keyName: e.key,
+                        dayType: e.value,
+                        planDefault: plan.targetsDefault,
+                        messages: plan.rules
+                            .where((r) => r.whenDayType == e.key)
+                            .map((r) => r.message)
+                            .whereType<String>()
+                            .toList(),
+                      )),
                 const SizedBox(height: 16),
                 Text('Schedule', style: Theme.of(context).textTheme.titleSmall),
                 const SizedBox(height: 8),
@@ -202,9 +210,21 @@ class _TargetsCard extends StatelessWidget {
 }
 
 class _DayTypeCard extends StatelessWidget {
-  const _DayTypeCard({required this.keyName, required this.dayType});
+  const _DayTypeCard({
+    required this.keyName,
+    required this.dayType,
+    required this.planDefault,
+    this.messages = const [],
+  });
   final String keyName;
   final DayType dayType;
+
+  /// The plan's default targets — used to hide a day's targets when they merely
+  /// restate the default (redundant noise).
+  final PlanTargets planDefault;
+
+  /// Coaching messages from `rules` scoped to this day type.
+  final List<String> messages;
 
   @override
   Widget build(BuildContext context) {
@@ -231,10 +251,14 @@ class _DayTypeCard extends StatelessWidget {
                     'Avoid: ${dayType.blockedFoods.join(', ')}'),
               for (final item in dayType.checklist)
                 _line(context, Icons.checklist, item),
-              // Day-type targets, when it overrides the plan default.
-              if (_hasAny(dayType.targets)) ...[
+              for (final m in messages)
+                _line(context, Icons.format_quote, m),
+              // Day-type targets ONLY when they actually differ from the plan
+              // default — restating identical numbers is noise, not information.
+              if (_differsFrom(dayType.targets, planDefault)) ...[
                 const SizedBox(height: 8),
-                _TargetsCard(title: 'Targets this day', targets: dayType.targets),
+                _TargetsCard(
+                    title: 'Targets this day', targets: dayType.targets),
               ],
             ],
           ),
@@ -243,13 +267,15 @@ class _DayTypeCard extends StatelessWidget {
     );
   }
 
-  static bool _hasAny(PlanTargets t) =>
-      t.calories != null ||
-      t.proteinG != null ||
-      t.carbG != null ||
-      t.fatG != null ||
-      t.fiberG != null ||
-      t.waterMl != null;
+  /// True when [t] states at least one value that differs from [base]. A day
+  /// type that only repeats the plan default adds nothing worth rendering.
+  static bool _differsFrom(PlanTargets t, PlanTargets base) =>
+      (t.calories != null && t.calories != base.calories) ||
+      (t.proteinG != null && t.proteinG != base.proteinG) ||
+      (t.carbG != null && t.carbG != base.carbG) ||
+      (t.fatG != null && t.fatG != base.fatG) ||
+      (t.fiberG != null && t.fiberG != base.fiberG) ||
+      (t.waterMl != null && t.waterMl != base.waterMl);
 
   Widget _line(BuildContext context, IconData icon, String text) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),

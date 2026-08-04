@@ -116,6 +116,60 @@ void main() {
     await _dispose(tester);
   });
 
+  testWidgets('a day type that only repeats the default hides "Targets this day"',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(500, 3000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final db = SakamaDatabase.withExecutor(NativeDatabase.memory());
+    addTearDown(() => tester.runAsync(() => db.close()));
+    // Day-type targets identical to targets_default → redundant, must be hidden.
+    await _seed(tester, db,
+        config: '{"schema_version":1,"id":"p","name":"Flat",'
+            '"targets_default":{"calories":1800},'
+            '"day_types":{"normal":{"label":"Standard day",'
+            '"targets":{"calories":1800}}},'
+            '"schedule":{"type":"weekly","map":{"mon":"normal"}}}');
+    await _mount(tester, db);
+
+    expect(find.text('Targets this day'), findsNothing,
+        reason: 'restating the plan default is noise, not information');
+    // The default itself is still shown once.
+    expect(find.text('1800 kcal'), findsOneWidget);
+    await _dispose(tester);
+  });
+
+  testWidgets('a day type that genuinely differs still shows its targets',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(500, 3000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final db = SakamaDatabase.withExecutor(NativeDatabase.memory());
+    addTearDown(() => tester.runAsync(() => db.close()));
+    await _seed(tester, db); // _config: the reset day overrides to 1200
+    await _mount(tester, db);
+    expect(find.text('Targets this day'), findsOneWidget);
+    expect(find.text('1200 kcal'), findsOneWidget);
+    await _dispose(tester);
+  });
+
+  testWidgets('coaching messages from rules render on their day type',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(500, 3000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final db = SakamaDatabase.withExecutor(NativeDatabase.memory());
+    addTearDown(() => tester.runAsync(() => db.close()));
+    await _seed(tester, db,
+        config: '{"schema_version":1,"id":"p","name":"Coached",'
+            '"day_types":{"reset":{"label":"Reset day"},'
+            '"normal":{"label":"Normal day"}},'
+            '"schedule":{"type":"weekly","map":{"mon":"reset"}},'
+            '"rules":[{"id":"r1","when":{"day_type":"reset"},'
+            '"message":"Electrolytes matter more today."}]}');
+    await _mount(tester, db);
+
+    expect(find.textContaining('Electrolytes matter more today'), findsOneWidget);
+    await _dispose(tester);
+  });
+
   testWidgets('a deleted/unknown plan id says so instead of crashing',
       (tester) async {
     final db = SakamaDatabase.withExecutor(NativeDatabase.memory());
