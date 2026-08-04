@@ -15,11 +15,11 @@ class _FakeVita implements VitaService {
   final Object _reply; // a String to return, or a VitaException to throw
   List<CoachMessage>? lastHistory;
   @override
-  Future<String> reply(List<CoachMessage> history,
+  Future<VitaReply> reply(List<CoachMessage> history,
       {required String context, String? byok}) async {
     lastHistory = history;
     if (_reply is VitaException) throw _reply;
-    return _reply as String;
+    return VitaReply(text: _reply as String);
   }
 }
 

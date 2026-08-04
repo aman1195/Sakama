@@ -31,7 +31,81 @@ RULES:
   asked for more.
 - Never give medical diagnoses or prescribe for conditions; suggest seeing a
   professional for medical concerns.
-- No markdown headers or bullet-symbol spam; plain, friendly text.`;
+- No markdown headers or bullet-symbol spam; plain, friendly text.
+
+LOGGING:
+- When the user clearly states something they ate or drank, or their weight,
+  call the matching tool INSTEAD of describing what you would log.
+- Only call a tool when the user is reporting something, not when they are
+  asking a question or thinking out loud ("should I have dal?" is a question).
+- Estimate portions from standard Indian servings when the user does not give
+  grams. Never invent a number you have no basis for: if the food is too vague
+  to estimate, ask one short clarifying question instead of calling the tool.
+- The user always confirms before anything is saved, so propose freely, but a
+  wrong number wastes their time — be honest, not eager.`;
+
+// Tool schemas (OpenAI/OpenRouter shape). The model PROPOSES; the client
+// bounds-checks every argument and the USER confirms before anything is
+// written (ADR 0016 decision 2) — nothing here writes.
+const TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "log_food",
+      description: "Propose logging a food the user says they ate.",
+      parameters: {
+        type: "object",
+        properties: {
+          meal: {
+            type: "string",
+            enum: ["breakfast", "lunch", "dinner", "snack"],
+          },
+          name: { type: "string", description: "the dish, e.g. dal tadka" },
+          energy_kcal: { type: "number" },
+          protein_g: { type: "number" },
+          carb_g: { type: "number" },
+          fat_g: { type: "number" },
+          grams: { type: "number", description: "portion weight if known" },
+        },
+        required: ["meal", "name", "energy_kcal"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "log_water",
+      description: "Propose logging water the user says they drank.",
+      parameters: {
+        type: "object",
+        properties: { amount_ml: { type: "number" } },
+        required: ["amount_ml"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "log_weight",
+      description: "Propose logging the user's stated body weight.",
+      parameters: {
+        type: "object",
+        properties: { weight_kg: { type: "number" } },
+        required: ["weight_kg"],
+      },
+    },
+  },
+];
+
+function safeParse(v: unknown): Record<string, unknown> {
+  if (typeof v !== "string") return {};
+  try {
+    const p = JSON.parse(v);
+    return p && typeof p === "object" ? p as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
 
 Deno.serve(async (req) => {
   const auth = req.headers.get("Authorization") ?? "";
@@ -96,6 +170,7 @@ Deno.serve(async (req) => {
     body: JSON.stringify({
       model: MODEL,
       messages: [{ role: "system", content: system }, ...clean],
+      tools: TOOLS,
       max_tokens: 500,
     }),
   });
@@ -103,11 +178,22 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
   }
   const or = await orRes.json();
-  const reply = or?.choices?.[0]?.message?.content;
-  if (typeof reply !== "string" || reply.trim().length === 0) {
+  const msg = or?.choices?.[0]?.message;
+  const reply = typeof msg?.content === "string" ? msg.content : "";
+
+  // A tool call is a PROPOSAL passed straight through: the client bounds-checks
+  // every argument (ToolCallParser) and the user confirms before any write.
+  const call = Array.isArray(msg?.tool_calls) ? msg.tool_calls[0] : null;
+  const name = call?.function?.name;
+  const toolJson = typeof name === "string"
+    ? JSON.stringify({ tool: name, arguments: safeParse(call?.function?.arguments) })
+    : null;
+
+  // Empty text is legitimate WHEN the model chose to act instead of talk.
+  if (reply.trim().length === 0 && toolJson === null) {
     return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
   }
-  return new Response(JSON.stringify({ reply }), {
+  return new Response(JSON.stringify({ reply, tool_json: toolJson }), {
     headers: { "Content-Type": "application/json" },
   });
 });

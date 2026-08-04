@@ -9,9 +9,11 @@ import '../../home/presentation/home_page.dart' show targetsProvider;
 import '../../onboarding/domain/nutrition_targets.dart';
 import '../../onboarding/domain/profile_record.dart';
 import '../../plans/application/plan_providers.dart';
+import '../data/tool_executor.dart';
 import '../data/vita_service.dart';
 import '../domain/coach_context.dart';
 import '../domain/coach_message.dart';
+import '../domain/tool_draft.dart';
 
 /// The Vita conversation, now backed by the device-local chat tables (ADR 0016
 /// phase 1) rather than living only in memory — the transcript survives a
@@ -24,6 +26,7 @@ class CoachState {
     this.messages = const [],
     this.sending = false,
     this.loading = true,
+    this.pendingDraft,
   });
 
   /// The thread being displayed. Null until the first message creates one.
@@ -34,17 +37,26 @@ class CoachState {
   /// True while the stored transcript is being restored.
   final bool loading;
 
+  /// An action Vita has PROPOSED, awaiting the user's confirmation. Deliberately
+  /// NOT persisted: a stale proposal should not survive a restart and reappear
+  /// as if it were still live. Confirming it writes and records a normal
+  /// transcript line instead.
+  final ToolDraft? pendingDraft;
+
   CoachState copyWith({
     String? threadId,
     List<CoachMessage>? messages,
     bool? sending,
     bool? loading,
+    ToolDraft? pendingDraft,
+    bool clearDraft = false,
   }) =>
       CoachState(
         threadId: threadId ?? this.threadId,
         messages: messages ?? this.messages,
         sending: sending ?? this.sending,
         loading: loading ?? this.loading,
+        pendingDraft: clearDraft ? null : (pendingDraft ?? this.pendingDraft),
       );
 }
 
@@ -176,7 +188,25 @@ class CoachController extends Notifier<CoachState> {
       final reply = await ref
           .read(vitaServiceProvider)
           .reply(wire, context: context, byok: byok);
-      await persistReply(reply);
+
+      // A tool call is UNTRUSTED: bounds-check it before it can become a
+      // confirm card (review #82). A refused call degrades to prose, never to
+      // a silently-wrong proposal.
+      ToolDraft? draft;
+      if (reply.toolJson != null) {
+        final parsed = const ToolCallParser().parse(reply.toolJson!);
+        draft = parsed.draft;
+        if (draft == null) {
+          debugPrint('vita tool refused: ${parsed.rejection}');
+        }
+      }
+      final text = reply.text.trim().isNotEmpty
+          ? reply.text
+          : (draft != null
+              ? 'Want me to log this?'
+              : "I couldn't work that one out — could you say it another way?");
+      await persistReply(text);
+      if (draft != null) _set(state.copyWith(pendingDraft: draft));
     } on VitaException catch (e) {
       await persistReply(_friendly(e), synthetic: true);
     } catch (e) {
@@ -185,6 +215,52 @@ class CoachController extends Notifier<CoachState> {
           "I couldn't reach the network just now. Try again in a moment.",
           synthetic: true);
     }
+  }
+
+  /// Write the proposed action. Only reachable from an explicit user tap —
+  /// Vita never writes on its own (ADR 0016 decision 2).
+  Future<void> confirmDraft() async {
+    final draft = state.pendingDraft;
+    if (draft == null) return;
+    _set(state.copyWith(clearDraft: true)); // no double-tap
+    try {
+      final executor = ToolExecutor(
+        foodLogs: await ref.read(foodLogRepositoryProvider.future),
+        water: await ref.read(waterRepositoryProvider.future),
+        weight: await ref.read(weightRepositoryProvider.future),
+        userId: ref.read(currentUserIdProvider),
+      );
+      final now = DateTime.now();
+      final ymd = '${now.year.toString().padLeft(4, '0')}-'
+          '${now.month.toString().padLeft(2, '0')}-'
+          '${now.day.toString().padLeft(2, '0')}';
+      final line = await executor.execute(draft, date: ymd);
+      await _appendVita(line, synthetic: true);
+    } catch (e) {
+      debugPrint('confirmDraft failed: $e');
+      await _appendVita("I couldn't save that just now — please try again.",
+          synthetic: true);
+    }
+  }
+
+  /// Discard the proposal. Nothing is written and nothing is said — the user
+  /// simply did not want it.
+  void dismissDraft() => _set(state.copyWith(clearDraft: true));
+
+  /// Append an assistant line to the visible + stored transcript.
+  Future<void> _appendVita(String content, {bool synthetic = false}) async {
+    final threadId = state.threadId;
+    if (threadId == null) return;
+    final repo = await ref.read(chatRepositoryProvider.future);
+    await repo.appendMessage(
+        threadId: threadId,
+        role: 'vita',
+        content: content,
+        synthetic: synthetic);
+    _set(state.copyWith(messages: [
+      ...state.messages,
+      CoachMessage(CoachRole.vita, content, synthetic: synthetic),
+    ]));
   }
 
   static String _friendly(VitaException e) => e.budgetExhausted

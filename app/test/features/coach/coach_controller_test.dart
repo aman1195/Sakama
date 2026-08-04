@@ -14,12 +14,12 @@ class _FakeVita implements VitaService {
   String? lastContext;
   List<CoachMessage>? lastHistory;
   @override
-  Future<String> reply(List<CoachMessage> history,
+  Future<VitaReply> reply(List<CoachMessage> history,
       {required String context, String? byok}) async {
     lastContext = context;
     lastHistory = history;
     if (_reply is VitaException) throw _reply;
-    return _reply as String;
+    return VitaReply(text: _reply as String);
   }
 }
 
@@ -31,11 +31,11 @@ class _SwapVita implements VitaService {
   int _n = 0;
   List<CoachMessage>? lastHistory;
   @override
-  Future<String> reply(List<CoachMessage> history,
+  Future<VitaReply> reply(List<CoachMessage> history,
       {required String context, String? byok}) async {
     lastHistory = history;
     if (_n++ == 0) throw _first;
-    return _ok;
+    return VitaReply(text: _ok);
   }
 }
 
