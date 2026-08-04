@@ -14,7 +14,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const DAILY_CAP = 2; // plan generations per user per day — server-side (design §8)
 const MODEL = "google/gemini-2.5-flash"; // cheap, JSON-mode; config-swappable
-const MAX_TOKENS = 2000; // a full multi-day plan is larger than an estimate
+const MAX_TOKENS = 3000; // richer multi-day-type plans need the headroom
 
 const SYSTEM_PROMPT =
   `You design a personal nutrition plan and reply with ONLY a JSON object in
@@ -48,6 +48,31 @@ this exact schema (Sakama plan v1). No prose, no markdown fences.
   "rules": []
 }
 
+MAKE IT FEEL PERSONALLY DESIGNED, NOT A TEMPLATE. A plan with one identical day
+repeated seven times is a FAILURE. Specifically:
+
+- Declare 2-4 DISTINCT day types that differ MEANINGFULLY from each other -- in
+  calories, eating window, emphasis, or all three. A good weight-loss week might
+  pair a regular day with 1-2 lighter "reset" days and, if the user is active, a
+  higher-protein day. Give each a short, human label ("Lighter reset day"), not
+  a generic one ("Day type 1").
+- The weekly schedule MUST use more than one day type. Place the lighter/harder
+  days sensibly across the week (e.g. a lighter day after a typical heavy-eating
+  day, not two lighter days back to back).
+- Name REAL DISHES from the user's own cuisine and diet in allowed_foods,
+  blocked_foods and checklist -- not food groups. For a south-Indian vegetarian:
+  idli, sambar, rasam, poriyal, curd rice, ragi. For north-Indian: roti, dal,
+  paneer, sabzi. Generic advice like "include a protein source" is a FAILURE;
+  say "add a katori of sprouts or paneer to lunch" instead.
+- checklist: at most 4 items per day type, each specific and doable TODAY, and
+  DIFFERENT between day types.
+- In a day type's "targets", include ONLY fields that DIFFER from
+  targets_default. If a day matches the default, omit "targets" entirely --
+  never restate identical numbers.
+- Populate "rules" with 1-3 short, encouraging coaching messages tied to a
+  day_type (use {"id","when":{"day_type":"<key>"},"effect":{},"message":"..."}).
+  These are what the coach says on that day; make them specific and warm.
+
 Rules you MUST follow:
 - Respect the user's diet: NEVER suggest non-veg foods to a veg/vegan user; no
   eggs to a vegan; honour the stated cuisine.
@@ -57,7 +82,8 @@ Rules you MUST follow:
 - Keep targets realistic: base them on a Mifflin-St Jeor maintenance estimate
   from the profile, adjusted for the goal (roughly -15..-20% for weight loss,
   +10..+15% for muscle gain, 0 for maintain). No extreme calorie floors
-  (never below ~1200 kcal/day for adults).
+  (never below ~1200 kcal/day for adults). Lighter days may go below the
+  plan default but NEVER below that floor.
 - schema_version MUST be 1. Use "weekly" schedule. Every schedule value MUST be
   a declared day_type key. Output MUST be valid JSON and nothing else.`;
 
