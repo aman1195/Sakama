@@ -26,6 +26,21 @@ updates:
         patterns: ["freezed", "freezed_annotation"]
       envied:
         patterns: ["envied", "envied_generator"]
+    # drift is pinned exact at 2.34.0 ON PURPOSE. drift >=2.34.1 requires
+    # analyzer ^13, but freezed ^3 + riverpod_generator (source_gen/analyzer)
+    # cap analyzer below 13, so drift_dev cannot reach a drift-2.34.3-compatible
+    # version and the migration harness fails to COMPILE (proven in PRs #34,
+    # #84 — `allSchemaEntities` gone from GeneratedDatabase). Until the codegen
+    # stack supports analyzer 13, every drift patch/minor bump is un-takeable,
+    # so ignore them to stop the weekly un-mergeable PR. REMOVE this ignore when
+    # freezed/riverpod move to analyzer ^13 (then bump drift + drift_dev in
+    # lockstep). A MAJOR bump is left un-ignored so a deliberate migration still
+    # surfaces.
+    ignore:
+      - dependency-name: "drift"
+        update-types:
+          - "version-update:semver-patch"
+          - "version-update:semver-minor"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule: {interval: "weekly"}
