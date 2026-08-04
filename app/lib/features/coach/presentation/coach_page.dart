@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/db/database.dart';
 import '../../settings/presentation/ai_disclosure.dart';
 import '../domain/coach_message.dart';
 import 'coach_controller.dart';
@@ -37,6 +38,15 @@ class _CoachPageState extends ConsumerState<CoachPage> {
     }
   }
 
+  /// Saved conversations. A sheet keeps the chat full-bleed and needs no route.
+  Future<void> _showThreads() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => const _ThreadSheet(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(coachControllerProvider);
@@ -44,6 +54,10 @@ class _CoachPageState extends ConsumerState<CoachPage> {
       identifier: 'coach-page',
       child: Column(
         children: [
+          _ThreadBar(
+            onNew: () => ref.read(coachControllerProvider.notifier).newThread(),
+            onHistory: _showThreads,
+          ),
           Expanded(
             child: state.messages.isEmpty
                 ? const _Intro()
@@ -175,4 +189,110 @@ class _Typing extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 2)),
         ),
       );
+}
+
+/// Slim header: start a new conversation, or open the saved ones.
+class _ThreadBar extends StatelessWidget {
+  const _ThreadBar({required this.onNew, required this.onHistory});
+  final VoidCallback onNew;
+  final VoidCallback onHistory;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Semantics(
+            identifier: 'coach-history',
+            button: true,
+            child: IconButton(
+              icon: const Icon(Icons.history),
+              tooltip: 'Saved chats',
+              onPressed: onHistory,
+            ),
+          ),
+          Semantics(
+            identifier: 'coach-new-thread',
+            button: true,
+            child: IconButton(
+              icon: const Icon(Icons.add_comment_outlined),
+              tooltip: 'New chat',
+              onPressed: onNew,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The saved-conversation list. Tap to open, trash to delete.
+class _ThreadSheet extends ConsumerWidget {
+  const _ThreadSheet();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final threads = ref.watch(chatThreadsProvider);
+    return Semantics(
+      identifier: 'coach-thread-sheet',
+      child: SafeArea(
+        child: threads.when(
+          loading: () => const Padding(
+              padding: EdgeInsets.all(32),
+              child: Center(child: CircularProgressIndicator())),
+          error: (e, _) => Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text('Could not load your chats: $e')),
+          data: (rows) => rows.isEmpty
+              ? const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text('No saved chats yet.',
+                      textAlign: TextAlign.center))
+              : ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final t in rows)
+                      _ThreadTile(thread: t),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ThreadTile extends ConsumerWidget {
+  const _ThreadTile({required this.thread});
+  final ChatThreadRow thread;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Semantics(
+      identifier: 'coach-thread-${thread.id}',
+      child: ListTile(
+        leading: const Icon(Icons.chat_bubble_outline),
+        title: Text(thread.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        trailing: Semantics(
+          identifier: 'coach-thread-delete-${thread.id}',
+          button: true,
+          child: IconButton(
+            icon: const Icon(Icons.delete_outline),
+            onPressed: () async {
+              await ref
+                  .read(coachControllerProvider.notifier)
+                  .deleteThread(thread.id);
+            },
+          ),
+        ),
+        onTap: () async {
+          await ref
+              .read(coachControllerProvider.notifier)
+              .openThread(thread.id);
+          if (context.mounted) Navigator.of(context).pop();
+        },
+      ),
+    );
+  }
 }
