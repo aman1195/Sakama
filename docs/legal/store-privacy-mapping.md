@@ -13,7 +13,9 @@ Every privacy artefact must name **both** external recipient classes. Missing ei
 failure #43 and #60 call out.
 
 1. **AI provider — OpenRouter, forwarding to Google (Gemini).** Receives photos, dish names, or the
-   food log plus profile including health conditions, and only when the user has enabled AI. Paid tier,
+   food log plus profile including health conditions, the active plan, and the messages of the current
+   coach conversation, and only when the user has enabled AI. Coach history itself is device-local and
+   never uploaded. Paid tier,
    no training, no human review.
 2. **Open Food Facts.** Receives the scanned barcode and the device IP on a barcode lookup. No user
    identifier attached. This path is **not** covered by the AI-consent gate because it is a different

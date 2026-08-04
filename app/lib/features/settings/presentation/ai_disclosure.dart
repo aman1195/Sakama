@@ -19,11 +19,15 @@ Future<bool> ensureAiConsent(BuildContext context, WidgetRef ref) async {
   if (!context.mounted) return false;
 
   if (current == false) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: const Text('AI features are turned off.'),
-      action: SnackBarAction(
-          label: 'Turn on', onPressed: () => context.push('/ai-privacy')),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('AI features are turned off.'),
+        action: SnackBarAction(
+          label: 'Turn on',
+          onPressed: () => context.push('/ai-privacy'),
+        ),
+      ),
+    );
     return false;
   }
 
@@ -53,54 +57,78 @@ class AiDisclosureSheet extends StatelessWidget {
     return Semantics(
       identifier: 'ai-disclosure-sheet',
       child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Before you use AI', style: text.headlineSmall),
-              const SizedBox(height: 12),
-              Text(
-                'Sakama\'s AI features work by sending some of your data off '
-                'this phone to our AI provider:',
-                style: text.bodyMedium,
-              ),
-              const SizedBox(height: 16),
-              const _Sends(
-                icon: Icons.photo_camera_outlined,
-                title: 'PhotoSnap',
-                what: 'the food photo you take',
-              ),
-              const _Sends(
-                icon: Icons.search,
-                title: 'AI estimate',
-                what: 'the dish name you type',
-              ),
-              const _Sends(
-                icon: Icons.chat_bubble_outline,
-                title: 'Coach (Vita)',
-                what: 'your recent food log and your profile — including any '
-                    'health conditions you set (for example diabetes or PCOS) — '
-                    'so its advice fits you',
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Only the explanation scrolls. The consent buttons stay PINNED —
+            // an accept button hidden below a fold is not informed consent, and
+            // this list overflowed a small screen once plan generation was
+            // added (large Dynamic Type makes it worse — docs/MOBILE.md).
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Before you use AI', style: text.headlineSmall),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Sakama\'s AI features work by sending some of your data '
+                      'off this phone to our AI provider:',
+                      style: text.bodyMedium,
+                    ),
+                    const SizedBox(height: 16),
+                    const _Sends(
+                      icon: Icons.photo_camera_outlined,
+                      title: 'PhotoSnap',
+                      what: 'the food photo you take',
+                    ),
+                    const _Sends(
+                      icon: Icons.search,
+                      title: 'AI estimate',
+                      what: 'the dish name you type',
+                    ),
+                    const _Sends(
+                      icon: Icons.chat_bubble_outline,
+                      title: 'Coach (Vita)',
+                      what:
+                          'what you type in the chat, your recent food log, '
+                          'your profile — including any health conditions you '
+                          'set (for example diabetes or PCOS) — and your active '
+                          'plan, so its advice fits you',
+                    ),
+                    const _Sends(
+                      icon: Icons.auto_awesome,
+                      title: 'Plan generation',
+                      what:
+                          'your profile — including any health conditions — '
+                          'to build a plan for you',
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: scheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Your chats are stored only on this phone and are never '
+                        'uploaded to our servers. Your data goes to our AI '
+                        'provider (OpenRouter, using Google Gemini) on a paid '
+                        'tier that does not train on it. We do not sell your '
+                        'data. You can turn AI off any time in Me → AI & '
+                        'privacy.',
+                        style: text.bodySmall,
+                      ),
+                    ),
+                  ],
                 ),
-                child: Text(
-                  'Your data goes to our AI provider (OpenRouter, using Google '
-                  'Gemini) on a paid tier that does not train on it. We do not '
-                  'sell your data. You can turn AI off any time in Me → AI & '
-                  'privacy.',
-                  style: text.bodySmall,
-                ),
               ),
-              const SizedBox(height: 20),
-              Row(
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+              child: Row(
                 children: [
                   Expanded(
                     child: Semantics(
@@ -123,8 +151,8 @@ class AiDisclosureSheet extends StatelessWidget {
                   ),
                 ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -149,13 +177,17 @@ class _Sends extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: RichText(
-              text: TextSpan(style: text.bodyMedium, children: [
-                TextSpan(
+              text: TextSpan(
+                style: text.bodyMedium,
+                children: [
+                  TextSpan(
                     text: '$title sends ',
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
-                TextSpan(text: what),
-                const TextSpan(text: '.'),
-              ]),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  TextSpan(text: what),
+                  const TextSpan(text: '.'),
+                ],
+              ),
             ),
           ),
         ],

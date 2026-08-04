@@ -53,8 +53,14 @@ class AiPrivacyPage extends ConsumerWidget {
             _row(
                 text,
                 'Coach (Vita)',
-                'your recent food log and your profile — including any health '
-                    'conditions you set (for example diabetes or PCOS)'),
+                'what you type in the chat, your recent food log, your profile '
+                    '— including any health conditions you set (for example '
+                    'diabetes or PCOS) — and your active plan'),
+            _row(
+                text,
+                'Plan generation',
+                'your profile — including any health conditions — to build a '
+                    'plan for you'),
             const SizedBox(height: 20),
             Container(
               padding: const EdgeInsets.all(14),
@@ -63,10 +69,13 @@ class AiPrivacyPage extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
-                'Your data goes to our AI provider (OpenRouter, using Google '
-                'Gemini) on a paid tier that does not train on it. We do not '
-                'sell your data. Turning AI off stops all of the above; the '
-                'rest of Sakama keeps working offline.',
+                'Your chats are stored only on this phone — they are never '
+                'uploaded to our servers — but the messages in the chat you '
+                'are having are sent to our AI provider (OpenRouter, using '
+                'Google Gemini) to answer you, on a paid tier that does not '
+                'train on your data. We do not sell your data. Turning AI off '
+                'stops all of the above; the rest of Sakama keeps working '
+                'offline.',
                 style: text.bodySmall,
               ),
             ),

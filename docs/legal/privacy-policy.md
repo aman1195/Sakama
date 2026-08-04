@@ -48,6 +48,8 @@ are signed in, replicated to our backend so it survives a device change.
 | Profile | date of birth, sex, height, weight, activity level, goal, diet, cuisine, and **health conditions** you add (for example diabetes, PCOS) | On device; synced to backend |
 | Food log | items, meals, amounts, calories and macronutrients, how each item was logged (search, barcode, photo, AI estimate) | On device; synced to backend |
 | Body metrics | weight entries over time, water intake | On device; synced to backend |
+| Plans | a plan you import or have generated: daily targets, day types, eating windows, foods to avoid, checklists | On device; synced to backend |
+| Coach conversations | the chats you have with Vita, and their titles | **Only on your device.** Never uploaded to our servers and never synced, even when you are signed in. Signing out or switching accounts deletes them from the device. |
 | Account identity | an anonymous device identifier by default; your email address only if you create an account | Backend authentication |
 | Your own AI key (optional) | an OpenRouter API key you choose to add ("BYOK") | **Only** in your device's secure storage (Keychain / Android Keystore). It is never stored on our servers and never written to our logs. |
 
@@ -81,8 +83,16 @@ then, the following is sent to our AI provider so the feature can work:
 
 - **PhotoSnap** sends the **food photo** you take.
 - **AI estimate** sends the **dish name** you type.
-- **Coach (Vita)** sends your **recent food log and your profile, including any health conditions you
-  have added**, so its advice fits you.
+- **Coach (Vita)** sends **the messages in the conversation you are having** (the most recent turns of
+  that chat), your **recent food log**, your **profile including any health conditions you have added**,
+  and your **active plan** (its targets, eating window, foods to avoid and checklist), so its advice fits
+  you.
+- **Plan generation** sends your **profile, including any health conditions**, so the plan it builds
+  suits you.
+
+**Your conversations are stored only on your device.** We never upload or sync the chat history. The
+messages of the chat you are currently having are sent to the AI provider so it can reply, but they are
+not stored by us afterwards.
 
 This data is routed through our own server function to our AI gateway, **OpenRouter**, which forwards it
 to the model provider, **Google (Gemini)**. We use a **paid tier that does not train on your data and
@@ -111,7 +121,7 @@ We identify our app to Open Food Facts with a contact address in the request, as
 |---|---|---|---|
 | Supabase | Profile, food log, weight, water, account identity | Backend storage and auth | Yes (health conditions), if synced |
 | PowerSync | The same data, in transit | Device ↔ backend sync | Yes, in transit |
-| OpenRouter → Google (Gemini) | Photo, dish name, or log + profile incl. health conditions | Run the AI feature you enabled | Yes, for the coach |
+| OpenRouter → Google (Gemini) | Photo, dish name, or conversation messages + log + profile incl. health conditions + active plan | Run the AI feature you enabled | Yes, for the coach and plan generation |
 | Open Food Facts | Scanned barcode + device IP | Look up a scanned product | No |
 
 ## Legal basis and consent
