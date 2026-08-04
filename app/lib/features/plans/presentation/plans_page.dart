@@ -177,6 +177,7 @@ class _PlansPageState extends ConsumerState<PlansPage> {
                       plan: p,
                       onActivate: p.active ? null : () => _activate(p.id),
                       onDelete: () => _confirmDelete(p),
+                      onOpen: () => context.push('/plans/${p.id}'),
                     )),
             ],
           ),
@@ -191,10 +192,12 @@ class _PlanTile extends StatelessWidget {
     required this.plan,
     required this.onActivate,
     required this.onDelete,
+    required this.onOpen,
   });
   final UserPlanRow plan;
   final VoidCallback? onActivate;
   final VoidCallback onDelete;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -202,6 +205,7 @@ class _PlanTile extends StatelessWidget {
       identifier: 'plan-row-${plan.id}',
       child: Card(
         child: ListTile(
+          onTap: onOpen, // view what the plan actually says
           title: Text(plan.name.isEmpty ? 'Untitled plan' : plan.name),
           subtitle: Text(_sourceLabel(plan.source)),
           leading: Icon(
