@@ -103,21 +103,32 @@ class CoachController extends Notifier<CoachState> {
   void newThread() =>
       state = const CoachState(loading: false); // threadId null → created on send
 
-  /// Switch to a saved conversation.
+  /// Switch to a saved conversation. Guarded like [_restore] — the provider can
+  /// be disposed mid-await if the user leaves the tab (review #85 nit).
   Future<void> openThread(String threadId) async {
-    final repo = await ref.read(chatRepositoryProvider.future);
-    final rows = await repo.messagesOf(threadId);
-    _set(CoachState(
-      threadId: threadId,
-      messages: rows.map(_toMessage).toList(),
-      loading: false,
-    ));
+    try {
+      final repo = await ref.read(chatRepositoryProvider.future);
+      final rows = await repo.messagesOf(threadId);
+      _set(CoachState(
+        threadId: threadId,
+        messages: rows.map(_toMessage).toList(),
+        loading: false,
+      ));
+    } catch (e) {
+      debugPrint('coach openThread failed: $e');
+    }
   }
 
   Future<void> deleteThread(String threadId) async {
-    final repo = await ref.read(chatRepositoryProvider.future);
-    await repo.deleteThread(threadId);
-    if (state.threadId == threadId) await _restore(); // fall back to the next one
+    try {
+      final repo = await ref.read(chatRepositoryProvider.future);
+      await repo.deleteThread(threadId);
+      if (ref.mounted && state.threadId == threadId) {
+        await _restore(); // fall back to the next saved conversation
+      }
+    } catch (e) {
+      debugPrint('coach deleteThread failed: $e');
+    }
   }
 
   Future<void> send(String text) async {
