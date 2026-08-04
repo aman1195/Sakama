@@ -25,7 +25,7 @@ class _FakeSync extends Fake implements SyncService {
   @override
   Future<void> connect() async {}
   @override
-  Future<void> disconnectAndClear() async {}
+  Future<void> disconnectAndClear({bool clearLocal = true}) async {}
 }
 
 Session _session({required bool anonymous, String? email}) => Session(

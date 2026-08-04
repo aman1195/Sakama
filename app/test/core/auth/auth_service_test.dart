@@ -70,24 +70,31 @@ class _FakeClient extends Fake implements SupabaseClient {
 
 class _FakeSync extends Fake implements SyncService {
   final calls = <String>[];
+  final clearLocalFlags = <bool>[];
   @override
   Future<void> connect() async => calls.add('connect');
   @override
-  Future<void> disconnectAndClear() async => calls.add('disconnectAndClear');
+  Future<void> disconnectAndClear({bool clearLocal = true}) async {
+    calls.add('disconnectAndClear');
+    clearLocalFlags.add(clearLocal);
+  }
 }
 
 void main() {
   late _FakeGoTrue goTrue;
   late _FakeSync sync;
   late AuthService auth;
+  late int identityChanges;
 
   setUp(() {
     goTrue = _FakeGoTrue();
     sync = _FakeSync();
     // configuredOverride: CI runs with placeholder .env (Env.isConfigured
     // false), local runs with real creds — the tests must not depend on that.
+    identityChanges = 0;
     auth = AuthService(sync,
-        client: _FakeClient(goTrue), configuredOverride: true);
+        client: _FakeClient(goTrue), configuredOverride: true)
+      ..onIdentityChanged = () async => identityChanges++;
   });
 
   test('ensureSession: creates an anonymous session and attaches sync',
@@ -146,6 +153,30 @@ void main() {
             'guest\'s data re-syncs; otherwise a typo wipes their day '
             'until an app restart');
     expect(auth.isAnonymous, isTrue, reason: 'old session still current');
+    // docs/architecture/06 §2a: local-only tables (Vita conversations) have NO
+    // server copy, so a failed sign-in must NOT clear them — unlike synced
+    // data, they could never come back.
+    expect(sync.clearLocalFlags, [false],
+        reason: 'a typo must not destroy conversations irrecoverably');
+    expect(identityChanges, 0,
+        reason: 'no identity change happened, so nothing may be dropped');
+  });
+
+  test('CONFIRMED switch drops conversations; failed switch does not (§2a)',
+      () async {
+    goTrue.sessionValue = _session(anonymous: true);
+    await auth.signInExisting(emailAddress: 'a@b.c', password: 'pw');
+    expect(sync.clearLocalFlags, [false],
+        reason: 'local-only data is never cleared by PowerSync here');
+    expect(identityChanges, 1,
+        reason: 'user B must not inherit user A conversations');
+  });
+
+  test('signOut drops conversations with the identity (§2a)', () async {
+    goTrue.sessionValue = _session(anonymous: false, email: 'a@b.c');
+    await auth.signOut();
+    expect(sync.clearLocalFlags, [false]);
+    expect(identityChanges, 1);
   });
 
   test('saveAccount converts the anonymous user (updateUser), keeping uid',

@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/capture/data/food_log_repository.dart';
 import '../../features/capture/data/photosnap_service.dart';
+import '../../features/coach/data/chat_repository.dart';
 import '../../features/coach/data/vita_service.dart';
 import '../../features/foods/data/food_repository.dart';
 import '../../features/foods/data/ai_estimator.dart';
@@ -43,8 +44,16 @@ final currentUserIdProvider = Provider<String?>((ref) {
 
 /// Anonymous-first auth (M3.1). ensureSession is fired on startup by
 /// SakamaApp and before AI calls; it never blocks or throws.
-final authServiceProvider =
-    Provider<AuthService>((ref) => AuthService(ref.watch(syncServiceProvider)));
+final authServiceProvider = Provider<AuthService>((ref) {
+  final auth = AuthService(ref.watch(syncServiceProvider));
+  // Local-only conversations are outside PowerSync's clear, so they are dropped
+  // explicitly on a CONFIRMED identity change (docs/architecture/06 §2a).
+  auth.onIdentityChanged = () async {
+    final repo = await ref.read(chatRepositoryProvider.future);
+    await repo.deleteAll();
+  };
+  return auth;
+});
 
 /// The one database handle the UI reads (offline-first, CLAUDE.md rule 1).
 /// Overridden with an in-memory instance in widget tests.
@@ -73,6 +82,13 @@ final waterRepositoryProvider = FutureProvider<WaterRepository>((ref) async {
 final weightRepositoryProvider = FutureProvider<WeightRepository>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return WeightRepository(db);
+});
+
+/// Vita conversations (ADR 0016 phase 1). DEVICE-LOCAL: local-only tables, so
+/// nothing here syncs or reaches a server.
+final chatRepositoryProvider = FutureProvider<ChatRepository>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return ChatRepository(db);
 });
 
 /// User plans store (M4). Offline-first over the synced `user_plans` table.

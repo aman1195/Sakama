@@ -107,6 +107,43 @@ class UserPlans extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// One Vita conversation (ADR 0016 phase 1). LOCAL-ONLY and deliberately so:
+/// health conversations never leave the phone at rest, so there is no Supabase
+/// mirror, no RLS policy and no sync-streams entry (docs/architecture/06).
+///
+/// [userId] scopes threads to the signed-in user on a shared device. Because a
+/// local-only row NEVER uploads, Postgres never backfills it — so the
+/// repository scopes strictly to the current uid and backfills nulls locally.
+@DataClassName('ChatThreadRow')
+class ChatThreads extends Table {
+  TextColumn get id => text()();
+  TextColumn get userId => text().nullable()();
+  TextColumn get title => text()();
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()(); // last activity; thread list sorts on this
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// One turn in a conversation. LOCAL-ONLY (see [ChatThreads]).
+///
+/// [synthetic] marks app chrome (budget/error notices) — kept in the visible
+/// transcript but never replayed upstream, so the model can't mistake our copy
+/// for its own prior reply (review #58).
+@DataClassName('ChatMessageRow')
+class ChatMessages extends Table {
+  TextColumn get id => text()();
+  TextColumn get threadId => text()();
+  TextColumn get role => text()(); // 'user' | 'vita'
+  TextColumn get content => text()();
+  BoolColumn get synthetic => boolean().withDefault(const Constant(false))();
+  IntColumn get createdAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 /// The food reference table — the searchable corpus users log against
 /// (USDA CC0 now; Indian dishes via AI estimation + a commercial licence later.
 /// NOT INDB — unlicensed + IFCT-derived, see CLAUDE.md rule 6). READ-ONLY
@@ -173,7 +210,8 @@ class OffFoods extends Table {
 }
 
 @DriftDatabase(
-    tables: [FoodLogs, Profiles, WaterLogs, WeightLogs, UserPlans, Foods, OffFoods])
+    tables: [FoodLogs, Profiles, WaterLogs, WeightLogs, UserPlans, ChatThreads,
+      ChatMessages, Foods, OffFoods])
 class SakamaDatabase extends _$SakamaDatabase {
   SakamaDatabase()
       : managedExternally = false,
@@ -191,7 +229,7 @@ class SakamaDatabase extends _$SakamaDatabase {
   final bool managedExternally;
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => managedExternally
@@ -220,6 +258,14 @@ class SakamaDatabase extends _$SakamaDatabase {
             if (from < 5) {
               // M4: user_plans (synced). Additive — no existing row is touched.
               await m.createTable(userPlans);
+            }
+            if (from < 6) {
+              // ADR 0016 phase 1: Vita conversations. LOCAL-ONLY tables — in
+              // production PowerSync creates these; this Drift DDL path runs in
+              // plain-Drift mode (tests/local-only). Additive — no existing row
+              // is touched.
+              await m.createTable(chatThreads);
+              await m.createTable(chatMessages);
             }
           },
         );
