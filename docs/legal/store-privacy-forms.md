@@ -27,6 +27,7 @@ tracking?* Sakama tracks nothing, so **Tracking = No everywhere.**
 | **Health & Fitness** (food log, weight, water, health conditions) | Yes | Yes (when signed in + synced) | No | App Functionality |
 | **Contact Info → Email Address** | Yes ⟨only if the user creates an account⟩ | Yes | No | App Functionality |
 | **User Content → Photos or Videos** | Yes | No | No | App Functionality |
+| **User Content → Other User Content** (coach chat messages) | Yes | No | No | App Functionality |
 | **Identifiers → User ID** | Yes | Yes | No | App Functionality |
 | **Health & Fitness / Other Data** — none beyond the above | — | — | — | — |
 | **Usage Data, Diagnostics, Location, Contacts, Browsing, Financial, Purchases** | **No** | — | — | — |
@@ -36,7 +37,14 @@ tracking?* Sakama tracks nothing, so **Tracking = No everywhere.**
 - **Photos** — "Food photos are sent to our AI service provider to identify the food, and are not stored
   by us." (Used only if the user enables PhotoSnap.)
 - **Health & Fitness** — collected to run the diary and, if the user enables the AI coach, sent to our AI
-  provider to personalize advice.
+  provider to personalize advice. This now also includes the **active plan** (targets, eating window,
+  foods to avoid, checklist) and the **messages of the current coach conversation**.
+- **Other User Content (coach chat)** — "Chats with the coach are stored only on the user's device and
+  are never uploaded to our servers. The messages of the conversation are sent to our AI service
+  provider to generate a reply and are not retained by us."
+  ⟨CONFIRM: we declare this conservatively as collected. Apple's guidance exempts data used only for a
+  transient transaction and not retained — arguably applicable here since we never store it server-side —
+  but over-declaring is the safer error for sensitive health-adjacent content. Decide with counsel.⟩
 - **Data deletion** — Apple requires a way for users to request account+data deletion. ⟨CONFIRM the
   path/turnaround; see checklist.⟩
 - **Privacy Policy URL** — ⟨CONFIRM public URL⟩.

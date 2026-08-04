@@ -40,8 +40,9 @@ void main() {
 
       // Disclosure sheet is up, naming the health-condition transmission.
       expect(find.bySemanticsIdentifier('ai-disclosure-sheet'), findsOneWidget);
+      // Mentioned by BOTH the Coach row and the Plan generation row now.
       expect(find.textContaining('health conditions', findRichText: true),
-          findsOneWidget);
+          findsWidgets);
 
       await tester.tap(find.bySemanticsIdentifier('ai-disclosure-accept'));
       await tester.pumpAndSettle();
