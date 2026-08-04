@@ -12,8 +12,23 @@ class VitaException implements Exception {
 
 /// Sends the conversation + grounding snapshot to the Vita Edge Function.
 /// Injectable so the chat UI + tests never touch the network.
+/// What Vita said, and (optionally) what it PROPOSES to do.
+///
+/// [toolJson] is raw, UNTRUSTED model output in the shape
+/// `{"tool": ..., "arguments": {...}}`. It is never acted on directly: the
+/// client bounds-checks it (ToolCallParser) and the user confirms before any
+/// write (ADR 0016 decision 2).
+class VitaReply {
+  const VitaReply({required this.text, this.toolJson});
+  final String text;
+  final String? toolJson;
+
+  bool get hasTool => toolJson != null;
+}
+
 abstract class VitaService {
-  Future<String> reply(List<CoachMessage> history, {required String context, String? byok});
+  Future<VitaReply> reply(List<CoachMessage> history,
+      {required String context, String? byok});
 }
 
 class EdgeFunctionVita implements VitaService {
@@ -23,7 +38,7 @@ class EdgeFunctionVita implements VitaService {
   static const _function = 'vita';
 
   @override
-  Future<String> reply(List<CoachMessage> history,
+  Future<VitaReply> reply(List<CoachMessage> history,
       {required String context, String? byok}) async {
     final supabase = _client ?? Supabase.instance.client;
     final FunctionResponse res;
@@ -43,9 +58,14 @@ class EdgeFunctionVita implements VitaService {
     }
     final data = res.data;
     final reply = data is Map ? data['reply'] : null;
-    if (reply is! String || reply.trim().isEmpty) {
+    final toolJson = data is Map && data['tool_json'] is String
+        ? data['tool_json'] as String
+        : null;
+    final text = reply is String ? reply.trim() : '';
+    // Empty text is legitimate ONLY when Vita chose to act instead of talk.
+    if (text.isEmpty && toolJson == null) {
       throw VitaException('empty reply');
     }
-    return reply.trim();
+    return VitaReply(text: text, toolJson: toolJson);
   }
 }

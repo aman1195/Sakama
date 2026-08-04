@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/db/database.dart';
 import '../../settings/presentation/ai_disclosure.dart';
 import '../domain/coach_message.dart';
+import '../domain/tool_draft.dart';
 import 'coach_controller.dart';
 
 /// Vita — the coach tab. A persistent chat grounded in today's real data.
@@ -82,6 +83,14 @@ class _CoachPageState extends ConsumerState<CoachPage> {
                       },
                     ),
             ),
+            if (state.pendingDraft != null)
+              _ConfirmCard(
+                draft: state.pendingDraft!,
+                onConfirm: () =>
+                    ref.read(coachControllerProvider.notifier).confirmDraft(),
+                onDismiss: () =>
+                    ref.read(coachControllerProvider.notifier).dismissDraft(),
+              ),
             SafeArea(
               top: false,
               child: Padding(
@@ -319,6 +328,68 @@ class _ThreadTile extends ConsumerWidget {
               .openThread(thread.id);
           if (context.mounted) Navigator.of(context).pop();
         },
+      ),
+    );
+  }
+}
+
+/// Vita PROPOSES; the user commits. Nothing is written until "Log it" is
+/// tapped (ADR 0016 decision 2) — this card is the whole safety contract made
+/// visible, so it states exactly what will be saved.
+class _ConfirmCard extends StatelessWidget {
+  const _ConfirmCard({
+    required this.draft,
+    required this.onConfirm,
+    required this.onDismiss,
+  });
+  final ToolDraft draft;
+  final VoidCallback onConfirm, onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      identifier: 'vita-confirm-card',
+      child: Card(
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+        color: scheme.secondaryContainer,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                draft.summary,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: scheme.onSecondaryContainer,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Semantics(
+                    identifier: 'vita-confirm-dismiss',
+                    button: true,
+                    child: TextButton(
+                      onPressed: onDismiss,
+                      child: const Text('No thanks'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Semantics(
+                    identifier: 'vita-confirm-log',
+                    button: true,
+                    child: FilledButton(
+                      onPressed: onConfirm,
+                      child: const Text('Log it'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
