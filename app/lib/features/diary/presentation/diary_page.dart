@@ -7,7 +7,9 @@ class DiaryPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       identifier: 'diary-page',
-      child: Center(child: Text('Diary')),
+      // Same shell-tab inset rule as coach/me — applied now so real content
+      // does not land under the status bar later.
+      child: SafeArea(bottom: false, child: Center(child: Text('Diary'))),
     );
   }
 }
