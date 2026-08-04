@@ -7,8 +7,14 @@ import '../domain/tool_draft.dart';
 /// a [ToolDraft] exists, [ToolCallParser] has already bounds-checked every
 /// argument, so this layer only writes.
 ///
-/// Every row is tagged `logged_via: 'vita'` so an AI-created entry stays
+/// FOOD rows are tagged `logged_via: 'vita'` so an AI-created entry stays
 /// auditable — "why does my diary say I ate this?" must be answerable.
+///
+/// Water and weight are NOT tagged: those tables have no `logged_via` column,
+/// so a Vita-logged glass of water is indistinguishable from a manual one.
+/// Acceptable for now (a bare number is low-ambiguity, unlike a named dish with
+/// invented macros); adding the column to both tables is a later migration if
+/// full provenance is wanted (review #92).
 class ToolExecutor {
   const ToolExecutor({
     required this.foodLogs,
@@ -41,6 +47,7 @@ class ToolExecutor {
           loggedVia: loggedVia,
           userId: userId,
         );
+      // No loggedVia on these repositories — see the class doc.
       case LogWaterDraft d:
         await water.add(date: date, amountMl: d.amountMl, userId: userId);
       case LogWeightDraft d:
