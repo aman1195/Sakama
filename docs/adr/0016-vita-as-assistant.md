@@ -102,9 +102,13 @@ memory → voice.
 
 **Harder / accepted risks**
 
-- **Reinstall or a new phone wipes conversations and memory.** This is the price of device-local,
-  accepted knowingly. A user-initiated export is a possible later escape hatch; adding sync later
-  is additive, whereas removing it would not be.
+- **Reinstall, a new phone, or a user switch wipes conversations and memory.** This is the price of
+  device-local, accepted knowingly. A user-initiated export is a possible later escape hatch;
+  adding sync later is additive, whereas removing it would not be. Note that PowerSync's
+  `disconnectAndClear` clears local-only tables **by default** (`clearLocal: true`), so identity
+  transitions need explicit handling — see
+  [architecture/06 §2a](../architecture/06-vita-conversations.md) for the failed-sign-in data-loss
+  path this creates and its fix.
 - **Device-local storage is not device-local processing.** Every turn still sends conversation
   content, images, and retrieved memory facts to the provider. The consent copy (#60/#62) and the
   privacy inventory (#64/#67) MUST say so plainly — this is launch-gating, and the asterisk on

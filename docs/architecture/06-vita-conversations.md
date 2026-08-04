@@ -40,6 +40,18 @@ chat_messages
 if one user signs out and another signs in on the same phone, the second must not see the first's
 transcript. It is nullable for the same offline-birth reason as every other table.
 
+**Filter semantics (specified, not assumed).** On synced tables Postgres backfills a null `user_id`
+via `default auth.uid()` on upload. A local-only row **never uploads**, so a conversation born
+pre-auth stays `user_id = null` forever and no server ever fixes it. Therefore:
+
+- Rows are scoped **strictly to the current uid**; a null `user_id` is visible to **no one** once a
+  session exists, never treated as "matches everybody".
+- The repository **backfills `user_id` locally** for null rows once the anonymous session resolves,
+  so a genuinely pre-auth conversation is adopted by the session that created it rather than
+  stranded.
+
+Isolation therefore rests on an explicit, tested rule rather than on null-coalescing behaviour.
+
 `synthetic` is preserved from the existing `CoachMessage` so the visible transcript is faithful
 while the wire payload stays clean (review #58).
 
@@ -55,6 +67,37 @@ No existing row is touched. Ships with the mandatory artefacts (docs/MOBILE.md, 
 
 Device-local does **not** exempt this from the migration discipline — a bad migration still
 destroys user data irrecoverably.
+
+## 2a. Identity transitions — the local-only clearing trap
+
+Verified against `powersync-2.3.3`:
+`disconnectAndClear({bool clearLocal = true})` runs `powersync_clear(clearLocal ? 1 : 0)`, and its
+docstring states *"To preserve data in local-only tables, set `clearLocal` to false."* Our call site
+(`SyncService.disconnectAndClear()`) passes **no argument**, so today **local-only tables are
+cleared** on both identity transitions:
+
+- `AuthService.signOut()` — sign out of a real account,
+- `AuthService.signInExisting()` — a user switch, which clears **before** attempting sign-in.
+
+Two consequences for this phase:
+
+1. **Sign-out/user-switch would wipe conversations and memory.** For a *switch* that is desirable —
+   user B must not inherit user A's health conversations, and clearing is a stronger guarantee than
+   the `user_id` filter, which is only a visibility control.
+2. **`signInExisting` would destroy them irrecoverably on a failed sign-in.** The #55 fix reattaches
+   replication after a mistyped password and notes "the guest's data re-syncs from the server" —
+   but **local-only data has no server copy to come back from**. Synced tables recover; chat and
+   memory would be gone forever.
+
+**Design:** switch the call sites to `disconnectAndClear(clearLocal: false)` and delete the
+conversation + memory tables **explicitly, after a confirmed identity change** (i.e. once
+`signInWithPassword` has succeeded, and in `signOut` after the sign-out call). This preserves the
+isolation intent while removing the failed-sign-in data-loss path. The existing local-only
+*reference* tables (`foods`, `off_foods`) are unaffected either way, since `ensureSeeded` re-seeds
+them.
+
+This must ship **with** phase 1 — the trap only becomes harmful once there is irreplaceable
+local-only user data.
 
 ## 3. Repository
 
@@ -92,6 +135,12 @@ destroys user data irrecoverably.
 ## 6. What this phase deliberately does NOT do
 
 Tool calls and confirm-cards (phase 2), photo-in-chat (phase 3), memory (phase 4), voice (phase 5).
+
+**Carried forward to phase 2 (design it in, do not bolt it on):** tool-call arguments are
+**untrusted model output** and must be validated and bounds-checked *before* they reach the confirm
+card — the same discipline `parseEstimate` and `PlanImporter` already apply. Propose-confirm guards
+*intent*, but a plausible-looking wrong number can slip past a distracted tap, and an absurd one
+should never be offered in the first place.
 The message table's `role`/`content` shape is deliberately plain; when confirm-cards arrive they
 will need a structured payload column, and that will be its own additive migration rather than
 speculative generality now.
