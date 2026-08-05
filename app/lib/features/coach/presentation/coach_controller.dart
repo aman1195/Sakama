@@ -244,7 +244,12 @@ class CoachController extends Notifier<CoachState> {
         // propose all of them, with the macros the tool call could not carry.
         final carried = state.carriedItems;
         final single = draft;
-        if (carried.isNotEmpty && single is LogFoodDraft) {
+        // Expand to the whole photographed meal ONLY when the tool call is
+        // actually about it. Otherwise a later, unrelated "log my chai" would
+        // propose the stale meal instead of the chai (review #99).
+        final aboutTheMeal = single is LogFoodDraft &&
+            carried.any((i) => _sameFood(i.name, single.name));
+        if (carried.isNotEmpty && single is LogFoodDraft && aboutTheMeal) {
           _set(state.copyWith(
             pendingDrafts: carried
                 .map((i) => LogFoodDraft(
@@ -260,7 +265,8 @@ class CoachController extends Notifier<CoachState> {
             carriedItems: const [], // consumed
           ));
         } else {
-          _set(state.copyWith(pendingDrafts: [draft]));
+          // Not about the photo: drop the carry so it cannot resurface later.
+          _set(state.copyWith(pendingDrafts: [draft], carriedItems: const []));
         }
       }
     } on VitaException catch (e) {
@@ -382,6 +388,14 @@ class CoachController extends Notifier<CoachState> {
       await finish("I couldn't look at that photo just now — please try again.",
           synthetic: true);
     }
+  }
+
+  /// Loose match — the model rarely echoes a dish name exactly ("Chana Masala"
+  /// vs "Chole/Chana Masala"), so compare on containment either way.
+  static bool _sameFood(String a, String b) {
+    final x = a.trim().toLowerCase();
+    final y = b.trim().toLowerCase();
+    return x == y || x.contains(y) || y.contains(x);
   }
 
   static Meal _mealFromClock() {

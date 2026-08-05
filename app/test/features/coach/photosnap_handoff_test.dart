@@ -109,6 +109,27 @@ void main() {
         reason: 'no more zero-macro rows');
   });
 
+  test('an unrelated log after the handoff does NOT propose the stale meal',
+      () async {
+    // review #99 nit: handoff -> opinion -> "log my chai" must be the chai.
+    const chai = '{"tool":"log_food","arguments":{"meal":"snack",'
+        '"name":"masala chai","energy_kcal":90}}';
+    final vita = _ScriptedVita([
+      const VitaReply(text: 'Looks good.'),
+      const VitaReply(text: '', toolJson: chai),
+    ]);
+    final ct = c(vita);
+    addTearDown(ct.dispose);
+    ct.listen(coachControllerProvider, (_, _) {});
+
+    await ct.read(coachControllerProvider.notifier).handoffFromPhotoSnap(_meal);
+    await ct.read(coachControllerProvider.notifier).send('also had a chai');
+
+    final drafts = ct.read(coachControllerProvider).pendingDrafts;
+    expect(drafts.length, 1, reason: 'a chai is not the photographed thali');
+    expect((drafts.single as LogFoodDraft).name, 'masala chai');
+  });
+
   test('carried items are consumed once, not re-proposed later', () async {
     final vita = _ScriptedVita([
       const VitaReply(text: 'Looks good.'),
