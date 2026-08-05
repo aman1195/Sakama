@@ -35,6 +35,8 @@ class VisionConversation {
     required this.answer,
     required this.description,
     this.items = const [],
+    this.logIntent = false,
+    this.meal,
   });
 
   final String answer;
@@ -45,7 +47,20 @@ class VisionConversation {
 
   final List<SnappedItem> items;
 
+  /// The MODEL's judgement that the user wants this saved ("I had this for
+  /// lunch"), not a trigger on the presence of a photo. False for a question
+  /// ("should I eat this?"). Deciding this upstream is what stops the app
+  /// behaving mechanically — a photo alone must not imply an intent to log.
+  final bool logIntent;
+
+  /// Meal slot when [logIntent] is true, from what the user said or the clock.
+  final String? meal;
+
   bool get hasLoggableItems => items.isNotEmpty;
+
+  /// Only propose a save when the user actually wants one AND there is
+  /// something loggable (a menu photo has neither).
+  bool get shouldProposeLog => logIntent && items.isNotEmpty;
 }
 
 abstract class PhotoSnapService {
@@ -148,10 +163,13 @@ class EdgeFunctionPhotoSnap implements PhotoSnapService {
     final description = j['description'] is String
         ? (j['description'] as String).trim()
         : '';
+    final meal = j['meal'];
     return VisionConversation(
       answer: answer.trim(),
       description: description,
       items: parseItems(raw), // same validation as the logging path
+      logIntent: j['log_intent'] == 'yes' || j['log_intent'] == true,
+      meal: meal is String && meal.isNotEmpty ? meal : null,
     );
   }
 

@@ -8,7 +8,9 @@ import 'package:sakama/features/capture/domain/snapped_item.dart';
 import 'package:sakama/features/coach/data/chat_repository.dart';
 import 'package:sakama/features/coach/data/vita_service.dart';
 import 'package:sakama/features/coach/domain/coach_message.dart';
+import 'package:sakama/features/coach/domain/tool_draft.dart';
 import 'package:sakama/features/coach/presentation/coach_controller.dart';
+import 'package:sakama/features/home/domain/day_totals.dart' show Meal;
 
 import '../../helpers/fake_byok.dart';
 
@@ -158,6 +160,106 @@ void main() {
         contains('skip it'));
     // Nothing is logged: photo conversations never auto-log (design §6).
     expect(await db.select(db.foodLogs).get(), isEmpty);
+  });
+
+  group('the model judges whether a save is wanted', () {
+    // A photo alone is NOT an intent to log; a clear "I ate this" should not
+    // need repeating. Both are the model's call, surfaced as logIntent.
+    VisionConversation withIntent({required bool intent, String? meal}) =>
+        VisionConversation(
+          answer: 'Looks good.',
+          description: 'poha, dal, two rotis',
+          logIntent: intent,
+          meal: meal,
+          items: [
+            SnappedItem(
+                name: 'poha',
+                portionLabel: '1 bowl',
+                grams: 180,
+                energyKcal: 260,
+                proteinG: 5,
+                carbG: 45,
+                fatG: 6,
+                confidence: 0.7),
+            SnappedItem(
+                name: 'dal tadka',
+                portionLabel: '1 katori',
+                grams: 150,
+                energyKcal: 150,
+                proteinG: 9,
+                carbG: 18,
+                fatG: 5,
+                confidence: 0.7),
+          ],
+        );
+
+    test('asking about a photo proposes NOTHING', () async {
+      final c = _c(db, vision: _FakeVision(result: withIntent(intent: false)));
+      addTearDown(c.dispose);
+      c.listen(coachControllerProvider, (_, _) {});
+
+      await c
+          .read(coachControllerProvider.notifier)
+          .sendPhoto(imageBase64: 'AAAA', caption: 'should I eat this?');
+
+      expect(c.read(coachControllerProvider).pendingDrafts, isEmpty,
+          reason: 'a question is not a request to save');
+    });
+
+    test('saying you ate it proposes EVERY item, in one card', () async {
+      final c = _c(
+          db,
+          vision: _FakeVision(result: withIntent(intent: true, meal: 'lunch')));
+      addTearDown(c.dispose);
+      c.listen(coachControllerProvider, (_, _) {});
+
+      await c
+          .read(coachControllerProvider.notifier)
+          .sendPhoto(imageBase64: 'AAAA', caption: 'I had this for lunch');
+
+      final drafts = c.read(coachControllerProvider).pendingDrafts;
+      expect(drafts.length, 2, reason: 'a thali is several foods, not one');
+      expect((drafts.first as LogFoodDraft).meal, Meal.lunch);
+      // Still nothing written until the tap — the contract is unchanged.
+      expect(await db.select(db.foodLogs).get(), isEmpty);
+    });
+
+    test('confirming logs all of them', () async {
+      final c = _c(
+          db,
+          vision: _FakeVision(result: withIntent(intent: true, meal: 'dinner')));
+      addTearDown(c.dispose);
+      c.listen(coachControllerProvider, (_, _) {});
+
+      await c
+          .read(coachControllerProvider.notifier)
+          .sendPhoto(imageBase64: 'AAAA', caption: 'just finished this');
+      await c.read(coachControllerProvider.notifier).confirmDraft();
+
+      final rows = await db.select(db.foodLogs).get();
+      expect(rows.length, 2);
+      expect(rows.every((r) => r.meal == 'dinner'), isTrue);
+      expect(rows.every((r) => r.loggedVia == 'vita'), isTrue);
+    });
+
+    test('intent WITHOUT loggable items (a menu photo) proposes nothing',
+        () async {
+      final c = _c(
+          db,
+          vision: _FakeVision(
+              result: const VisionConversation(
+                  answer: 'That menu has little for you.',
+                  description: 'a restaurant menu',
+                  logIntent: true))); // nothing plated to save
+      addTearDown(c.dispose);
+      c.listen(coachControllerProvider, (_, _) {});
+
+      await c
+          .read(coachControllerProvider.notifier)
+          .sendPhoto(imageBase64: 'AAAA', caption: 'log this');
+
+      expect(c.read(coachControllerProvider).pendingDrafts, isEmpty);
+    });
   });
 
   test('a photo conversation NEVER auto-logs', () async {

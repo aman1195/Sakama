@@ -96,9 +96,9 @@ class _CoachPageState extends ConsumerState<CoachPage> {
                       },
                     ),
             ),
-            if (state.pendingDraft != null)
+            if (state.pendingDrafts.isNotEmpty)
               _ConfirmCard(
-                draft: state.pendingDraft!,
+                drafts: state.pendingDrafts,
                 onConfirm: () =>
                     ref.read(coachControllerProvider.notifier).confirmDraft(),
                 onDismiss: () =>
@@ -360,11 +360,14 @@ class _ThreadTile extends ConsumerWidget {
 /// visible, so it states exactly what will be saved.
 class _ConfirmCard extends StatelessWidget {
   const _ConfirmCard({
-    required this.draft,
+    required this.drafts,
     required this.onConfirm,
     required this.onDismiss,
   });
-  final ToolDraft draft;
+
+  /// A photo of a thali proposes several foods at once; a text tool call
+  /// proposes one. Both render here.
+  final List<ToolDraft> drafts;
   final VoidCallback onConfirm, onDismiss;
 
   @override
@@ -380,12 +383,16 @@ class _ConfirmCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                draft.summary,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: scheme.onSecondaryContainer,
+              for (final d in drafts)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Text(
+                    d.summary,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: scheme.onSecondaryContainer,
+                    ),
+                  ),
                 ),
-              ),
               const SizedBox(height: 4),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
