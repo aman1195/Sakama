@@ -11,6 +11,7 @@ import '../../onboarding/domain/profile_record.dart';
 import '../../home/domain/day_totals.dart' show Meal;
 import '../../plans/application/plan_providers.dart';
 import '../../capture/data/photosnap_service.dart';
+import '../../capture/domain/snapped_item.dart';
 import '../data/tool_executor.dart';
 import '../data/vita_service.dart';
 import '../domain/coach_context.dart';
@@ -29,6 +30,7 @@ class CoachState {
     this.sending = false,
     this.loading = true,
     this.pendingDrafts = const [],
+    this.carriedItems = const [],
   });
 
   /// The thread being displayed. Null until the first message creates one.
@@ -38,6 +40,11 @@ class CoachState {
 
   /// True while the stored transcript is being restored.
   final bool loading;
+
+  /// Items handed over from a PhotoSnap result, kept so that a later "I just
+  /// ate this" proposes the WHOLE meal with its real macros — instead of the
+  /// single-food tool call re-deriving one item from the text summary.
+  final List<SnappedItem> carriedItems;
 
   /// Actions Vita has PROPOSED, awaiting the user's confirmation. A LIST because
   /// one photo of a thali is five foods, not one. Deliberately NOT persisted: a
@@ -54,6 +61,7 @@ class CoachState {
     bool? sending,
     bool? loading,
     List<ToolDraft>? pendingDrafts,
+    List<SnappedItem>? carriedItems,
     bool clearDraft = false,
   }) =>
       CoachState(
@@ -63,6 +71,7 @@ class CoachState {
         loading: loading ?? this.loading,
         pendingDrafts:
             clearDraft ? const [] : (pendingDrafts ?? this.pendingDrafts),
+        carriedItems: carriedItems ?? this.carriedItems,
       );
 }
 
@@ -85,8 +94,13 @@ class CoachController extends Notifier<CoachState> {
     if (ref.mounted) state = next;
   }
 
-  /// Restore the most recent thread on open.
-  Future<void> _restore() async {
+  /// Restore the most recent thread.
+  ///
+  /// [force] distinguishes the two callers, which want opposite things: the
+  /// build-time restore must NOT clobber whatever happened while it was in
+  /// flight, whereas the post-delete fallback must replace the state showing
+  /// the thread that no longer exists.
+  Future<void> _restore({bool force = false}) async {
     try {
       final repo = await ref.read(chatRepositoryProvider.future);
       final uid = ref.read(currentUserIdProvider);
@@ -96,14 +110,26 @@ class CoachController extends Notifier<CoachState> {
       if (uid != null) await repo.adoptOrphanThreads(uid);
       final thread = await repo.latestThread(uid);
       if (thread == null) {
-        _set(state.copyWith(loading: false));
+        _set(force
+            ? const CoachState(loading: false) // the last thread was deleted
+            : state.copyWith(loading: false));
         return;
       }
       final rows = await repo.messagesOf(thread.id);
+      // Restore is fire-and-forget from build(), so the user (or a PhotoSnap
+      // handoff) can act BEFORE it finishes. Writing a fresh CoachState here
+      // would clobber that — silently dropping carried items, or a message
+      // sent the instant Coach opened. Whoever got there first wins.
+      if (!force &&
+          (state.messages.isNotEmpty || state.carriedItems.isNotEmpty)) {
+        _set(state.copyWith(loading: false));
+        return;
+      }
       _set(CoachState(
         threadId: thread.id,
         messages: rows.map(_toMessage).toList(),
         loading: false,
+        carriedItems: force ? const [] : state.carriedItems,
       ));
     } catch (e) {
       debugPrint('coach restore failed: $e');
@@ -142,7 +168,7 @@ class CoachController extends Notifier<CoachState> {
       final repo = await ref.read(chatRepositoryProvider.future);
       await repo.deleteThread(threadId);
       if (ref.mounted && state.threadId == threadId) {
-        await _restore(); // fall back to the next saved conversation
+        await _restore(force: true); // replace the deleted thread's state
       }
     } catch (e) {
       debugPrint('coach deleteThread failed: $e');
@@ -212,7 +238,31 @@ class CoachController extends Notifier<CoachState> {
               ? 'Want me to log this?'
               : "I couldn't work that one out — could you say it another way?");
       await persistReply(text);
-      if (draft != null) _set(state.copyWith(pendingDrafts: [draft]));
+      if (draft != null) {
+        // The text tool is single-food by schema. If we are still holding the
+        // real photographed items, the user means the MEAL, not one dish — so
+        // propose all of them, with the macros the tool call could not carry.
+        final carried = state.carriedItems;
+        final single = draft;
+        if (carried.isNotEmpty && single is LogFoodDraft) {
+          _set(state.copyWith(
+            pendingDrafts: carried
+                .map((i) => LogFoodDraft(
+                      meal: single.meal,
+                      name: i.name,
+                      energyKcal: i.energyKcal,
+                      proteinG: i.proteinG,
+                      carbG: i.carbG,
+                      fatG: i.fatG,
+                      grams: i.grams,
+                    ))
+                .toList(),
+            carriedItems: const [], // consumed
+          ));
+        } else {
+          _set(state.copyWith(pendingDrafts: [draft]));
+        }
+      }
     } on VitaException catch (e) {
       await persistReply(_friendly(e), synthetic: true);
     } catch (e) {
@@ -221,6 +271,19 @@ class CoachController extends Notifier<CoachState> {
           "I couldn't reach the network just now. Try again in a moment.",
           synthetic: true);
     }
+  }
+
+  /// Hand a PhotoSnap result to the coach: ask for an opinion in words, but
+  /// keep the real items (with macros and grams) so that if the user then says
+  /// they ate it, the whole meal can be proposed accurately.
+  Future<void> handoffFromPhotoSnap(List<SnappedItem> items) async {
+    _set(state.copyWith(carriedItems: items));
+    final summary = items
+        .map((i) => '${i.name} (~${i.energyKcal.round()} kcal, '
+            'P${i.proteinG.round()}/C${i.carbG.round()}/F${i.fatG.round()})')
+        .join(', ');
+    await send('What do you think of this meal for me — $summary? '
+        "I'm asking for your opinion, not to log it yet.");
   }
 
   /// Send a PHOTO turn (the chat attach button).
