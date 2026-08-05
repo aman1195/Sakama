@@ -204,14 +204,14 @@ extension _AskVita on _ConfirmListState {
   /// path has paid for vision once, so it runs an ordinary Vita turn — one
   /// exchange, no second vision call, no second photo charge.
   Future<void> _askVita(BuildContext context) async {
-    final summary = widget.drafts
-        .map((d) => '${d.item.name} (~${d.item.energyKcal.round()} kcal)')
-        .join(', ');
+    // Hand over the REAL items (macros + grams), not a name-and-kcal summary:
+    // if the user then says they ate it, the whole meal must be loggable
+    // accurately rather than re-derived from prose.
+    final items = widget.drafts.map((d) => d.item).toList();
     context.go('/coach'); // switch first so the reply lands in view
     await ref
         .read(coachControllerProvider.notifier)
-        .send('What do you think of this meal for me — $summary? '
-            "I'm asking for your opinion, not to log it yet.");
+        .handoffFromPhotoSnap(items);
   }
 }
 
