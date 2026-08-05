@@ -210,7 +210,8 @@ extension _AskVita on _ConfirmListState {
     context.go('/coach'); // switch first so the reply lands in view
     await ref
         .read(coachControllerProvider.notifier)
-        .send('I just photographed this meal: $summary. What do you think?');
+        .send('What do you think of this meal for me — $summary? '
+            "I'm asking for your opinion, not to log it yet.");
   }
 }
 
