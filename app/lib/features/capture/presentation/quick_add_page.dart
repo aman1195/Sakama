@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/db/database.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../foods/data/ai_estimator.dart';
 import '../../foods/domain/food.dart';
@@ -46,6 +47,14 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
   /// `loggedVia='search'` provenance. Cleared the moment the user edits the
   /// name by hand (it is no longer that food).
   Food? _picked;
+
+  /// Foods you have actually eaten, newest first. Loaded once on open; tapping
+  /// one refills the form with the SAME portion you logged before.
+  List<FoodLog> _recents = const [];
+
+  /// True when the current form was filled from a recent entry and has not been
+  /// hand-edited since — so the new row records where it really came from.
+  bool _fromRecent = false;
   List<Food> _results = const [];
 
   /// The query that produced zero results — shows the AI-estimate offer.
@@ -66,6 +75,12 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
     if (h < 16) return Meal.lunch;
     if (h < 21) return Meal.dinner;
     return Meal.snack;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadRecents());
   }
 
   @override
@@ -107,7 +122,9 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
     }
     final repo = await ref.read(foodRepositoryProvider.future);
     final results = await repo.search(q, limit: 8);
-    if (!mounted || token != _searchToken) return; // a newer query superseded us
+    if (!mounted || token != _searchToken) {
+      return; // a newer query superseded us
+    }
     setState(() {
       _results = results;
       _noResultQuery = results.isEmpty ? q : null;
@@ -121,7 +138,10 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
     // #60: consent before sending the dish name to the AI provider.
     if (!await ensureAiConsent(context, ref)) return;
     if (!mounted) return;
-    setState(() { _estimating = true; _estimateError = null; });
+    setState(() {
+      _estimating = true;
+      _estimateError = null;
+    });
     try {
       // Anonymous-first: if startup was offline, grab the session now.
       await ref.read(authServiceProvider).ensureSession();
@@ -135,21 +155,80 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
       if (!mounted) return;
       _pick(food);
       if (estimate.assumptions != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('AI estimate — assumed: ${estimate.assumptions}')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('AI estimate — assumed: ${estimate.assumptions}'),
+          ),
+        );
       }
     } on EstimateException catch (e) {
       if (mounted) {
-        setState(() => _estimateError = e.budgetExhausted
-            ? 'Daily AI limit reached. Add your own key in Me → Your own AI key to go unlimited, or enter it manually.'
-            : e.notFood
-                ? "That doesn't look like a food. Try a different name."
-                : 'Could not estimate right now. Enter it manually below.');
+        setState(
+          () => _estimateError = e.budgetExhausted
+              ? 'Daily AI limit reached. Add your own key in Me → Your own AI key to go unlimited, or enter it manually.'
+              : e.notFood
+              ? "That doesn't look like a food. Try a different name."
+              : 'Could not estimate right now. Enter it manually below.',
+        );
       }
     } finally {
       if (mounted) setState(() => _estimating = false);
     }
   }
+
+  Future<void> _loadRecents() async {
+    final repo = await ref.read(foodLogRepositoryProvider.future);
+    final rows = await repo.recentDistinct();
+    if (mounted) setState(() => _recents = rows);
+  }
+
+  /// Re-log something you have eaten before. Unlike [_pick] (a per-100g corpus
+  /// row that must be scaled by grams), a recent entry is ALREADY the portion
+  /// you ate, so its totals are copied across verbatim.
+  void _pickRecent(FoodLog r) {
+    _picked = null; // not a corpus food; provenance is 'recent'
+    _fromRecent = true;
+    _name.text = r.name;
+    _grams.text = r.grams == null ? '' : r.grams!.toStringAsFixed(0);
+    _kcal.text = r.energyKcal.toStringAsFixed(0);
+    _protein.text = r.proteinG.toStringAsFixed(0);
+    _carb.text = r.carbG.toStringAsFixed(0);
+    _fat.text = r.fatG.toStringAsFixed(0);
+    final meal = Meal.values.where((m) => m.key == r.meal).firstOrNull;
+    setState(() {
+      if (meal != null) _meal = meal;
+      _results = const [];
+      _search.clear();
+    });
+    FocusScope.of(context).unfocus();
+  }
+
+  /// Repeat meals are the norm, so put them one tap away.
+  Widget _recentsStrip() => Padding(
+    padding: const EdgeInsets.only(top: 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Recent', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            for (final r in _recents)
+              Semantics(
+                identifier: 'qa-recent-${r.id}',
+                button: true,
+                child: ActionChip(
+                  label: Text('${r.name} · ${r.energyKcal.round()} kcal'),
+                  onPressed: () => _pickRecent(r),
+                ),
+              ),
+          ],
+        ),
+      ],
+    ),
+  );
 
   void _pick(Food food) {
     _picked = food;
@@ -167,6 +246,7 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
   /// so the log must record 'manual', not 'search'. Ignored while we are the
   /// ones writing those fields (see [_recomputeFromGrams]).
   void _dropPickedProvenance(String _) {
+    if (_fromRecent && !_deriving) _fromRecent = false;
     if (_picked != null && !_deriving) setState(() => _picked = null);
   }
 
@@ -200,8 +280,12 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
         proteinG: double.tryParse(_protein.text) ?? 0,
         carbG: double.tryParse(_carb.text) ?? 0,
         fatG: double.tryParse(_fat.text) ?? 0,
-        grams: _picked == null ? null : double.tryParse(_grams.text.trim()),
-        loggedVia: _picked == null ? 'manual' : 'search',
+        grams: (_picked == null && !_fromRecent)
+            ? null
+            : double.tryParse(_grams.text.trim()),
+        loggedVia: _picked != null
+            ? 'search'
+            : (_fromRecent ? 'recent' : 'manual'),
         userId: ref.read(currentUserIdProvider),
       );
       if (!mounted) return;
@@ -285,6 +369,10 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
                 ),
               ),
               if (_results.isNotEmpty) _resultsList(),
+              if (_results.isEmpty &&
+                  _search.text.isEmpty &&
+                  _recents.isNotEmpty)
+                _recentsStrip(),
               if (_noResultQuery != null && _results.isEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
@@ -296,12 +384,18 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
                         child: OutlinedButton.icon(
                           icon: _estimating
                               ? const SizedBox(
-                                  width: 16, height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2))
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
                               : const Icon(Icons.auto_awesome),
-                          label: Text(_estimating
-                              ? 'Estimating…'
-                              : 'Estimate "$_noResultQuery" with AI'),
+                          label: Text(
+                            _estimating
+                                ? 'Estimating…'
+                                : 'Estimate "$_noResultQuery" with AI',
+                          ),
                           onPressed: _estimating ? null : _estimate,
                         ),
                       ),
@@ -310,8 +404,10 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
                           padding: const EdgeInsets.only(top: 4),
                           child: Semantics(
                             identifier: 'qa-estimate-error',
-                            child: Text(_estimateError!,
-                                style: Theme.of(context).textTheme.bodySmall),
+                            child: Text(
+                              _estimateError!,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
                           ),
                         ),
                     ],
@@ -326,41 +422,78 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
                 style: const ButtonStyle(
                   visualDensity: VisualDensity.compact,
                   padding: WidgetStatePropertyAll(
-                      EdgeInsets.symmetric(horizontal: 8)),
+                    EdgeInsets.symmetric(horizontal: 8),
+                  ),
                 ),
                 segments: [
                   for (final m in Meal.values)
                     ButtonSegment(
-                        value: m,
-                        label: Text(m.label,
-                            maxLines: 1, overflow: TextOverflow.ellipsis)),
+                      value: m,
+                      label: Text(
+                        m.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                 ],
                 selected: {_meal},
                 onSelectionChanged: (s) => setState(() => _meal = s.first),
               ),
               const SizedBox(height: 16),
-              _field(_name, 'Food name', id: 'qa-name', required: true,
-                  onChanged: (_) {
-                // Hand-editing the name means it is no longer the picked food.
-                if (_picked != null) setState(() => _picked = null);
-              }),
+              _field(
+                _name,
+                'Food name',
+                id: 'qa-name',
+                required: true,
+                onChanged: (_) {
+                  // Hand-editing the name means it is no longer the picked food.
+                  if (_picked != null) setState(() => _picked = null);
+                },
+              ),
               // Grams only matters for a picked food (drives derivation).
               if (_picked != null)
-                _field(_grams, 'Amount (g)', id: 'qa-grams',
-                    number: true, required: true, positive: true,
-                    onChanged: (_) => _recomputeFromGrams()),
+                _field(
+                  _grams,
+                  'Amount (g)',
+                  id: 'qa-grams',
+                  number: true,
+                  required: true,
+                  positive: true,
+                  onChanged: (_) => _recomputeFromGrams(),
+                ),
               // Hand-editing ANY nutrition value means the row no longer
               // equals scaleTo(grams) of the picked food, so it must not keep
               // that food's provenance (issue #32).
-              _field(_kcal, 'Calories (kcal)', id: 'qa-kcal',
-                  number: true, required: true, positive: true,
-                  onChanged: _dropPickedProvenance),
-              _field(_protein, 'Protein (g)', id: 'qa-protein', number: true,
-                  onChanged: _dropPickedProvenance),
-              _field(_carb, 'Carbs (g)', id: 'qa-carb', number: true,
-                  onChanged: _dropPickedProvenance),
-              _field(_fat, 'Fat (g)', id: 'qa-fat', number: true,
-                  onChanged: _dropPickedProvenance),
+              _field(
+                _kcal,
+                'Calories (kcal)',
+                id: 'qa-kcal',
+                number: true,
+                required: true,
+                positive: true,
+                onChanged: _dropPickedProvenance,
+              ),
+              _field(
+                _protein,
+                'Protein (g)',
+                id: 'qa-protein',
+                number: true,
+                onChanged: _dropPickedProvenance,
+              ),
+              _field(
+                _carb,
+                'Carbs (g)',
+                id: 'qa-carb',
+                number: true,
+                onChanged: _dropPickedProvenance,
+              ),
+              _field(
+                _fat,
+                'Fat (g)',
+                id: 'qa-fat',
+                number: true,
+                onChanged: _dropPickedProvenance,
+              ),
               const SizedBox(height: 24),
               Semantics(
                 identifier: 'qa-save',
@@ -388,8 +521,10 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
               child: ListTile(
                 dense: true,
                 title: Text(food.name),
-                subtitle: Text('${food.per100g.energyKcal.toStringAsFixed(0)} '
-                    'kcal / 100 g · ${food.source}'),
+                subtitle: Text(
+                  '${food.per100g.energyKcal.toStringAsFixed(0)} '
+                  'kcal / 100 g · ${food.source}',
+                ),
                 onTap: () => _pick(food),
               ),
             ),
@@ -421,8 +556,10 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
           inputFormatters: number
               ? [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))]
               : null,
-          decoration:
-              InputDecoration(labelText: label, border: const OutlineInputBorder()),
+          decoration: InputDecoration(
+            labelText: label,
+            border: const OutlineInputBorder(),
+          ),
           validator: (v) {
             final t = (v ?? '').trim();
             if (required && t.isEmpty) return 'Required';

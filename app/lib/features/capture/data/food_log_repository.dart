@@ -11,6 +11,36 @@ class FoodLogRepository {
 
   Stream<List<FoodLog>> watchDay(String date) => _db.watchDay(date);
 
+  /// The foods you actually eat, newest first, one row per distinct name.
+  ///
+  /// Repeat eating is the norm — most people cycle the same few dishes — so
+  /// re-entering name and macros every time is the main friction in a food
+  /// diary. This is derived from `food_logs`, so it needs NO new table and no
+  /// migration (the user_foods library in #35 is a separate, later slice).
+  ///
+  /// Dedupe is by case-insensitive name and happens in Dart rather than SQL:
+  /// the candidate window is small and an explicit fold is obviously correct,
+  /// where a GROUP BY relying on SQLite's bare-column behaviour is not.
+  Future<List<FoodLog>> recentDistinct({int limit = 12}) async {
+    final rows = await (_db.select(_db.foodLogs)
+          ..orderBy([
+            (t) => OrderingTerm.desc(t.createdAt),
+            (t) => OrderingTerm.desc(t.id), // deterministic within a millisecond
+          ])
+          ..limit(limit * 20)) // enough history to fill `limit` distinct names
+        .get();
+
+    final seen = <String>{};
+    final out = <FoodLog>[];
+    for (final r in rows) {
+      if (seen.add(r.name.trim().toLowerCase())) {
+        out.add(r);
+        if (out.length == limit) break;
+      }
+    }
+    return out;
+  }
+
   /// Add one logged food. Returns the new row id. userId is the session uid
   /// (null when signed out — the server default fills it on sync).
   Future<String> add({
