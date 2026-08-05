@@ -8,6 +8,7 @@ import '../../../core/providers/app_providers.dart';
 import '../../home/presentation/home_page.dart' show targetsProvider;
 import '../../onboarding/domain/nutrition_targets.dart';
 import '../../onboarding/domain/profile_record.dart';
+import '../../home/domain/day_totals.dart' show Meal;
 import '../../plans/application/plan_providers.dart';
 import '../../capture/data/photosnap_service.dart';
 import '../data/tool_executor.dart';
@@ -27,7 +28,7 @@ class CoachState {
     this.messages = const [],
     this.sending = false,
     this.loading = true,
-    this.pendingDraft,
+    this.pendingDrafts = const [],
   });
 
   /// The thread being displayed. Null until the first message creates one.
@@ -38,18 +39,21 @@ class CoachState {
   /// True while the stored transcript is being restored.
   final bool loading;
 
-  /// An action Vita has PROPOSED, awaiting the user's confirmation. Deliberately
-  /// NOT persisted: a stale proposal should not survive a restart and reappear
-  /// as if it were still live. Confirming it writes and records a normal
-  /// transcript line instead.
-  final ToolDraft? pendingDraft;
+  /// Actions Vita has PROPOSED, awaiting the user's confirmation. A LIST because
+  /// one photo of a thali is five foods, not one. Deliberately NOT persisted: a
+  /// stale proposal should not survive a restart and reappear as if still live.
+  final List<ToolDraft> pendingDrafts;
+
+  /// Convenience for the single-draft (text tool-call) case.
+  ToolDraft? get pendingDraft =>
+      pendingDrafts.isEmpty ? null : pendingDrafts.first;
 
   CoachState copyWith({
     String? threadId,
     List<CoachMessage>? messages,
     bool? sending,
     bool? loading,
-    ToolDraft? pendingDraft,
+    List<ToolDraft>? pendingDrafts,
     bool clearDraft = false,
   }) =>
       CoachState(
@@ -57,7 +61,8 @@ class CoachState {
         messages: messages ?? this.messages,
         sending: sending ?? this.sending,
         loading: loading ?? this.loading,
-        pendingDraft: clearDraft ? null : (pendingDraft ?? this.pendingDraft),
+        pendingDrafts:
+            clearDraft ? const [] : (pendingDrafts ?? this.pendingDrafts),
       );
 }
 
@@ -207,7 +212,7 @@ class CoachController extends Notifier<CoachState> {
               ? 'Want me to log this?'
               : "I couldn't work that one out — could you say it another way?");
       await persistReply(text);
-      if (draft != null) _set(state.copyWith(pendingDraft: draft));
+      if (draft != null) _set(state.copyWith(pendingDrafts: [draft]));
     } on VitaException catch (e) {
       await persistReply(_friendly(e), synthetic: true);
     } catch (e) {
@@ -284,6 +289,28 @@ class CoachController extends Notifier<CoachState> {
           _set(state.copyWith(messages: msgs));
         }
       }
+      // Propose a save ONLY when the model judged the user actually wants one
+      // (design: a photo alone is not an intent to log). Items were already
+      // bounds-checked by parseItems, so they are reused rather than
+      // re-estimated from the description (review #95).
+      if (vision.shouldProposeLog) {
+        final meal = Meal.values
+                .where((m) => m.key == vision.meal)
+                .firstOrNull ??
+            _mealFromClock();
+        _set(state.copyWith(
+            pendingDrafts: vision.items
+                .map((i) => LogFoodDraft(
+                      meal: meal,
+                      name: i.name,
+                      energyKcal: i.energyKcal,
+                      proteinG: i.proteinG,
+                      carbG: i.carbG,
+                      fatG: i.fatG,
+                      grams: i.grams,
+                    ))
+                .toList()));
+      }
       await finish(vision.answer);
     } on PhotoSnapException catch (e) {
       await finish(_photoFriendly(e), synthetic: true);
@@ -292,6 +319,14 @@ class CoachController extends Notifier<CoachState> {
       await finish("I couldn't look at that photo just now — please try again.",
           synthetic: true);
     }
+  }
+
+  static Meal _mealFromClock() {
+    final h = DateTime.now().hour;
+    if (h < 11) return Meal.breakfast;
+    if (h < 16) return Meal.lunch;
+    if (h < 21) return Meal.dinner;
+    return Meal.snack;
   }
 
   /// A photos-exhausted user can STILL text-chat — the scarce-first charge
@@ -315,8 +350,8 @@ class CoachController extends Notifier<CoachState> {
   /// Write the proposed action. Only reachable from an explicit user tap —
   /// Vita never writes on its own (ADR 0016 decision 2).
   Future<void> confirmDraft() async {
-    final draft = state.pendingDraft;
-    if (draft == null) return;
+    final drafts = state.pendingDrafts;
+    if (drafts.isEmpty) return;
     _set(state.copyWith(clearDraft: true)); // no double-tap
     try {
       final executor = ToolExecutor(
@@ -329,8 +364,13 @@ class CoachController extends Notifier<CoachState> {
       final ymd = '${now.year.toString().padLeft(4, '0')}-'
           '${now.month.toString().padLeft(2, '0')}-'
           '${now.day.toString().padLeft(2, '0')}';
-      final line = await executor.execute(draft, date: ymd);
-      await _appendVita(line, synthetic: true);
+      final lines = <String>[];
+      for (final d in drafts) {
+        lines.add(await executor.execute(d, date: ymd));
+      }
+      await _appendVita(
+          lines.length == 1 ? lines.single : 'Logged ${lines.length} items.',
+          synthetic: true);
     } catch (e) {
       debugPrint('confirmDraft failed: $e');
       await _appendVita("I couldn't save that just now — please try again.",

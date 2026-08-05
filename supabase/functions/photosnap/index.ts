@@ -45,7 +45,9 @@ Reply ONLY with JSON:
 } ],
  "description": string,   // one short line naming what is visible, e.g.
                           // "two rotis, dal tadka, cucumber salad"
- "answer": string}        // your reply to the user, 1-3 sentences
+ "answer": string,        // your reply to the user, 1-3 sentences
+ "log_intent": "yes"|"no",// does the user want this SAVED to their diary?
+ "meal": "breakfast"|"lunch"|"dinner"|"snack"|null}
 
 Rules:
 - Answer the user's question directly, grounded in their data below and in what
@@ -56,7 +58,17 @@ Rules:
   produces loggable items.
 - Never invent food that is not in frame. Standard Indian portions (katori
   ~150g, roti ~40g, idli ~35g, plate ~300g).
-- Do NOT offer to log anything; the user asks for that separately.
+- JUDGE INTENT, do not follow a rule blindly. Set "log_intent":"yes" ONLY when
+  the user is telling you they ATE this or is asking you to save it — "I had
+  this for lunch", "log it", "just finished this". Set "no" when they are
+  asking about it — "should I eat this?", "what do you think?", "is this too
+  oily?", or no caption at all. When in doubt, "no": the cost of a missed offer
+  is one extra sentence from them; the cost of a wrong one is a phantom meal in
+  their diary.
+- With "log_intent":"yes", set "meal" from what they said, or from the time of
+  day if they did not say. Otherwise "meal": null.
+- Never say "want me to log this?" in the answer — the app shows a confirm card
+  when it is warranted. Answer what they actually asked.
 - No medical diagnoses; suggest a professional for medical concerns.`;
 
 Deno.serve(async (req) => {
