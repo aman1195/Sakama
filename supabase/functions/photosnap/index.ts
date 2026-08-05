@@ -11,6 +11,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const DAILY_CAP = 8;          // photos/user/day — vision is pricier than text
+const VITA_CAP = 30;          // a converse photo also costs one coach exchange
 const MAX_IMAGE_BYTES = 6_000_000; // ~6MB decoded guard (client should downscale)
 const MODEL = "google/gemini-2.5-flash"; // Phase 0 winner; config-swappable
 
@@ -29,6 +30,34 @@ Rules: one entry per distinct food you can see. Use standard Indian portions
 (katori cooked dal/veg ~150g, roti ~40g, idli ~35g, plate ~300g). Estimate what
 is VISIBLE; do not invent sides that are not in frame. If the image contains no
 food, reply {"error":"no_food"}. Keep it to at most 8 items.`;
+
+// CONVERSE mode (docs/architecture/07-photo-in-chat.md). A SEPARATE prompt by
+// design: the log-mode prompt above earned the Phase-0 GO decision and must not
+// be put at risk by conversational tuning.
+const CONVERSE_PROMPT =
+  `You are Vita, a warm Indian nutrition coach, looking at a photo the user sent.
+Reply ONLY with JSON:
+{"items": [ {
+   "name": string, "portion_label": string, "grams": number,
+   "energy_kcal": number,            // FOR THE WHOLE PORTION
+   "protein_g": number, "carb_g": number, "fat_g": number,
+   "confidence": number
+} ],
+ "description": string,   // one short line naming what is visible, e.g.
+                          // "two rotis, dal tadka, cucumber salad"
+ "answer": string}        // your reply to the user, 1-3 sentences
+
+Rules:
+- Answer the user's question directly, grounded in their data below and in what
+  you can actually SEE (portion size, visible oil, what is missing from the
+  plate). That visual judgement is why they sent a photo.
+- If the image is NOT a plated meal — a menu, a packet, an ingredients label, a
+  supplement — still ANSWER helpfully and return "items": []. Only a plated meal
+  produces loggable items.
+- Never invent food that is not in frame. Standard Indian portions (katori
+  ~150g, roti ~40g, idli ~35g, plate ~300g).
+- Do NOT offer to log anything; the user asks for that separately.
+- No medical diagnoses; suggest a professional for medical concerns.`;
 
 Deno.serve(async (req) => {
   const auth = req.headers.get("Authorization") ?? "";
@@ -49,6 +78,10 @@ Deno.serve(async (req) => {
   const byok = byokRaw.startsWith("sk-") && byokRaw.length > 20 ? byokRaw : "";
   const image = body?.image; // base64 (no data: prefix) or a data URL
   const mime = typeof body?.mime === "string" ? body.mime : "image/jpeg";
+  // mode defaults to today's behaviour, so existing callers are untouched.
+  const converse = body?.mode === "converse";
+  const question = typeof body?.question === "string" ? body.question.trim() : "";
+  const ctx = typeof body?.context === "string" ? body.context.slice(0, 4000) : "";
   if (typeof image !== "string" || image.length < 100) {
     return new Response(JSON.stringify({ error: "bad_request" }), { status: 400 });
   }
@@ -59,14 +92,30 @@ Deno.serve(async (req) => {
   const dataUrl = image.startsWith("data:") ? image : `data:${mime};base64,${image}`;
 
   // ATOMIC budget check-and-increment (rule 9), charge-on-attempt, as the caller.
+  //
+  // SCARCE CAP FIRST (design §3): increment_ai_usage returns NULL WITHOUT
+  // consuming when already at cap, so charging the binding cap (photos, 8)
+  // first makes the common refusal cost nothing. Charging the abundant cap
+  // first would burn an exchange per retry for a user who is out of photos.
   if (!byok) {
-    const { data: newCount, error: usageErr } = await supabase
+    const { data: photoCount, error: usageErr } = await supabase
       .rpc("increment_ai_usage", { p_feature: "photosnap", p_cap: DAILY_CAP });
     if (usageErr) {
       return new Response(JSON.stringify({ error: "usage_error" }), { status: 500 });
     }
-    if (newCount === null || newCount === undefined) {
+    if (photoCount === null || photoCount === undefined) {
       return new Response(JSON.stringify({ error: "budget_exhausted" }), { status: 429 });
+    }
+    // A converse photo is also a coach exchange (ADR 0016 decision 6).
+    if (converse) {
+      const { data: vitaCount, error: vitaErr } = await supabase
+        .rpc("increment_ai_usage", { p_feature: "vita", p_cap: VITA_CAP });
+      if (vitaErr) {
+        return new Response(JSON.stringify({ error: "usage_error" }), { status: 500 });
+      }
+      if (vitaCount === null || vitaCount === undefined) {
+        return new Response(JSON.stringify({ error: "budget_exhausted" }), { status: 429 });
+      }
     }
   }
 
@@ -79,17 +128,28 @@ Deno.serve(async (req) => {
     body: JSON.stringify({
       model: MODEL,
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        {
+          role: "system",
+          content: converse ? `${CONVERSE_PROMPT}\n\nUSER DATA:\n${ctx}` : SYSTEM_PROMPT,
+        },
         {
           role: "user",
           content: [
-            { type: "text", text: "Identify and estimate the foods in this meal." },
+            {
+              type: "text",
+              text: converse
+                ? (question.length > 0
+                  ? question
+                  : "What is this, and should I eat it given my plan?")
+                : "Identify and estimate the foods in this meal.",
+            },
             { type: "image_url", image_url: { url: dataUrl } },
           ],
         },
       ],
       response_format: { type: "json_object" },
-      max_tokens: 700,
+      // converse also returns a description + a prose answer on top of items.
+      max_tokens: converse ? 1000 : 700,
     }),
   });
   if (!orRes.ok) {
