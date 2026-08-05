@@ -21,6 +21,13 @@ class _FakeSnap implements PhotoSnapService {
     if (_result is PhotoSnapException) throw _result;
     return _result as List<SnappedItem>;
   }
+
+  // Converse mode is exercised by vision_converse_test / the chat flow, not by
+  // this snap-to-log path.
+  @override
+  Future<VisionConversation> converse(String imageBytesBase64,
+          {String? question, required String context, String? byok}) async =>
+      throw UnimplementedError();
 }
 
 SnappedItem _item(String name,
