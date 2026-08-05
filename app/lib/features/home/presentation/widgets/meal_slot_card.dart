@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/db/database.dart';
 import '../../domain/day_totals.dart';
+import '../log_entry_sheet.dart';
 
 /// One meal slot (Breakfast/Lunch/Dinner/Snack) with its entries + a "+".
 ///
@@ -71,14 +72,21 @@ class MealSlotCard extends StatelessWidget {
                 ),
               ),
               for (final e in entries)
-                ListTile(
-                  dense: true,
-                  visualDensity: VisualDensity.compact,
-                  contentPadding: const EdgeInsets.only(left: 74, right: 20),
-                  title: Text(e.name, overflow: TextOverflow.ellipsis),
-                  trailing: Text('${e.energyKcal.round()} kcal',
-                      style: text.bodySmall
-                          ?.copyWith(color: scheme.onSurfaceVariant)),
+                Semantics(
+                  identifier: 'log-entry-${e.id}',
+                  button: true,
+                  child: ListTile(
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
+                    contentPadding: const EdgeInsets.only(left: 74, right: 20),
+                    title: Text(e.name, overflow: TextOverflow.ellipsis),
+                    trailing: Text('${e.energyKcal.round()} kcal',
+                        style: text.bodySmall
+                            ?.copyWith(color: scheme.onSurfaceVariant)),
+                    // A logged row was write-only until now: no macros, no fix,
+                    // no delete. Tap opens the entry.
+                    onTap: () => LogEntrySheet.show(context, e),
+                  ),
                 ),
             ],
           ),
