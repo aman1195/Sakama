@@ -6,10 +6,17 @@ import '../domain/snapped_item.dart';
 
 class PhotoSnapException implements Exception {
   PhotoSnapException(this.message,
-      {this.budgetExhausted = false, this.noFood = false});
+      {this.budgetExhausted = false, this.noFood = false, this.budgetKind});
   final String message;
   final bool budgetExhausted; // daily cap hit (rule 9)
   final bool noFood;          // model saw no food in the frame
+
+  /// Which cap refused: 'photo' or 'exchange'. Worth distinguishing because a
+  /// photos-exhausted user CAN still text-chat — the scarce-first charge order
+  /// deliberately preserved that budget, and the UI should say so (review #94).
+  final String? budgetKind;
+
+  bool get outOfPhotosOnly => budgetExhausted && budgetKind == 'photo';
   @override
   String toString() => 'PhotoSnapException: $message';
 }
@@ -106,8 +113,8 @@ class EdgeFunctionPhotoSnap implements PhotoSnapService {
       });
     } on FunctionException catch (e) {
       if (e.status == 429) {
-        // Either cap can refuse; both read the same to the user.
-        throw PhotoSnapException('daily limit reached', budgetExhausted: true);
+        throw PhotoSnapException('daily limit reached',
+            budgetExhausted: true, budgetKind: _budgetKind(e.details));
       }
       throw PhotoSnapException('gateway error ${e.status}');
     } catch (e) {
@@ -146,6 +153,17 @@ class EdgeFunctionPhotoSnap implements PhotoSnapService {
       description: description,
       items: parseItems(raw), // same validation as the logging path
     );
+  }
+
+  /// Read `which` from a 429 body (the function says photo vs exchange).
+  static String? _budgetKind(Object? details) {
+    try {
+      final j = details is String ? jsonDecode(details) : details;
+      final w = j is Map ? j['which'] : null;
+      return w is String ? w : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   static bool _isNoFood(String raw) {

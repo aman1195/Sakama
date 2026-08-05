@@ -9,6 +9,7 @@ import '../../home/presentation/home_page.dart' show targetsProvider;
 import '../../onboarding/domain/nutrition_targets.dart';
 import '../../onboarding/domain/profile_record.dart';
 import '../../plans/application/plan_providers.dart';
+import '../../capture/data/photosnap_service.dart';
 import '../data/tool_executor.dart';
 import '../data/vita_service.dart';
 import '../domain/coach_context.dart';
@@ -215,6 +216,100 @@ class CoachController extends Notifier<CoachState> {
           "I couldn't reach the network just now. Try again in a moment.",
           synthetic: true);
     }
+  }
+
+  /// Send a PHOTO turn (the chat attach button).
+  ///
+  /// The OTHER entry point — "Ask Vita" on a PhotoSnap result — deliberately
+  /// does NOT come through here: by design §5 that path already paid for
+  /// vision, so it composes the extracted items as text and uses [send], the
+  /// ordinary Vita turn. Routing it through a photo method would imply a second
+  /// vision call that must not happen.
+  Future<void> sendPhoto({
+    required String imageBase64,
+    String? caption,
+  }) async {
+    if (state.sending) return;
+
+    final repo = await ref.read(chatRepositoryProvider.future);
+    final question = (caption ?? '').trim();
+    final threadId = state.threadId ??
+        await repo.createThread(
+            title: question.isEmpty ? 'Photo' : question,
+            userId: ref.read(currentUserIdProvider));
+
+    // Persist the user's turn FIRST; the description is folded in once known.
+    final placeholder =
+        question.isEmpty ? '[photo]' : '[photo] $question';
+    final messageId = await repo.appendMessage(
+        threadId: threadId, role: 'user', content: placeholder);
+
+    final history = [...state.messages, CoachMessage(CoachRole.user, placeholder)];
+    _set(state.copyWith(
+        threadId: threadId, messages: history, sending: true, loading: false));
+
+    Future<void> finish(String text, {bool synthetic = false}) async {
+      await repo.appendMessage(
+          threadId: threadId, role: 'vita', content: text, synthetic: synthetic);
+      _set(state.copyWith(
+        messages: [
+          ...state.messages,
+          CoachMessage(CoachRole.vita, text, synthetic: synthetic)
+        ],
+        sending: false,
+      ));
+    }
+
+    try {
+      await ref.read(authServiceProvider).ensureSession();
+      final byok = await ref.read(byokStoreProvider).read();
+
+      final vision = await ref.read(photoSnapServiceProvider).converse(
+            imageBase64,
+            question: question.isEmpty ? null : question,
+            context: await _groundingSnapshot(),
+            byok: byok,
+          );
+
+      // Fold the description into the user's message: it is the visible
+      // stand-in for the un-stored photo AND the grounding replayed upstream.
+      if (vision.description.isNotEmpty) {
+        final withDesc = question.isEmpty
+            ? '[photo: ${vision.description}]'
+            : '[photo: ${vision.description}] $question';
+        await repo.updateMessage(messageId, withDesc);
+        final msgs = [...state.messages];
+        if (msgs.isNotEmpty) {
+          msgs[msgs.length - 1] = CoachMessage(CoachRole.user, withDesc);
+          _set(state.copyWith(messages: msgs));
+        }
+      }
+      await finish(vision.answer);
+    } on PhotoSnapException catch (e) {
+      await finish(_photoFriendly(e), synthetic: true);
+    } catch (e) {
+      debugPrint('sendPhoto failed: $e');
+      await finish("I couldn't look at that photo just now — please try again.",
+          synthetic: true);
+    }
+  }
+
+  /// A photos-exhausted user can STILL text-chat — the scarce-first charge
+  /// order preserved that budget, so say so rather than a flat "limit reached"
+  /// (review #94).
+  static String _photoFriendly(PhotoSnapException e) {
+    if (e.outOfPhotosOnly) {
+      return "That's all the photo look-ups for today — but you can still chat "
+          'with me, or add your own AI key for unlimited.';
+    }
+    if (e.budgetExhausted) {
+      return "We've chatted a lot today — I reset tomorrow. Add your own AI key "
+          '(Me → Your own AI key) to chat without limits.';
+    }
+    if (e.noFood) {
+      return "I couldn't make out any food there — want to tell me what it is?";
+    }
+    return "I couldn't look at that photo just now — please try again.";
   }
 
   /// Write the proposed action. Only reachable from an explicit user tap —

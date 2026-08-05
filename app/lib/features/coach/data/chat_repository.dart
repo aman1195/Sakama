@@ -107,6 +107,15 @@ class ChatRepository {
     return id;
   }
 
+  /// Rewrite a message's text. Used to fold the vision description into the
+  /// user's photo message once it is known ("[photo: two rotis, dal] is this
+  /// too oily?") — the transcript stand-in AND the follow-up grounding, since
+  /// the image itself is never stored (docs/architecture/07 §5).
+  Future<void> updateMessage(String id, String content) async {
+    await (_db.update(_db.chatMessages)..where((m) => m.id.equals(id)))
+        .write(ChatMessagesCompanion(content: Value(content)));
+  }
+
   /// Delete a thread and its messages together — no orphaned transcript.
   Future<void> deleteThread(String id) async {
     await _db.transaction(() async {

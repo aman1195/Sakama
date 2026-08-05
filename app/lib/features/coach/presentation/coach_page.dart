@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/database.dart';
+import '../../capture/presentation/snap_controller.dart' show captureJpegBase64;
 import '../../settings/presentation/ai_disclosure.dart';
 import '../domain/coach_message.dart';
 import '../domain/tool_draft.dart';
@@ -23,6 +24,18 @@ class _CoachPageState extends ConsumerState<CoachPage> {
     _input.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  /// Attach a photo and send it with whatever is typed as the question.
+  Future<void> _sendPhoto() async {
+    if (!await ensureAiConsent(context, ref)) return;
+    final image = await captureJpegBase64();
+    if (image == null || !mounted) return; // cancelled
+    final caption = _input.text;
+    _input.clear();
+    await ref
+        .read(coachControllerProvider.notifier)
+        .sendPhoto(imageBase64: image, caption: caption);
   }
 
   Future<void> _send() async {
@@ -97,6 +110,15 @@ class _CoachPageState extends ConsumerState<CoachPage> {
                 padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
                 child: Row(
                   children: [
+                    Semantics(
+                      identifier: 'coach-attach',
+                      button: true,
+                      child: IconButton(
+                        icon: const Icon(Icons.add_a_photo_outlined),
+                        tooltip: 'Send a photo',
+                        onPressed: state.sending ? null : _sendPhoto,
+                      ),
+                    ),
                     Expanded(
                       child: Semantics(
                         identifier: 'coach-input',

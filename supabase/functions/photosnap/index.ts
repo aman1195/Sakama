@@ -104,7 +104,12 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "usage_error" }), { status: 500 });
     }
     if (photoCount === null || photoCount === undefined) {
-      return new Response(JSON.stringify({ error: "budget_exhausted" }), { status: 429 });
+      // Say WHICH cap: a photos-exhausted user can still text-chat, and the
+      // scarce-first order preserved that budget for them (review #94).
+      return new Response(
+        JSON.stringify({ error: "budget_exhausted", which: "photo" }),
+        { status: 429 },
+      );
     }
     // A converse photo is also a coach exchange (ADR 0016 decision 6).
     if (converse) {
@@ -114,7 +119,10 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: "usage_error" }), { status: 500 });
       }
       if (vitaCount === null || vitaCount === undefined) {
-        return new Response(JSON.stringify({ error: "budget_exhausted" }), { status: 429 });
+        return new Response(
+          JSON.stringify({ error: "budget_exhausted", which: "exchange" }),
+          { status: 429 },
+        );
       }
     }
   }

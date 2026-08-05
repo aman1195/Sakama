@@ -84,9 +84,10 @@ then, the following is sent to our AI provider so the feature can work:
 - **PhotoSnap** sends the **food photo** you take.
 - **AI estimate** sends the **dish name** you type.
 - **Coach (Vita)** sends **the messages in the conversation you are having** (the most recent turns of
-  that chat), your **recent food log**, your **profile including any health conditions you have added**,
-  and your **active plan** (its targets, eating window, foods to avoid and checklist), so its advice fits
-  you.
+  that chat), **any photo you send it**, your **recent food log**, your **profile including any health
+  conditions you have added**, and your **active plan** (its targets, eating window, foods to avoid and
+  checklist), so its advice fits you. A photo sent to the coach is used to answer you and is **not
+  stored** — not by us, and not on your device; only a short text description of it is kept in the chat.
 - **Plan generation** sends your **profile, including any health conditions**, so the plan it builds
   suits you.
 
@@ -121,7 +122,7 @@ We identify our app to Open Food Facts with a contact address in the request, as
 |---|---|---|---|
 | Supabase | Profile, food log, weight, water, account identity | Backend storage and auth | Yes (health conditions), if synced |
 | PowerSync | The same data, in transit | Device ↔ backend sync | Yes, in transit |
-| OpenRouter → Google (Gemini) | Photo, dish name, or conversation messages + log + profile incl. health conditions + active plan | Run the AI feature you enabled | Yes, for the coach and plan generation |
+| OpenRouter → Google (Gemini) | Photo (from PhotoSnap **or the coach**), dish name, or conversation messages + log + profile incl. health conditions + active plan | Run the AI feature you enabled | Yes, for the coach and plan generation |
 | Open Food Facts | Scanned barcode + device IP | Look up a scanned product | No |
 
 ## Legal basis and consent

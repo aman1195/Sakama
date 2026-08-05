@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../coach/presentation/coach_controller.dart';
 
 import '../../settings/presentation/ai_disclosure.dart';
 import '../domain/snap_draft.dart';
@@ -162,20 +165,52 @@ class _ConfirmListState extends ConsumerState<_ConfirmList> {
         SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: Semantics(
-              identifier: 'snap-log',
-              child: FilledButton(
-                onPressed: (_saving || keptCount == 0) ? null : _log,
-                child: Text(keptCount == 0
-                    ? 'Nothing selected'
-                    : 'Log $keptCount ${keptCount == 1 ? 'item' : 'items'} · '
-                        '${_totalKcal.round()} kcal'),
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Semantics(
+                  identifier: 'snap-log',
+                  child: FilledButton(
+                    onPressed: (_saving || keptCount == 0) ? null : _log,
+                    child: Text(keptCount == 0
+                        ? 'Nothing selected'
+                        : 'Log $keptCount ${keptCount == 1 ? 'item' : 'items'} · '
+                            '${_totalKcal.round()} kcal'),
+                  ),
+                ),
+                // Second entry point into photo-chat (design §4). This path has
+                // ALREADY paid for vision, so it hands the extracted items over
+                // as text — no second vision call, no second photo charge (§5).
+                Semantics(
+                  identifier: 'snap-ask-vita',
+                  button: true,
+                  child: TextButton.icon(
+                    icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                    label: const Text('Ask Vita about this'),
+                    onPressed: _saving ? null : () => _askVita(context),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
       ],
     );
+  }
+}
+
+extension _AskVita on _ConfirmListState {
+  /// Hand the ALREADY-extracted items to the coach as text (design §5): this
+  /// path has paid for vision once, so it runs an ordinary Vita turn — one
+  /// exchange, no second vision call, no second photo charge.
+  Future<void> _askVita(BuildContext context) async {
+    final summary = widget.drafts
+        .map((d) => '${d.item.name} (~${d.item.energyKcal.round()} kcal)')
+        .join(', ');
+    context.go('/coach'); // switch first so the reply lands in view
+    await ref
+        .read(coachControllerProvider.notifier)
+        .send('I just photographed this meal: $summary. What do you think?');
   }
 }
 
