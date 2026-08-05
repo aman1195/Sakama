@@ -12,24 +12,29 @@ import '../domain/snap_flow.dart';
 /// Drives the PhotoSnap flow. Camera capture is injectable (a function that
 /// returns base64 JPEG bytes) so the whole analyze→confirm→log path is testable
 /// without a camera, exactly like the barcode split.
+/// Capture a photo as base64 JPEG, at reduced resolution/quality (bandwidth on
+/// Indian mobile data + the vision function's ~6MB guard). Returns null if the
+/// user backs out of the camera.
+///
+/// Shared so the chat's photo attach uses the SAME capture settings as
+/// PhotoSnap — two entry points, one configuration (docs/architecture/07 §4).
+Future<String?> captureJpegBase64() async {
+  final picker = ImagePicker();
+  final file = await picker.pickImage(
+    source: ImageSource.camera,
+    maxWidth: 1024,
+    maxHeight: 1024,
+    imageQuality: 80,
+  );
+  if (file == null) return null;
+  return base64Encode(await file.readAsBytes());
+}
+
 class SnapController extends Notifier<SnapState> {
   @override
   SnapState build() => const SnapIdle();
 
-  /// Default capture: camera at reduced resolution/quality (bandwidth on Indian
-  /// mobile data + the function's ~6MB guard). Returns null if the user backs
-  /// out of the camera.
-  Future<String?> _captureFromCamera() async {
-    final picker = ImagePicker();
-    final file = await picker.pickImage(
-      source: ImageSource.camera,
-      maxWidth: 1024,
-      maxHeight: 1024,
-      imageQuality: 80,
-    );
-    if (file == null) return null;
-    return base64Encode(await file.readAsBytes());
-  }
+  Future<String?> _captureFromCamera() => captureJpegBase64();
 
   /// Capture (or accept an injected [imageBase64] in tests) → analyze → confirm.
   Future<void> snap({

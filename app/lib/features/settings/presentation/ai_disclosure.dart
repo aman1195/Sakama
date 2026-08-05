@@ -93,10 +93,10 @@ class AiDisclosureSheet extends StatelessWidget {
                       icon: Icons.chat_bubble_outline,
                       title: 'Coach (Vita)',
                       what:
-                          'what you type in the chat, your recent food log, '
-                          'your profile — including any health conditions you '
-                          'set (for example diabetes or PCOS) — and your active '
-                          'plan, so its advice fits you',
+                          'what you type in the chat, any photo you send it, '
+                          'your recent food log, your profile — including any '
+                          'health conditions you set (for example diabetes or '
+                          'PCOS) — and your active plan, so its advice fits you',
                     ),
                     const _Sends(
                       icon: Icons.auto_awesome,
