@@ -38,16 +38,28 @@ reads as broken. Log mode keeps `no_food`, because there genuinely is nothing to
 ## 3. Budget (decision 3)
 
 A photo message costs **1 exchange + 1 photo** ([ADR 0016](../adr/0016-vita-as-assistant.md) decision
-12). Converse mode is a single call, so the function charges both itself:
+6). Converse mode is a single call, so the function charges both itself:
 
 ```
-increment_ai_usage("vita",      cap 30)   ← FIRST
-increment_ai_usage("photosnap", cap  8)   ← second
+increment_ai_usage("photosnap", cap  8)   ← FIRST (the scarce, binding cap)
+increment_ai_usage("vita",      cap 30)   ← second
 ```
 
-**Order is load-bearing.** These are two separate atomic RPCs, not one transaction: whichever is
-charged first is spent even if the second is exhausted. Charging the abundant resource first means a
-refused request burns 1 of 30 rather than 1 of only 8 daily photos. BYOK skips both, as elsewhere.
+**Order is load-bearing, and it goes scarce-first.** These are two separate atomic RPCs, not one
+transaction, so whichever is charged first is spent even if the second refuses. Verified in
+`increment_ai_usage`: the upsert carries `where ai_usage.count < p_cap` and returns NULL **without
+consuming** when already at cap — so charging the *binding* cap first fails fast at **zero cost**.
+
+The photo cap (8) is what users actually hit first, and in that case:
+
+| | photos exhausted (the common failure) |
+|---|---|
+| **photosnap first** | 429 immediately, **nothing consumed** |
+| vita first | 1 of 30 vita burned, *then* 429 — and every retry burns another |
+
+That retry-drain is the deciding factor: a user out of photos who taps again would eat into the text
+coaching they can still use. (An earlier draft of this doc argued abundant-first; that reasoning only
+holds in the rarer vita-exhausted case and was corrected in review #93.) BYOK skips both, as elsewhere.
 
 ## 4. Entry points (decision 4)
 
