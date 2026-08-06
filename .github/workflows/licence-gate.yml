@@ -147,18 +147,6 @@ jobs:
           DRIFT_WRITE = re.compile(
               r'\b(into|update|delete)\s*\(\s*[\w.]*\bfoods\s*\)'
               r'|\binsertAll\s*\(\s*[\w.]*\bfoods\b')
-          # user_foods (docs/architecture/08) is SYNCED, so copying OFF
-          # nutrition into it would upload ODbL values to our server. A
-          # 'pointer' row must carry no nutrition at all. The primary guarantee
-          # is structural — UserFoodRepository.addPointer takes no nutrition
-          # arguments, and a Postgres CHECK enforces the same — because a regex
-          # can never prove the absence of a copy. This is belt-and-braces: it
-          # flags a nutrition-bearing write to userFoods in any file that also
-          # mentions OFF, which is the shape a contaminating path would take.
-          USER_FOODS_WRITE = re.compile(
-              r'\b(into|update)\s*\(\s*[\w.]*\buserFoods\s*\)')
-          NUTRITION_FIELD = re.compile(
-              r'\b(energyKcal|proteinG|carbG|fatG|fiberG)\s*:')
           # FILE-level, not statement-level: a violation can build the
           # companion in one statement and insert it in the next, which
           # splitting on ';' would miss. Conservative by design.
@@ -196,13 +184,6 @@ jobs:
                           hits.append(
                               f"{p}: Drift write to `foods` in a file that "
                               f"handles OFF data -> {m.group(0)}")
-                      # user_foods is SYNCED: nutrition written there would
-                      # upload ODbL values. A pointer row must carry none.
-                      u = USER_FOODS_WRITE.search(dart)
-                      if u and NUTRITION_FIELD.search(dart) and OFF.search(dart):
-                          hits.append(
-                              f"{p}: nutrition-bearing write to `user_foods` in "
-                              f"a file that handles OFF data -> {u.group(0)}")
 
           for h in hits:
               print(f"::error::ODbL contamination: {h}")

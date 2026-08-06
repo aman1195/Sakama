@@ -109,10 +109,16 @@ disagreeing, would be worse than either alone.
 - **Migration**: forward-only, additive, with a preservation test seeding every existing table.
 - **Licence**: a test asserting an OFF-derived favourite stores **no nutrition values** — the structural
   guarantee of §3, enforced rather than documented.
-- **CI gate**: add `user_foods` to the `odbl-containment` Drift rule when the table lands. Its current
-  pattern is case-sensitive (`_db.foods` matches, `_db.offFoods` deliberately does not), so a write
-  into the new table would not be seen. Belt-and-braces only: a regex cannot prove nutrition was not
-  copied, which is why the primary guarantee is the `addPointer()` signature above.
+- **CI gate: tried and deliberately NOT adopted.** A regex rule for `user_foods` was added and
+  **failed on the repository that implements the guarantee correctly** — `addCustom` legitimately
+  writes user-authored nutrition, and `resolve()` legitimately reads `off_foods`, so the three signals
+  co-occur in a correct file. A gate that fires on correct code is worse than none: it teaches people
+  to suppress it, and the next person adds an exclusion instead of thinking.
+
+  The belt-and-braces role is filled better by the **Postgres CHECK** (§4): it enforces the invariant
+  at the server, cannot be bypassed by any client, and cannot produce a false positive. Together with
+  the `addPointer()` signature and the unit test, that is three independent guarantees — none of them
+  a regex, because a regex can never express "this value was not copied from there".
 - UI: keep-from-log, keep-from-PhotoSnap, log-from-favourites at the stored portion.
 
 ## 8. Decisions
