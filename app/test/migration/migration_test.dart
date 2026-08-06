@@ -8,6 +8,7 @@ import 'generated/schema_v2.dart' as v2;
 import 'generated/schema_v3.dart' as v3;
 import 'generated/schema_v4.dart' as v4;
 import 'generated/schema_v5.dart' as v5;
+import 'generated/schema_v6.dart' as v6;
 
 /// The migration harness required by docs/MOBILE.md and docs/REVIEW.md §6.1:
 /// a bad on-device migration destroys user data irrecoverably, so every schema
@@ -198,13 +199,60 @@ void main() {
     await db.close();
   });
 
-  test('database schema matches the committed v6 snapshot', () async {
+  test('v6 -> v7 adds user_foods AND preserves all user data', () async {
+    final schema = await verifier.schemaAt(6);
+    final v6Db = v6.DatabaseAtV6(schema.newConnection());
+    // Seed a row in EVERY existing table, synced and local-only alike.
+    await v6Db.customStatement(
+      "INSERT INTO food_logs (id, date, meal, name, energy_kcal, protein_g, "
+      "carb_g, fat_g, logged_via, created_at, updated_at) "
+      "VALUES ('fl','2026-08-06','lunch','dal',180,9,22,6,'quick_add',1,1)");
+    await v6Db.customStatement(
+      "INSERT INTO profiles (id, dob, weight_kg, height_cm, sex, activity, "
+      "goal, diet, cuisine, conditions, onboarding_complete, created_at, "
+      "updated_at) VALUES ('p','1994-01-01',70,175,'male','moderate','maintain',"
+      "'veg','both','',1,1,1)");
+    await v6Db.customStatement(
+      "INSERT INTO water_logs (id, date, amount_ml, created_at, updated_at) "
+      "VALUES ('w','2026-08-06',250,1,1)");
+    await v6Db.customStatement(
+      "INSERT INTO weight_logs (id, date, weight_kg, created_at, updated_at) "
+      "VALUES ('wt','2026-08-06',70.5,1,1)");
+    await v6Db.customStatement(
+      "INSERT INTO user_plans (id, name, config, source, active, created_at, "
+      "updated_at) VALUES ('pl','P','{}','user_imported',1,1,1)");
+    await v6Db.customStatement(
+      "INSERT INTO chat_threads (id, title, created_at, updated_at) "
+      "VALUES ('t','Knee injury',1,1)");
+    await v6Db.customStatement(
+      "INSERT INTO chat_messages (id, thread_id, role, content, synthetic, "
+      "created_at) VALUES ('m','t','user','hello',0,1)");
+    await v6Db.close();
+
+    final db = SakamaDatabase.withExecutor(schema.newConnection());
+    await verifier.migrateAndValidate(db, 7);
+
+    // Every pre-existing row survived (MOBILE.md: a bad migration destroys
+    // user data irrecoverably) — including the device-local conversation.
+    expect((await db.select(db.foodLogs).get()).map((r) => r.id), contains('fl'));
+    expect((await db.select(db.profiles).get()).map((r) => r.id), contains('p'));
+    expect((await db.select(db.waterLogs).get()).map((r) => r.id), contains('w'));
+    expect((await db.select(db.weightLogs).get()).map((r) => r.id), contains('wt'));
+    expect((await db.select(db.userPlans).get()).map((r) => r.id), contains('pl'));
+    expect((await db.select(db.chatThreads).get()).map((r) => r.id), contains('t'));
+    expect((await db.select(db.chatMessages).get()).map((r) => r.id), contains('m'));
+    // The new table exists and is usable (born empty).
+    expect(await db.select(db.userFoods).get(), isEmpty);
+    await db.close();
+  });
+
+  test('database schema matches the committed v7 snapshot', () async {
     // Creates a fresh db from SakamaDatabase's Dart definitions and diffs it
-    // against drift_schemas/drift_schema_v6.json. Fails if the code drifts
+    // against drift_schemas/drift_schema_v7.json. Fails if the code drifts
     // from the committed snapshot without a new schema version + migration.
-    final connection = await verifier.startAt(6);
+    final connection = await verifier.startAt(7);
     final db = SakamaDatabase.withExecutor(connection);
-    await verifier.migrateAndValidate(db, 6);
+    await verifier.migrateAndValidate(db, 7);
     await db.close();
   });
 

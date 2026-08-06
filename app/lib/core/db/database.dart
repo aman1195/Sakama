@@ -107,6 +107,48 @@ class UserPlans extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// Foods the user CHOSE to keep: favourites and their own creations
+/// (docs/architecture/08-user-foods.md). Synced, unlike conversations — this is
+/// per-user data worth surviving a lost phone.
+///
+/// Deliberately NOT `foods`: `ensureSeeded` runs DELETE FROM foods on every
+/// seedVersion bump, which would silently destroy user-authored rows (#35).
+///
+/// LICENCE (CLAUDE.md rule 5): a [kind] of 'pointer' stores NO nutrition — only
+/// where to read it from, plus the user's portion. That keeps ODbL values from
+/// Open Food Facts out of this synced table entirely. Only 'custom' rows carry
+/// nutrition, and those values are the user's own.
+@DataClassName('UserFoodRow')
+class UserFoods extends Table {
+  TextColumn get id => text()();
+  TextColumn get userId => text().nullable()();
+  TextColumn get name => text()(); // what the USER calls it
+  TextColumn get kind => text()(); // pointer | custom
+
+  /// Pointer only: where the nutrition actually lives.
+  TextColumn get sourceTable => text().nullable()(); // foods | off_foods
+  TextColumn get sourceId => text().nullable()();
+
+  /// Custom only, per 100 g (the canonical unit, as everywhere else).
+  RealColumn get energyKcal => real().nullable()();
+  RealColumn get proteinG => real().nullable()();
+  RealColumn get carbG => real().nullable()();
+  RealColumn get fatG => real().nullable()();
+  RealColumn get fiberG => real().nullable()();
+
+  /// The user's usual portion — the thing no corpus can know.
+  TextColumn get servingLabel => text().nullable()();
+  RealColumn get servingGrams => real().nullable()();
+
+  /// Drives most-used ordering, so the common path gets shorter with use.
+  IntColumn get useCount => integer().withDefault(const Constant(0))();
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()(); // LWW
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 /// One Vita conversation (ADR 0016 phase 1). LOCAL-ONLY and deliberately so:
 /// health conversations never leave the phone at rest, so there is no Supabase
 /// mirror, no RLS policy and no sync-streams entry (docs/architecture/06).
@@ -210,8 +252,8 @@ class OffFoods extends Table {
 }
 
 @DriftDatabase(
-    tables: [FoodLogs, Profiles, WaterLogs, WeightLogs, UserPlans, ChatThreads,
-      ChatMessages, Foods, OffFoods])
+    tables: [FoodLogs, Profiles, WaterLogs, WeightLogs, UserPlans, UserFoods,
+      ChatThreads, ChatMessages, Foods, OffFoods])
 class SakamaDatabase extends _$SakamaDatabase {
   SakamaDatabase()
       : managedExternally = false,
@@ -229,7 +271,7 @@ class SakamaDatabase extends _$SakamaDatabase {
   final bool managedExternally;
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => managedExternally
@@ -266,6 +308,11 @@ class SakamaDatabase extends _$SakamaDatabase {
               // is touched.
               await m.createTable(chatThreads);
               await m.createTable(chatMessages);
+            }
+            if (from < 7) {
+              // Favourites + custom foods (#35). Additive — no existing row is
+              // touched. Synced, so it also has a Supabase mirror + RLS.
+              await m.createTable(userFoods);
             }
           },
         );

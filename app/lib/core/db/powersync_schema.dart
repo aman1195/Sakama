@@ -61,6 +61,23 @@ const powersyncSchema = Schema([
     Column.integer('created_at'),
     Column.integer('updated_at'),
   ]),
+  Table('user_foods', [
+    Column.text('user_id'),
+    Column.text('name'),
+    Column.text('kind'), // pointer | custom
+    Column.text('source_table'),
+    Column.text('source_id'),
+    Column.real('energy_kcal'), // custom only; a pointer leaves these null so
+    Column.real('protein_g'),   // no ODbL value ever reaches this table
+    Column.real('carb_g'),
+    Column.real('fat_g'),
+    Column.real('fiber_g'),
+    Column.text('serving_label'),
+    Column.real('serving_grams'),
+    Column.integer('use_count'),
+    Column.integer('created_at'),
+    Column.integer('updated_at'),
+  ]),
   // Vita conversations — LOCAL-ONLY by DESIGN (ADR 0016 decision 1), not
   // because they are reference data: health conversations never leave the
   // phone at rest, so there is deliberately no Supabase mirror, no RLS policy
