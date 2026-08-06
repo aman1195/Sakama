@@ -75,6 +75,34 @@ class FoodLogRepository {
     return id;
   }
 
+  /// Correct an entry in place. An edited row records `manual` provenance: it
+  /// is no longer the AI estimate / corpus match / remembered portion it
+  /// started as, and the diary must not claim otherwise (rule 7).
+  Future<void> update({
+    required String id,
+    required String meal,
+    required String name,
+    required double energyKcal,
+    required double proteinG,
+    required double carbG,
+    required double fatG,
+    double? grams,
+  }) async {
+    await (_db.update(_db.foodLogs)..where((t) => t.id.equals(id))).write(
+      FoodLogsCompanion(
+        meal: Value(meal),
+        name: Value(name),
+        energyKcal: Value(energyKcal),
+        proteinG: Value(proteinG),
+        carbG: Value(carbG),
+        fatG: Value(fatG),
+        grams: Value(grams),
+        loggedVia: const Value('manual'),
+        updatedAt: Value(DateTime.now().millisecondsSinceEpoch), // LWW
+      ),
+    );
+  }
+
   Future<void> delete(String id) async =>
       (_db.delete(_db.foodLogs)..where((t) => t.id.equals(id))).go();
 }
