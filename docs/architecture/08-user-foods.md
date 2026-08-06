@@ -45,6 +45,12 @@ A favourite of an OFF product is a **pointer plus a portion**. No ODbL value is 
 ODbL-licensed ever reaches the server. The containment is **structural**, not a rule someone must
 remember — which is the only kind that survives.
 
+**Enforced by the API shape, not by discipline.** `UserFoodRepository.addPointer()` takes **no
+nutrition parameters at all** — only `sourceTable`, `sourceId`, and the user's portion. A caller
+therefore *cannot* copy OFF values into a pointer row even by accident; there is nowhere to put them.
+`addCustom()` is the only method that accepts nutrition, and by definition its values are
+user-authored. This is stronger than a regex gate, which can never prove the absence of a copy.
+
 ## 4. Schema (synced)
 
 Unlike conversations (device-local by [ADR 0016](../adr/0016-vita-as-assistant.md)), user foods are
@@ -103,13 +109,30 @@ disagreeing, would be worse than either alone.
 - **Migration**: forward-only, additive, with a preservation test seeding every existing table.
 - **Licence**: a test asserting an OFF-derived favourite stores **no nutrition values** — the structural
   guarantee of §3, enforced rather than documented.
+- **CI gate**: add `user_foods` to the `odbl-containment` Drift rule when the table lands. Its current
+  pattern is case-sensitive (`_db.foods` matches, `_db.offFoods` deliberately does not), so a write
+  into the new table would not be seen. Belt-and-braces only: a regex cannot prove nutrition was not
+  copied, which is why the primary guarantee is the `addPointer()` signature above.
 - UI: keep-from-log, keep-from-PhotoSnap, log-from-favourites at the stored portion.
 
-## 8. Open questions
+## 8. Decisions
 
-1. **Does a pointer follow its source's numbers, or freeze them?** Following keeps a corrected corpus
-   value accurate; freezing means your log history stays reproducible. Proposal: **follow** — the
-   pointer exists precisely to avoid duplicating data, and the log row already snapshots what was
-   logged at the time.
-2. **Ordering in the UI** — manual, most-used, or most-recent? Proposal: **most-used**, since the point
-   is to shorten the common path.
+1. **A pointer FOLLOWS its source; it never freezes it.** This looked like a UX trade (a corrected
+   corpus value stays accurate vs a reproducible log history), but for an OFF pointer it is a
+   **licence** decision: "freeze" means copying the OFF nutrition into `user_foods` at save time —
+   which **is** the ODbL merge §3 exists to prevent, and it would then sync to our server.
+
+   So freeze is **not available** for OFF pointers on rule-5 grounds, independently of any
+   reproducibility argument, and there is no reason to treat corpus pointers differently. Log history
+   stays reproducible anyway, because a `food_logs` row already snapshots the values as logged.
+
+   Recorded explicitly so a future implementer cannot choose "freeze" for reproducibility and quietly
+   reintroduce the trap.
+
+2. **Ordering: most-used**, since the point is to shorten the common path.
+
+## 9. Privacy
+
+§6 adds a favourites list to Vita's grounding snapshot — another slice of user data sent to the
+provider. The consent copy and inventory (#87) must be updated **with the feature**, as was done for
+plan context and photos, not afterwards.
