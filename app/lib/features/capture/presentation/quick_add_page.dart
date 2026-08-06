@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/db/database.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../foods/data/ai_estimator.dart';
+import '../../foods/data/user_food_repository.dart';
 import '../../foods/domain/food.dart';
 import '../../settings/presentation/ai_disclosure.dart';
 import '../../home/domain/day_totals.dart';
@@ -55,6 +56,11 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
   /// True when the current form was filled from a recent entry and has not been
   /// hand-edited since — so the new row records where it really came from.
   bool _fromRecent = false;
+
+  /// Same, for a saved food; [_favouriteId] lets the save bump its use count so
+  /// most-used ordering reflects reality.
+  bool _fromFavourite = false;
+  String? _favouriteId;
   List<Food> _results = const [];
 
   /// The query that produced zero results — shows the AI-estimate offer.
@@ -182,6 +188,36 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
     if (mounted) setState(() => _recents = rows);
   }
 
+  /// Log a saved food at YOUR portion. A pointer's nutrition is per 100 g and
+  /// scales by the saved grams; a missing source leaves the numbers blank for
+  /// the user to complete rather than logging a silent zero.
+  Future<void> _pickFavourite(ResolvedUserFood f) async {
+    _picked = null;
+    _fromRecent = false;
+    _fromFavourite = true;
+    _favouriteId = f.row.id;
+    _name.text = f.row.name;
+    final grams = f.row.servingGrams;
+    _grams.text = grams == null ? '' : grams.toStringAsFixed(0);
+    if (f.energyKcal != null && grams != null) {
+      final k = grams / 100;
+      _kcal.text = (f.energyKcal! * k).toStringAsFixed(0);
+      _protein.text = ((f.proteinG ?? 0) * k).toStringAsFixed(0);
+      _carb.text = ((f.carbG ?? 0) * k).toStringAsFixed(0);
+      _fat.text = ((f.fatG ?? 0) * k).toStringAsFixed(0);
+    } else {
+      // Source gone, or no saved portion: let the user fill it in.
+      for (final c in [_kcal, _protein, _carb, _fat]) {
+        c.clear();
+      }
+    }
+    setState(() {
+      _results = const [];
+      _search.clear();
+    });
+    FocusScope.of(context).unfocus();
+  }
+
   /// Re-log something you have eaten before. Unlike [_pick] (a per-100g corpus
   /// row that must be scaled by grams), a recent entry is ALREADY the portion
   /// you ate, so its totals are copied across verbatim.
@@ -201,6 +237,61 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
       _search.clear();
     });
     FocusScope.of(context).unfocus();
+  }
+
+  /// Save a corpus food as a POINTER: source + your portion, never a copy of
+  /// the nutrition. `addPointer` takes no nutrition arguments, so this path
+  /// cannot carry licensed values into the synced table even by mistake.
+  Future<void> _keepPicked() async {
+    final food = _picked;
+    if (food == null) return;
+    final repo = await ref.read(userFoodRepositoryProvider.future);
+    await repo.addPointer(
+      name: food.name,
+      sourceTable: UserFoodRepository.sourceFoods,
+      sourceId: food.id,
+      servingLabel: food.defaultServingLabel,
+      servingGrams: double.tryParse(_grams.text.trim()),
+      userId: ref.read(currentUserIdProvider),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Saved "${food.name}" to your foods.')));
+  }
+
+  /// Foods you chose to keep — including ones that fell out of the recency
+  /// window, and ones that exist in no corpus at all.
+  Widget _favouritesStrip() {
+    final favs = ref.watch(favouriteFoodsProvider).value ?? const [];
+    if (favs.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Saved', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              for (final f in favs)
+                Semantics(
+                  identifier: 'qa-favourite-${f.row.id}',
+                  button: true,
+                  child: ActionChip(
+                    avatar: const Icon(Icons.bookmark, size: 16),
+                    label: Text(f.portionKcal == null
+                        ? f.row.name
+                        : '${f.row.name} · ${f.portionKcal!.round()} kcal'),
+                    onPressed: () => _pickFavourite(f),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   /// Repeat meals are the norm, so put them one tap away.
@@ -247,6 +338,7 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
   /// ones writing those fields (see [_recomputeFromGrams]).
   void _dropPickedProvenance(String _) {
     if (_fromRecent && !_deriving) _fromRecent = false;
+    if (_fromFavourite && !_deriving) _fromFavourite = false;
     if (_picked != null && !_deriving) setState(() => _picked = null);
   }
 
@@ -280,14 +372,18 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
         proteinG: double.tryParse(_protein.text) ?? 0,
         carbG: double.tryParse(_carb.text) ?? 0,
         fatG: double.tryParse(_fat.text) ?? 0,
-        grams: (_picked == null && !_fromRecent)
+        grams: (_picked == null && !_fromRecent && !_fromFavourite)
             ? null
             : double.tryParse(_grams.text.trim()),
         loggedVia: _picked != null
             ? 'search'
-            : (_fromRecent ? 'recent' : 'manual'),
+            : (_fromFavourite ? 'saved' : (_fromRecent ? 'recent' : 'manual')),
         userId: ref.read(currentUserIdProvider),
       );
+      if (_fromFavourite && _favouriteId != null) {
+        final foods = await ref.read(userFoodRepositoryProvider.future);
+        await foods.markUsed(_favouriteId!);
+      }
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(context);
       // Pushed as /add -> pop back. As the LOG TAB root there is nothing to
@@ -369,6 +465,7 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
                 ),
               ),
               if (_results.isNotEmpty) _resultsList(),
+              if (_results.isEmpty && _search.text.isEmpty) _favouritesStrip(),
               if (_results.isEmpty &&
                   _search.text.isEmpty &&
                   _recents.isNotEmpty)
@@ -494,6 +591,23 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
                 number: true,
                 onChanged: _dropPickedProvenance,
               ),
+              // Keep a corpus match as a saved food. This is the POINTER path:
+              // it stores where the nutrition lives plus your portion, never a
+              // copy of the values — which is what keeps ODbL data out of the
+              // synced user_foods table (docs/architecture/08 §3).
+              if (_picked != null)
+                Semantics(
+                  identifier: 'qa-keep-food',
+                  button: true,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      icon: const Icon(Icons.bookmark_add_outlined, size: 18),
+                      label: const Text('Save this food'),
+                      onPressed: _keepPicked,
+                    ),
+                  ),
+                ),
               const SizedBox(height: 24),
               Semantics(
                 identifier: 'qa-save',

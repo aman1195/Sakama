@@ -490,12 +490,16 @@ class CoachController extends Notifier<CoachState> {
         '${now.day.toString().padLeft(2, '0')}';
     final List<FoodLog> logs = await db.watchDay(ymd).first;
     final planDay = ref.read(activePlanDayProvider);
+    final favourites = (ref.read(favouriteFoodsProvider).value ?? const [])
+        .map((f) => f.row.name)
+        .toList();
     return CoachContext.build(
         profile: profile,
         targets: targets,
         todayLogs: logs,
         now: now,
-        planDay: planDay);
+        planDay: planDay,
+        favouriteFoods: favourites);
   }
 }
 

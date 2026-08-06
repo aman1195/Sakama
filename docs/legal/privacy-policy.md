@@ -49,6 +49,7 @@ are signed in, replicated to our backend so it survives a device change.
 | Food log | items, meals, amounts, calories and macronutrients, how each item was logged (search, barcode, photo, AI estimate) | On device; synced to backend |
 | Body metrics | weight entries over time, water intake | On device; synced to backend |
 | Plans | a plan you import or have generated: daily targets, day types, eating windows, foods to avoid, checklists | On device; synced to backend |
+| Saved foods | foods you keep as favourites, and any you create yourself, with your usual portion | On device; synced to backend |
 | Coach conversations | the chats you have with Vita, and their titles | **Only on your device.** Never uploaded to our servers and never synced, even when you are signed in. Signing out or switching accounts deletes them from the device. |
 | Account identity | an anonymous device identifier by default; your email address only if you create an account | Backend authentication |
 | Your own AI key (optional) | an OpenRouter API key you choose to add ("BYOK") | **Only** in your device's secure storage (Keychain / Android Keystore). It is never stored on our servers and never written to our logs. |
@@ -84,8 +85,8 @@ then, the following is sent to our AI provider so the feature can work:
 - **PhotoSnap** sends the **food photo** you take.
 - **AI estimate** sends the **dish name** you type.
 - **Coach (Vita)** sends **the messages in the conversation you are having** (the most recent turns of
-  that chat), **any photo you send it**, your **recent food log**, your **profile including any health
-  conditions you have added**, and your **active plan** (its targets, eating window, foods to avoid and
+  that chat), **any photo you send it**, your **recent food log**, your **saved foods**, your **profile including
+  any health conditions you have added**, and your **active plan** (its targets, eating window, foods to avoid and
   checklist), so its advice fits you. A photo sent to the coach is used to answer you and is **not
   stored** — not by us, and not on your device; only a short text description of it is kept in the chat.
 - **Plan generation** sends your **profile, including any health conditions**, so the plan it builds
