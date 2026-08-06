@@ -55,6 +55,7 @@ class _LogEntrySheetState extends ConsumerState<LogEntrySheet> {
   }
 
   Future<void> _save() async {
+    if (_busy) return; // symmetry with _delete (review #100)
     final kcal = double.tryParse(_kcal.text.trim());
     if (_name.text.trim().isEmpty || kcal == null || kcal <= 0) return;
     setState(() => _busy = true);
