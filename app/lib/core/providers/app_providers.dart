@@ -7,6 +7,7 @@ import '../../features/capture/data/photosnap_service.dart';
 import '../../features/coach/data/chat_repository.dart';
 import '../../features/coach/data/vita_service.dart';
 import '../../features/foods/data/food_repository.dart';
+import '../../features/foods/data/user_food_repository.dart';
 import '../../features/foods/data/ai_estimator.dart';
 import '../../features/plans/data/plan_generator.dart';
 import '../../features/foods/data/food_seed.dart';
@@ -82,6 +83,14 @@ final waterRepositoryProvider = FutureProvider<WaterRepository>((ref) async {
 final weightRepositoryProvider = FutureProvider<WeightRepository>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return WeightRepository(db);
+});
+
+/// Favourites + custom foods (docs/architecture/08-user-foods.md). SYNCED, and
+/// deliberately not `foods` — that table is wiped on every seedVersion bump.
+final userFoodRepositoryProvider =
+    FutureProvider<UserFoodRepository>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return UserFoodRepository(db);
 });
 
 /// Vita conversations (ADR 0016 phase 1). DEVICE-LOCAL: local-only tables, so
