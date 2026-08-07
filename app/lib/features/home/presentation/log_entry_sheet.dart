@@ -73,6 +73,45 @@ class _LogEntrySheetState extends ConsumerState<LogEntrySheet> {
     if (mounted) Navigator.of(context).pop();
   }
 
+  /// A barcode row's macros came from Open Food Facts, so saving it here would
+  /// write ODbL-derived nutrition into `user_foods` — the exact merge the
+  /// pointer scheme exists to prevent (docs/architecture/08 §3).
+  ///
+  /// It cannot be saved as a POINTER either: `food_logs` keeps no `off_foods`
+  /// id (see the table — name and macros only), so by the time a scan reaches
+  /// this sheet the link to its source is already gone. Save at scan time
+  /// instead, where the id still exists and a real pointer can be written.
+  bool get _keepable => widget.entry.loggedVia != 'barcode';
+
+  /// Keep this as a saved food. A logged row is already a portion, so it is
+  /// stored as a CUSTOM food converted to the canonical per-100 g basis.
+  ///
+  /// Safe for every origin [_keepable] admits: manual and Vita rows are the
+  /// user's own numbers, search rows are USDA (CC0) or our proprietary corpus,
+  /// and PhotoSnap rows are our own AI estimate. Only OFF is excluded.
+  Future<void> _keep() async {
+    if (_busy || !_keepable) return;
+    final kcal = double.tryParse(_kcal.text.trim());
+    final grams = double.tryParse(_grams.text.trim());
+    if (_name.text.trim().isEmpty || kcal == null || kcal <= 0) return;
+    setState(() => _busy = true);
+    final per100 = (grams != null && grams > 0) ? 100 / grams : 1.0;
+    final repo = await ref.read(userFoodRepositoryProvider.future);
+    await repo.addCustom(
+      name: _name.text.trim(),
+      energyKcal: kcal * per100,
+      proteinG: (double.tryParse(_protein.text.trim()) ?? 0) * per100,
+      carbG: (double.tryParse(_carb.text.trim()) ?? 0) * per100,
+      fatG: (double.tryParse(_fat.text.trim()) ?? 0) * per100,
+      servingGrams: grams,
+      userId: ref.read(currentUserIdProvider),
+    );
+    if (!mounted) return;
+    setState(() => _busy = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Saved "${_name.text.trim()}" to your foods.')));
+  }
+
   Future<void> _delete() async {
     final ok = await showDialog<bool>(
       context: context,
@@ -134,6 +173,16 @@ class _LogEntrySheetState extends ConsumerState<LogEntrySheet> {
               const SizedBox(height: 8),
               Row(
                 children: [
+                  if (_keepable)
+                    Semantics(
+                      identifier: 'log-edit-keep',
+                      button: true,
+                      child: TextButton.icon(
+                        icon: const Icon(Icons.bookmark_add_outlined),
+                        label: const Text('Save food'),
+                        onPressed: _busy ? null : _keep,
+                      ),
+                    ),
                   Semantics(
                     identifier: 'log-edit-delete',
                     button: true,

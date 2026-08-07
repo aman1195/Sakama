@@ -113,6 +113,41 @@ void main() {
     await _dispose(tester);
   });
 
+  testWidgets('a barcode row cannot be saved as a food (ODbL, rule 5)',
+      (tester) async {
+    // A barcode row's macros are Open Food Facts values copied into food_logs
+    // (ADR 0014). Saving them here would write ODbL-derived nutrition into
+    // `user_foods`, which syncs to our server — the merge the pointer scheme
+    // exists to prevent. It cannot be pointer-saved either: food_logs keeps no
+    // off_foods id. So the offer is withdrawn; saving happens at scan time.
+    await tester.runAsync(() => db.into(db.foodLogs).insert(_row(via: 'barcode')));
+    await _open(tester, db);
+
+    expect(find.bySemanticsIdentifier('log-edit-keep'), findsNothing);
+    expect(find.text('Save food'), findsNothing);
+    // Everything else about the row stays fully editable.
+    expect(find.bySemanticsIdentifier('log-edit-save'), findsOneWidget);
+    expect(find.bySemanticsIdentifier('log-edit-delete'), findsOneWidget);
+    await _dispose(tester);
+  });
+
+  testWidgets('a non-barcode row still offers the save', (tester) async {
+    // The guard must be narrow: photo/manual/search/vita are all our own or
+    // permissively licensed, so withdrawing the offer from them would be a
+    // silent feature loss with no licence justification.
+    await tester.runAsync(() => db.into(db.foodLogs).insert(_row(via: 'photo')));
+    await _open(tester, db);
+
+    expect(find.bySemanticsIdentifier('log-edit-keep'), findsOneWidget);
+    await tester.tap(find.bySemanticsIdentifier('log-edit-keep'));
+    await _pumpFrames(tester);
+
+    final saved = (await tester.runAsync(() => db.select(db.userFoods).get()))!;
+    expect(saved, hasLength(1));
+    expect(saved.single.kind, 'custom');
+    await _dispose(tester);
+  });
+
   testWidgets('an empty name or zero calories will not save', (tester) async {
     await tester.runAsync(() => db.into(db.foodLogs).insert(_row()));
     await _open(tester, db);

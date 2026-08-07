@@ -30,9 +30,11 @@ class AiPrivacyPage extends ConsumerWidget {
                 identifier: 'ai-enabled-toggle',
                 child: SwitchListTile(
                   title: const Text('Use AI features'),
-                  subtitle: Text(enabled
-                      ? 'PhotoSnap, AI estimates and Coach are on.'
-                      : 'PhotoSnap, AI estimates and Coach are off.'),
+                  subtitle: Text(
+                    enabled
+                        ? 'PhotoSnap, AI estimates and Coach are on.'
+                        : 'PhotoSnap, AI estimates and Coach are off.',
+                  ),
                   value: enabled,
                   onChanged: consent.isLoading
                       ? null
@@ -51,17 +53,19 @@ class AiPrivacyPage extends ConsumerWidget {
             _row(text, 'PhotoSnap', 'the food photo you take'),
             _row(text, 'AI estimate', 'the dish name you type'),
             _row(
-                text,
-                'Coach (Vita)',
-                'what you type in the chat, any photo you send it, your recent '
-                    'food log, your profile — including any health conditions '
-                    'you set (for example diabetes or PCOS) — and your active '
-                    'plan'),
+              text,
+              'Coach (Vita)',
+              'what you type in the chat, any photo you send it, your recent '
+                  'food log, your saved foods, your profile — including any health conditions '
+                  'you set (for example diabetes or PCOS) — and your active '
+                  'plan',
+            ),
             _row(
-                text,
-                'Plan generation',
-                'your profile — including any health conditions — to build a '
-                    'plan for you'),
+              text,
+              'Plan generation',
+              'your profile — including any health conditions — to build a '
+                  'plan for you',
+            ),
             const SizedBox(height: 20),
             Container(
               padding: const EdgeInsets.all(14),
@@ -87,15 +91,19 @@ class AiPrivacyPage extends ConsumerWidget {
   }
 
   Widget _row(TextTheme text, String title, String what) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: RichText(
-          text: TextSpan(style: text.bodyMedium, children: [
-            TextSpan(
-                text: '$title: ',
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-            TextSpan(text: what),
-            const TextSpan(text: '.'),
-          ]),
-        ),
-      );
+    padding: const EdgeInsets.only(bottom: 10),
+    child: RichText(
+      text: TextSpan(
+        style: text.bodyMedium,
+        children: [
+          TextSpan(
+            text: '$title: ',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          TextSpan(text: what),
+          const TextSpan(text: '.'),
+        ],
+      ),
+    ),
+  );
 }

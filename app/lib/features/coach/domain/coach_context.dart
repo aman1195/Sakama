@@ -19,6 +19,7 @@ class CoachContext {
     required List<FoodLog> todayLogs,
     required DateTime now,
     PlanDay? planDay,
+    List<String> favouriteFoods = const [],
   }) {
     final totals = DayTotals.fromLogs(todayLogs);
     final b = StringBuffer();
@@ -68,6 +69,13 @@ class CoachContext {
     } else {
       b.writeln('Today so far: ${totals.calories.round()} kcal logged '
           '(no targets set).');
+    }
+
+    // Foods the user CHOSE to keep — a stated preference, so "what should I
+    // eat?" can answer with something they actually like instead of generic
+    // advice. Explicit data, deliberately not inferred memory.
+    if (favouriteFoods.isNotEmpty) {
+      b.writeln('Foods they like (saved): ${favouriteFoods.take(15).join(', ')}.');
     }
 
     if (todayLogs.isEmpty) {

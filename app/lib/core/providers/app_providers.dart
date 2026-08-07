@@ -93,6 +93,17 @@ final userFoodRepositoryProvider =
   return UserFoodRepository(db);
 });
 
+/// Saved foods, resolved (a pointer's nutrition read from its source) and
+/// most-used first. Null owner = pre-auth rows only, per the usual scoping.
+final favouriteFoodsProvider =
+    StreamProvider<List<ResolvedUserFood>>((ref) async* {
+  final repo = await ref.watch(userFoodRepositoryProvider.future);
+  final uid = ref.watch(currentUserIdProvider);
+  await for (final rows in repo.watchAll(uid)) {
+    yield await repo.resolveAll(rows);
+  }
+});
+
 /// Vita conversations (ADR 0016 phase 1). DEVICE-LOCAL: local-only tables, so
 /// nothing here syncs or reaches a server.
 final chatRepositoryProvider = FutureProvider<ChatRepository>((ref) async {
