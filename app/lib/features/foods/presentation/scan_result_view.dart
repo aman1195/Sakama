@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/app_providers.dart';
 import '../../home/domain/day_totals.dart';
+import '../data/user_food_repository.dart';
 import '../domain/barcode_result.dart';
 import '../domain/food.dart';
 
@@ -125,6 +126,33 @@ class _ConfirmFormState extends ConsumerState<_ConfirmForm> {
     }
   }
 
+  /// Keep a scanned product as a saved food — a POINTER, never a copy.
+  ///
+  /// This is the only place a barcode CAN be saved: the `off_foods` id is in
+  /// hand here (`off-<barcode>`, always an OFF row — barcode lookup reads no
+  /// other table), whereas `food_logs` discards it, so the entry sheet has
+  /// nothing to point at and refuses the save instead.
+  ///
+  /// Pointer, not custom, on CLAUDE.md rule 5: copying the macros would put
+  /// ODbL-derived nutrition into `user_foods`, which SYNCS TO OUR SERVER.
+  /// [UserFoodRepository.addPointer] takes no nutrition arguments, so the
+  /// containment holds by the shape of the call, not by remembering to.
+  Future<void> _keep() async {
+    if (_saving) return;
+    final repo = await ref.read(userFoodRepositoryProvider.future);
+    await repo.addPointer(
+      name: widget.food.name,
+      sourceTable: UserFoodRepository.sourceOffFoods,
+      sourceId: widget.food.id,
+      servingLabel: widget.food.defaultServingLabel,
+      servingGrams: double.tryParse(_grams.text.trim()),
+      userId: ref.read(currentUserIdProvider),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Saved "${widget.food.name}" to your foods.')));
+  }
+
   @override
   Widget build(BuildContext context) {
     final f = widget.food;
@@ -169,12 +197,28 @@ class _ConfirmFormState extends ConsumerState<_ConfirmForm> {
               'C ${m.carbG.toStringAsFixed(1)} · '
               'F ${m.fatG.toStringAsFixed(1)}'),
           const SizedBox(height: 16),
-          Semantics(
-            identifier: 'scan-log',
-            child: FilledButton(
-              onPressed: _saving ? null : _save,
-              child: const Text('Log it'),
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Semantics(
+                  identifier: 'scan-log',
+                  child: FilledButton(
+                    onPressed: _saving ? null : _save,
+                    child: const Text('Log it'),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Semantics(
+                identifier: 'scan-keep',
+                button: true,
+                child: TextButton.icon(
+                  icon: const Icon(Icons.bookmark_add_outlined),
+                  label: const Text('Save food'),
+                  onPressed: _saving ? null : _keep,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           // ODbL §4.3: attribution on each public use of the data, not just in

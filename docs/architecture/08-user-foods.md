@@ -41,9 +41,23 @@ mixing ODbL values into per-user rows, which then **sync to our server**.
 | **pointer** | `source_table` + `source_id` + *your* portion | read at display time from `foods` / `off_foods` |
 | **custom** | its own per-100 g values | itself — the user authored them |
 
-A favourite of an OFF product is a **pointer plus a portion**. No ODbL value is duplicated, so nothing
-ODbL-licensed ever reaches the server. The containment is **structural**, not a rule someone must
-remember — which is the only kind that survives.
+A favourite of an OFF product is a **pointer plus a portion**. No ODbL value is duplicated, so no OFF
+nutrition reaches `user_foods` on the server. The containment is **structural**, not a rule someone
+must remember — which is the only kind that survives.
+
+**Be precise about the scope of that claim.** It is *not* true that no ODbL-derived byte ever reaches
+our server: logging a scanned product copies its name and macros into `food_logs`, which syncs.
+[ADR 0014](../adr/0014-off-live-lookup-only.md) accepted that deliberately, on three grounds — the
+rows are private per-user data behind RLS, each is a single insubstantial extract rather than a
+database, and the user is recording their own meal.
+
+`user_foods` is held to the **stricter** standard on purpose, because it differs in kind. A
+`food_logs` row is a historical record that *you ate something on Tuesday*. A `user_foods` row is a
+**reusable food definition**: a name, per-100 g macros, a serving. That is a product catalogue entry.
+Let barcode-derived values in, and `user_foods` becomes, across all users, an OFF-derived
+branded-food table assembled on our infrastructure as a silent by-product of user logging — which is
+almost exactly the **explicit non-goal** ADR 0014 records. The stricter rule here is what keeps that
+non-goal from being reached by accident.
 
 **Enforced by the API shape, not by discipline.** `UserFoodRepository.addPointer()` takes **no
 nutrition parameters at all** — only `sourceTable`, `sourceId`, and the user's portion. A caller
@@ -136,6 +150,23 @@ disagreeing, would be worse than either alone.
    reintroduce the trap.
 
 2. **Ordering: most-used**, since the point is to shorten the common path.
+
+3. **A barcode row is saved at SCAN time, never from the log entry sheet.** Review of #103 found the
+   log-then-save path calling `addCustom()` with the row's macros and no origin guard, so
+   scan → log → *Save food* wrote OFF-derived nutrition into `user_foods` as a **custom** row. The
+   Postgres CHECK does not catch it (custom rows may legitimately carry nutrition), and the sheet's
+   comment claiming "the user authored these numbers" was simply false for that origin.
+
+   The fix is a routing decision rather than a removal. `food_logs` stores **no `off_foods` id**, so
+   by the time a scan reaches the entry sheet the link to its source is already gone and a pointer
+   is impossible to construct — the save must therefore happen at scan time, where the id is in hand
+   and a genuine pointer can be written. That path is also strictly better: a pointer follows OFF
+   corrections instead of freezing a snapshot of them (decision 1).
+
+   The guard is deliberately **narrow**: only `logged_via = 'barcode'` is withdrawn. Manual and Vita
+   rows are the user's own numbers, search rows are USDA (CC0) or our proprietary corpus, and
+   PhotoSnap rows are our own AI estimate — none raise a licence question, and withdrawing the offer
+   from them would be a silent feature loss with no justification.
 
 ## 9. Privacy
 

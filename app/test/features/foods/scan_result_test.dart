@@ -79,6 +79,37 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
   });
 
+  testWidgets('saving a scanned product stores a POINTER, never OFF nutrition',
+      (tester) async {
+    // The licence-critical path (CLAUDE.md rule 5). `user_foods` SYNCS TO OUR
+    // SERVER, so an OFF product may be referenced there but never copied.
+    await tester.binding.setSurfaceSize(const Size(600, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+        harness(MockClient((_) async => http.Response(_productJson(), 200))));
+    await settle(tester, find.bySemanticsIdentifier('scan-keep'));
+
+    await tester.tap(find.bySemanticsIdentifier('scan-keep'));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    final saved = await db.select(db.userFoods).getSingle();
+    expect(saved.kind, 'pointer');
+    expect(saved.sourceTable, 'off_foods');
+    expect(saved.sourceId, 'off-8901719101083');
+    // The guarantee, stated as four assertions so it cannot regress quietly.
+    expect(saved.energyKcal, isNull);
+    expect(saved.proteinG, isNull);
+    expect(saved.carbG, isNull);
+    expect(saved.fatG, isNull);
+    // Your portion is yours, and carries no licence question.
+    expect(saved.servingGrams, 30);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(milliseconds: 50));
+  });
+
   testWidgets('unknown barcode → not-found message, nothing logged',
       (tester) async {
     await tester.pumpWidget(
