@@ -44,11 +44,25 @@ class SyncService {
 
   /// Attach replication. Safe to call anytime: no-ops until the app is
   /// configured, initialized, and signed in.
+  /// How long to wait before retrying a failed sync connection.
+  ///
+  /// PowerSync's default is 5 seconds with NO backoff and no ceiling, which is
+  /// fine for a momentary blip and wasteful for anything longer: an instance
+  /// that is down, deprovisioned (free projects deactivate after a week idle),
+  /// or simply unreachable produces a radio wake-up every 5 seconds for as long
+  /// as the app is open. 30s still reconnects promptly on a real outage while
+  /// costing a sixth of the wake-ups — this is a phone, and battery is a
+  /// first-class performance metric (docs/MOBILE.md).
+  static const retryDelay = Duration(seconds: 30);
+
   Future<void> connect() async {
     final db = _psDb;
     if (db == null || !syncConfigured) return;
     if (Supabase.instance.client.auth.currentSession == null) return;
-    await db.connect(connector: SupabaseConnector());
+    await db.connect(
+      connector: SupabaseConnector(),
+      options: const SyncOptions(retryDelay: retryDelay),
+    );
   }
 
   Future<void> disconnect() async => _psDb?.disconnect();
