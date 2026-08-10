@@ -19,5 +19,21 @@ abstract class Env {
   static final String powersyncUrl = _Env.powersyncUrl;
 
   /// True until real project values are filled in — sync stays disabled.
-  static bool get isConfigured => !supabaseUrl.contains('YOUR-PROJECT');
+  ///
+  /// Checks BOTH endpoints. It previously checked only Supabase, so a build
+  /// with a real Supabase project and a placeholder PowerSync URL counted as
+  /// "configured": `connect()` fired and the client then retried a POST to a
+  /// non-existent host every 5 seconds, forever, on battery, silently. Sync is
+  /// a two-endpoint feature, so both have to be present for it to be on.
+  static bool get isConfigured => configuredWith(supabaseUrl, powersyncUrl);
+
+  /// The rule, extracted so it can be tested. `isConfigured` reads compile-time
+  /// obfuscated fields, so the placeholder cases are unreachable from a test
+  /// without editing .env — which is exactly how the one-endpoint check
+  /// survived unnoticed.
+  static bool configuredWith(String supabase, String powersync) =>
+      supabase.isNotEmpty &&
+      powersync.isNotEmpty &&
+      !supabase.contains('YOUR-PROJECT') &&
+      !powersync.contains('YOUR-INSTANCE');
 }
