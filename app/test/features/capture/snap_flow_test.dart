@@ -98,6 +98,11 @@ void main() {
     for (final (exc, matcher) in [
       (PhotoSnapException('x', noFood: true), isA<SnapNoFood>()),
       (PhotoSnapException('x', budgetExhausted: true), isA<SnapBudgetExhausted>()),
+      // A provider failure is NOT a connectivity failure. Conflating them told
+      // the user to check their connection while the real cause was an
+      // exhausted OpenRouter balance (2026-08-07).
+      (PhotoSnapException('x', providerDown: true), isA<SnapProviderDown>()),
+      (PhotoSnapException('x', signInFailed: true), isA<SnapSignInFailed>()),
       (PhotoSnapException('x'), isA<SnapError>()),
     ]) {
       final c = _container(_FakeSnap(exc), db);

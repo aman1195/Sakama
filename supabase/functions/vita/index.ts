@@ -179,7 +179,12 @@ Deno.serve(async (req) => {
       max_tokens: 500,
     }),
   });
+  // Refund a rejected request (see the 0009 migration): no tokens billed, so
+  // no exchange spent. A 2xx we cannot parse WAS billed and is not refunded.
   if (!orRes.ok) {
+    const detail = await orRes.text().catch(() => "");
+    console.error(`openrouter ${orRes.status} feature=vita :: ${detail.slice(0, 500)}`);
+    if (!byok) await supabase.rpc("refund_ai_usage", { p_feature: "vita" });
     return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
   }
   const or = await orRes.json();

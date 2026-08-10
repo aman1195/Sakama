@@ -172,12 +172,39 @@ Deno.serve(async (req) => {
       max_tokens: converse ? 1000 : 700,
     }),
   });
+  // Upstream failures used to collapse to a bare 502, discarding what the
+  // provider actually said — which turned a two-minute diagnosis into reading
+  // dashboard logs. Log the status and a bounded slice of the body.
+  //
+  // SAFE TO LOG: this is OpenRouter's ERROR RESPONSE, never the request. The
+  // image, the prompt, the user context and the API key are not in it, so no
+  // health data and no secret reaches the log (OWASP M1, CLAUDE.md rule 3).
   if (!orRes.ok) {
+    const detail = await orRes.text().catch(() => "");
+    console.error(
+      `openrouter ${orRes.status} mode=${converse ? "converse" : "analyze"} ` +
+        `image_b64_len=${image.length} byok=${byok ? "yes" : "no"} :: ` +
+        detail.slice(0, 500),
+    );
+    // REFUND: the provider rejected the request, so no tokens were billed and
+    // the user should not lose a daily estimate for our outage. Only this
+    // branch refunds — a 2xx we failed to parse WAS charged upstream (see the
+    // 0009 migration). Best-effort: a failed refund must not turn a provider
+    // error into a 500, so the response below is unconditional.
+    if (!byok) {
+      await supabase.rpc("refund_ai_usage", { p_feature: "photosnap" });
+      if (converse) await supabase.rpc("refund_ai_usage", { p_feature: "vita" });
+    }
     return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
   }
   const or = await orRes.json();
   const content = or?.choices?.[0]?.message?.content;
   if (typeof content !== "string") {
+    // A 200 with no usable content — a different failure from a rejected
+    // request, and previously indistinguishable from one.
+    console.error(
+      `openrouter 200 but no content :: ${JSON.stringify(or).slice(0, 500)}`,
+    );
     return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
   }
 

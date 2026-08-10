@@ -142,7 +142,13 @@ Deno.serve(async (req) => {
       max_tokens: MAX_TOKENS,
     }),
   });
+  // Refund a rejected request (see the 0009 migration). Plan generation has the
+  // tightest cap of the four, so losing one to a provider outage is the most
+  // painful — a user could be locked out of generating a plan all day.
   if (!orRes.ok) {
+    const detail = await orRes.text().catch(() => "");
+    console.error(`openrouter ${orRes.status} feature=plan_gen :: ${detail.slice(0, 500)}`);
+    if (!byok) await supabase.rpc("refund_ai_usage", { p_feature: "plan_gen" });
     return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
   }
   const or = await orRes.json();

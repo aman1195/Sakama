@@ -1,15 +1,32 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../domain/snapped_item.dart';
 
 class PhotoSnapException implements Exception {
   PhotoSnapException(this.message,
-      {this.budgetExhausted = false, this.noFood = false, this.budgetKind});
+      {this.budgetExhausted = false,
+      this.noFood = false,
+      this.budgetKind,
+      this.providerDown = false,
+      this.signInFailed = false});
   final String message;
   final bool budgetExhausted; // daily cap hit (rule 9)
   final bool noFood;          // model saw no food in the frame
+
+  /// The AI provider refused or failed (HTTP 502 from the function). NOT a
+  /// connectivity problem, and the difference matters: on 2026-08-07 an
+  /// exhausted OpenRouter balance (402) surfaced to the user as "check your
+  /// connection", which sent us hunting a network fault for half an hour while
+  /// the real answer was a billing page. An error screen that names the wrong
+  /// cause is worse than a vague one, because it actively misdirects.
+  final bool providerDown;
+
+  /// Could not obtain a session, so the call went out unauthenticated (401).
+  final bool signInFailed;
 
   /// Which cap refused: 'photo' or 'exchange'. Worth distinguishing because a
   /// photos-exhausted user CAN still text-chat — the scarce-first charge order
@@ -95,7 +112,7 @@ class EdgeFunctionPhotoSnap implements PhotoSnapService {
         throw PhotoSnapException('daily photo limit reached',
             budgetExhausted: true);
       }
-      throw PhotoSnapException('gateway error ${e.status}');
+      throw fromStatus(e.status);
     } catch (e) {
       throw PhotoSnapException('network error: $e');
     }
@@ -131,7 +148,7 @@ class EdgeFunctionPhotoSnap implements PhotoSnapService {
         throw PhotoSnapException('daily limit reached',
             budgetExhausted: true, budgetKind: _budgetKind(e.details));
       }
-      throw PhotoSnapException('gateway error ${e.status}');
+      throw fromStatus(e.status);
     } catch (e) {
       throw PhotoSnapException('network error: $e');
     }
@@ -139,6 +156,20 @@ class EdgeFunctionPhotoSnap implements PhotoSnapService {
     final raw = data is String ? data : jsonEncode(data);
     return parseConversation(raw);
   }
+
+  /// Classify a non-429 gateway failure so the UI can say something true.
+  ///
+  /// 502 is the function's own `provider_error`: the AI provider rejected us or
+  /// returned nothing usable. 401 means we never got a session. Everything else
+  /// stays generic rather than guessing — an honest "something went wrong"
+  /// beats a confident wrong cause.
+  @visibleForTesting
+  static PhotoSnapException fromStatus(int? status) => switch (status) {
+        502 => PhotoSnapException('provider unavailable', providerDown: true),
+        401 || 403 =>
+          PhotoSnapException('not signed in', signInFailed: true),
+        _ => PhotoSnapException('gateway error $status'),
+      };
 
   /// Parse + VALIDATE an untrusted converse response. Items go through the SAME
   /// bounds/Atwater discipline as log mode (parseItems); a missing or unusable

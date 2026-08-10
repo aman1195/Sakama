@@ -421,6 +421,17 @@ class CoachController extends Notifier<CoachState> {
     if (e.noFood) {
       return "I couldn't make out any food there — want to tell me what it is?";
     }
+    // "Please try again" is bad advice when retrying cannot work. A provider
+    // failure needs to say so plainly, and must NOT be dressed up as a
+    // connectivity blip the user can fix by moving nearer the router.
+    if (e.providerDown) {
+      return "My food vision is down right now — that's on our side, not your "
+          'connection. Tell me what you ate and I can still help.';
+    }
+    if (e.signInFailed) {
+      return "I couldn't sign in just now, so I can't look at photos. Check "
+          'your connection and try again.';
+    }
     return "I couldn't look at that photo just now — please try again.";
   }
 
