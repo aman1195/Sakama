@@ -8,6 +8,11 @@
 -- Five of eight were burned on requests that never reached a model. A provider
 -- outage would silently cost every user their whole day's allowance.
 --
+-- APPLIES TO ALL FOUR AI FEATURES: photosnap, estimate, vita, plan_gen. The
+-- incident was image-only, but the defect is not: any provider outage would
+-- drain every cap it touched. plan_gen has the tightest cap, so a user could
+-- lose the ability to generate a plan for a whole day to someone else's outage.
+--
 -- THE RULE, and it is narrow on purpose:
 --   refund ONLY when the provider REJECTED the request (non-2xx), because then
 --   no tokens were billed to us either.

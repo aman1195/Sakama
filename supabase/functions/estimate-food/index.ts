@@ -74,7 +74,15 @@ Deno.serve(async (req) => {
       max_tokens: 400,
     }),
   });
+  // Same rule as photosnap (see the 0009 migration): the provider REJECTED the
+  // request, so no tokens were billed and the user must not lose an estimate
+  // for our outage. A 2xx we cannot parse is NOT refunded — that one was
+  // billed. Log the upstream reason: a bare 502 is what made the 2026-08-07
+  // credit exhaustion take half an hour to identify.
   if (!orRes.ok) {
+    const detail = await orRes.text().catch(() => "");
+    console.error(`openrouter ${orRes.status} feature=estimate :: ${detail.slice(0, 500)}`);
+    if (!byok) await supabase.rpc("refund_ai_usage", { p_feature: "estimate" });
     return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
   }
   const or = await orRes.json();
