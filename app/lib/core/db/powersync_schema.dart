@@ -87,6 +87,20 @@ const powersyncSchema = Schema([
     Column.text('title'),
     Column.integer('created_at'),
     Column.integer('updated_at'),
+    Column.text('summary'),
+    Column.integer('summarized_up_to'),
+  ]),
+  // What Vita has learned (ADR 0016 phase 4). Local-only for the same reason
+  // as the conversations it is derived from: the promise is that it never
+  // leaves the phone at rest, and a synced table could not make that promise.
+  Table.localOnly('memory_facts', [
+    Column.text('user_id'),
+    Column.text('kind'),
+    Column.text('content'),
+    Column.real('confidence'),
+    Column.text('source_thread_id'),
+    Column.integer('created_at'),
+    Column.integer('updated_at'),
   ]),
   Table.localOnly('chat_messages', [
     Column.text('thread_id'),

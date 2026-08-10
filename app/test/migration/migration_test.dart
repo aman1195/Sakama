@@ -9,6 +9,7 @@ import 'generated/schema_v3.dart' as v3;
 import 'generated/schema_v4.dart' as v4;
 import 'generated/schema_v5.dart' as v5;
 import 'generated/schema_v6.dart' as v6;
+import 'generated/schema_v7.dart' as v7;
 
 /// The migration harness required by docs/MOBILE.md and docs/REVIEW.md §6.1:
 /// a bad on-device migration destroys user data irrecoverably, so every schema
@@ -183,8 +184,14 @@ void main() {
       "updated_at) VALUES ('pl','P','{}','user_imported',1,1,1)");
     await v5Db.close();
 
+    // Migrates to the CURRENT version, not to 6. Once a table's Dart
+    // definition gains columns, createTable() in an earlier step emits the
+    // NEW shape, so an old database can never be made to match an
+    // intermediate snapshot again. Production only ever migrates to the
+    // latest version anyway; what must be proven is that data survives the
+    // whole journey, which is what this now asserts.
     final db = SakamaDatabase.withExecutor(schema.newConnection());
-    await verifier.migrateAndValidate(db, 6);
+    await verifier.migrateAndValidate(db, 8);
 
     // Every pre-existing row survived (MOBILE.md: a bad migration destroys
     // user data irrecoverably) — including the M4 plan.
@@ -229,8 +236,9 @@ void main() {
       "created_at) VALUES ('m','t','user','hello',0,1)");
     await v6Db.close();
 
+    // To the CURRENT version, for the reason given in the v5 -> v6 test.
     final db = SakamaDatabase.withExecutor(schema.newConnection());
-    await verifier.migrateAndValidate(db, 7);
+    await verifier.migrateAndValidate(db, 8);
 
     // Every pre-existing row survived (MOBILE.md: a bad migration destroys
     // user data irrecoverably) — including the device-local conversation.
@@ -246,13 +254,80 @@ void main() {
     await db.close();
   });
 
-  test('database schema matches the committed v7 snapshot', () async {
+  test('v7 -> v8 adds memory_facts, ALTERS chat_threads, and preserves all data',
+      () async {
+    // The FIRST migration in this database that alters an existing table
+    // rather than only adding new ones, so this test asserts more than
+    // survival: it checks the pre-existing chat_threads VALUES are intact and
+    // that the two added columns take their defaults on old rows.
+    final schema = await verifier.schemaAt(7);
+    final v7Db = v7.DatabaseAtV7(schema.newConnection());
+    await v7Db.customStatement(
+      "INSERT INTO food_logs (id, date, meal, name, energy_kcal, protein_g, "
+      "carb_g, fat_g, logged_via, created_at, updated_at) "
+      "VALUES ('fl','2026-08-06','lunch','dal',180,9,22,6,'quick_add',1,1)");
+    await v7Db.customStatement(
+      "INSERT INTO profiles (id, dob, weight_kg, height_cm, sex, activity, "
+      "goal, diet, cuisine, conditions, onboarding_complete, created_at, "
+      "updated_at) VALUES ('p','1994-01-01',70,175,'male','moderate','maintain',"
+      "'veg','both','',1,1,1)");
+    await v7Db.customStatement(
+      "INSERT INTO water_logs (id, date, amount_ml, created_at, updated_at) "
+      "VALUES ('w','2026-08-06',250,1,1)");
+    await v7Db.customStatement(
+      "INSERT INTO weight_logs (id, date, weight_kg, created_at, updated_at) "
+      "VALUES ('wt','2026-08-06',70.5,1,1)");
+    await v7Db.customStatement(
+      "INSERT INTO user_plans (id, name, config, source, active, created_at, "
+      "updated_at) VALUES ('pl','P','{}','user_imported',1,1,1)");
+    await v7Db.customStatement(
+      "INSERT INTO user_foods (id, name, kind, use_count, created_at, "
+      "updated_at) VALUES ('uf','rajma','custom',3,1,1)");
+    await v7Db.customStatement(
+      "INSERT INTO chat_threads (id, title, created_at, updated_at) "
+      "VALUES ('t','Knee injury',11,22)");
+    await v7Db.customStatement(
+      "INSERT INTO chat_messages (id, thread_id, role, content, synthetic, "
+      "created_at) VALUES ('m','t','user','hello',0,1)");
+    await v7Db.close();
+
+    final db = SakamaDatabase.withExecutor(schema.newConnection());
+    await verifier.migrateAndValidate(db, 8);
+
+    expect((await db.select(db.foodLogs).get()).map((r) => r.id), contains('fl'));
+    expect((await db.select(db.profiles).get()).map((r) => r.id), contains('p'));
+    expect((await db.select(db.waterLogs).get()).map((r) => r.id), contains('w'));
+    expect((await db.select(db.weightLogs).get()).map((r) => r.id), contains('wt'));
+    expect((await db.select(db.userPlans).get()).map((r) => r.id), contains('pl'));
+    expect((await db.select(db.userFoods).get()).map((r) => r.id), contains('uf'));
+    expect((await db.select(db.chatMessages).get()).map((r) => r.id), contains('m'));
+
+    // The ALTERED table: the conversation kept its identity AND its values.
+    // Checking only that the row exists would pass even if ADD COLUMN had
+    // rewritten the table and lost the timestamps the thread list sorts on.
+    final thread = await (db.select(db.chatThreads)
+          ..where((t) => t.id.equals('t')))
+        .getSingle();
+    expect(thread.title, 'Knee injury');
+    expect(thread.createdAt, 11);
+    expect(thread.updatedAt, 22);
+    // New columns take their declared defaults on a pre-existing row: no
+    // summary yet, and nothing summarised so far.
+    expect(thread.summary, isNull);
+    expect(thread.summarizedUpTo, 0);
+
+    // The new table exists and is usable (born empty).
+    expect(await db.select(db.memoryFacts).get(), isEmpty);
+    await db.close();
+  });
+
+  test('database schema matches the committed v8 snapshot', () async {
     // Creates a fresh db from SakamaDatabase's Dart definitions and diffs it
-    // against drift_schemas/drift_schema_v7.json. Fails if the code drifts
+    // against drift_schemas/drift_schema_v8.json. Fails if the code drifts
     // from the committed snapshot without a new schema version + migration.
-    final connection = await verifier.startAt(7);
+    final connection = await verifier.startAt(8);
     final db = SakamaDatabase.withExecutor(connection);
-    await verifier.migrateAndValidate(db, 7);
+    await verifier.migrateAndValidate(db, 8);
     await db.close();
   });
 
