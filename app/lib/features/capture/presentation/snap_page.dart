@@ -71,6 +71,19 @@ class _SnapPageState extends ConsumerState<SnapPage> {
                   '— or add your own AI key (Me → Your own AI key) to go '
                   'unlimited.',
               onRetry: null),
+          SnapProviderDown() => _Retry(
+              id: 'snap-provider-down',
+              icon: Icons.cloud_off_outlined,
+              text: 'Our food AI is unavailable right now. This is on our side, '
+                  'not your connection — please try again later, or add your '
+                  'food manually.',
+              onRetry: null),
+          SnapSignInFailed() => _Retry(
+              id: 'snap-signin-failed',
+              icon: Icons.person_off_outlined,
+              text: "Couldn't sign in, so we can't read your photo. Check your "
+                  'connection and try again, or add it manually.',
+              onRetry: _snap),
           SnapError() => _Retry(
               id: 'snap-error',
               icon: Icons.wifi_off,

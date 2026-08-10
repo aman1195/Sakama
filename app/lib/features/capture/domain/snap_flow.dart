@@ -36,6 +36,21 @@ class SnapError extends SnapState {
   const SnapError();
 }
 
+/// The AI provider failed, which is NOT a connectivity problem. Split out
+/// because [SnapError] renders a "check your connection" message, and on
+/// 2026-08-07 that sent us debugging the network while the real cause was an
+/// exhausted provider balance. Retrying immediately will not help, so this
+/// state deliberately offers no retry-and-hope affordance.
+class SnapProviderDown extends SnapState {
+  const SnapProviderDown();
+}
+
+/// We could not obtain a session, so the request went out unauthenticated.
+/// Also previously indistinguishable from a network failure.
+class SnapSignInFailed extends SnapState {
+  const SnapSignInFailed();
+}
+
 /// The camera/photo permission was denied — a Settings-flavoured message, not
 /// the network-flavoured SnapError (review #57).
 class SnapPermissionDenied extends SnapState {

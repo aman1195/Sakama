@@ -58,6 +58,12 @@ class SnapController extends Notifier<SnapState> {
     if (image == null) return; // user cancelled the camera
     state = const SnapAnalyzing();
     try {
+      // NOTE: ensureSession()'s false is deliberately NOT treated as fatal.
+      // It returns false when `configured` is false EVEN IF a valid session
+      // exists, so an early return here would block calls that would have
+      // succeeded. The authoritative signal is the server's own 401, which
+      // photosnap_service now classifies as signInFailed — what the server
+      // said beats what the client guessed.
       await ref.read(authServiceProvider).ensureSession(); // anon-first
       final byok = await ref.read(byokStoreProvider).read();
       final service = ref.read(photoSnapServiceProvider);
@@ -68,7 +74,11 @@ class SnapController extends Notifier<SnapState> {
           ? const SnapBudgetExhausted()
           : e.noFood
               ? const SnapNoFood()
-              : const SnapError();
+              : e.providerDown
+                  ? const SnapProviderDown()
+                  : e.signInFailed
+                      ? const SnapSignInFailed()
+                      : const SnapError();
     } catch (e) {
       debugPrint('snap failed: $e');
       state = const SnapError();

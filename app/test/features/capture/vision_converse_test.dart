@@ -13,6 +13,35 @@ String _resp({
     '{"answer":"$answer","description":"$description","items":$items}';
 
 void main() {
+  group('gateway failures name the RIGHT cause', () {
+    // 2026-08-07: OpenRouter returned 402 (out of credits) on every image
+    // request. The function turned that into a 502, and the app told the user
+    // to check their connection — so we debugged the network for half an hour
+    // while the real fix was a billing page. Wrong cause is worse than vague.
+    test('502 is a provider failure, NOT a connectivity failure', () {
+      final e = EdgeFunctionPhotoSnap.fromStatus(502);
+      expect(e.providerDown, isTrue);
+      expect(e.signInFailed, isFalse);
+      expect(e.budgetExhausted, isFalse,
+          reason: 'a provider outage is not the user spending their quota');
+    });
+
+    test('401/403 is a sign-in failure', () {
+      for (final s in [401, 403]) {
+        final e = EdgeFunctionPhotoSnap.fromStatus(s);
+        expect(e.signInFailed, isTrue, reason: 'status $s');
+        expect(e.providerDown, isFalse, reason: 'status $s');
+      }
+    });
+
+    test('an unknown status stays generic rather than guessing', () {
+      final e = EdgeFunctionPhotoSnap.fromStatus(418);
+      expect(e.providerDown, isFalse);
+      expect(e.signInFailed, isFalse);
+      expect(e.budgetExhausted, isFalse);
+    });
+  });
+
   group('accepts a well-formed conversation', () {
     test('answer, description and loggable items all come through', () {
       final c = EdgeFunctionPhotoSnap.parseConversation(_resp());
