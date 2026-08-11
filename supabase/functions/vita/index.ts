@@ -22,6 +22,31 @@ const DAILY_CAP = 30;   // coach turns/user/day — text is cheap, conversation 
 /// every N turns, not per message.
 const EXTRACT_CAP = 12;
 
+// EXTRACTION RUNS ON A DIFFERENT GATEWAY (docs/research/model-bakeoff-2026-08.md).
+// ModelBeat is OpenAI-compatible, so this is a base-URL + key swap, and the
+// spike showed its models are NOT good enough for vision — but extraction is
+// text-only, structured, background work where a miss costs nothing. Keeping
+// it off OpenRouter leaves that balance serving only PhotoSnap, the one path
+// where the model demonstrably matters.
+//
+// Configurable per feature ON PURPOSE: ModelBeat is a beta endpoint, so an
+// outage there must degrade extraction alone, never the whole app. Unset the
+// secret and this falls back to OpenRouter with no deploy.
+const MODELBEAT_URL = "https://api.beta.modelbeat.ai/v1/chat/completions";
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+// deepseek-v3.2, chosen on evidence (2026-08-11, five-turn transcript fixture):
+// all of qwen3-32b, glm-4.7-flash and deepseek-v3.2 extracted the same three
+// correct facts and all correctly REFUSED to remember "I had dal chawal for
+// lunch today" (a diary entry, not a memory) — the hardest instruction in the
+// prompt. Two things separated them:
+//   - qwen3-32b and glm-4.7-flash wrap output in ```json fences DESPITE
+//     response_format: json_object; deepseek does not.
+//   - glm-4.7-flash reports confidence 1.0 for everything, which is useless
+//     for a ranking that sorts on confidence.
+// kimi-k2-thinking returned null content entirely (a reasoning model) and is
+// unusable here without extra handling.
+const EXTRACT_MODEL = Deno.env.get("MODELBEAT_EXTRACT_MODEL") || "deepseek-v3.2";
+
 /// Distil a transcript into durable facts. Deliberately NOT the coach persona:
 /// this call has one job, and mixing it with conversation degrades both on a
 /// cheap model (decision 5 is why extraction is a separate pass at all).
@@ -219,14 +244,24 @@ Deno.serve(async (req) => {
     ? `${PERSONA}\n\n--- The user's data right now ---\n${context.slice(0, 4000)}`
     : PERSONA;
 
-  const orRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  // BYOK is always the user's own OpenRouter key, so it pins the OpenRouter
+  // path regardless of mode — we must never spend a user's key on a gateway
+  // they did not choose.
+  const mbKey = Deno.env.get("MODELBEAT_API_KEY");
+  const useModelBeat = extractMode && !byok && !!mbKey;
+  const endpoint = useModelBeat ? MODELBEAT_URL : OPENROUTER_URL;
+  const upstreamKey = byok ||
+    (useModelBeat ? mbKey : Deno.env.get("OPENROUTER_API_KEY"));
+  const upstreamModel = useModelBeat ? EXTRACT_MODEL : MODEL;
+
+  const orRes = await fetch(endpoint, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${byok || Deno.env.get("OPENROUTER_API_KEY")}`,
+      "Authorization": `Bearer ${upstreamKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: MODEL,
+      model: upstreamModel,
       messages: [{ role: "system", content: system }, ...clean],
       // Extraction must NOT be given tools: its job is to distil, and a
       // background pass that could propose a write would be a way to log food
@@ -249,6 +284,26 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
   }
   const or = await orRes.json();
+
+  // FAIL CLOSED ON A SILENT MODEL SWAP. ModelBeat returns HTTP 200 served by a
+  // DIFFERENT model when a pin is unrecognised or retired — no error, no
+  // warning field (their API.md §4.3; reproduced 2026-08-11: asking for
+  // "google/gemini-2.5-flash" was served by ministral-3-8b). Without this
+  // check, a retired pin would silently change what distils a user's health
+  // data, and the first symptom would be worse memories months later.
+  //
+  // A 502 here costs one skipped extraction, which is invisible by design.
+  if (useModelBeat) {
+    const served = or?.extra_fields?.resolved_model_used;
+    if (typeof served === "string" && !served.includes(EXTRACT_MODEL)) {
+      console.error(
+        `modelbeat SILENT FALLBACK: pinned ${EXTRACT_MODEL}, served ${served}`,
+      );
+      await supabase.rpc("refund_ai_usage", { p_feature: "memory" });
+      return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
+    }
+  }
+
   const msg = or?.choices?.[0]?.message;
   const reply = typeof msg?.content === "string" ? msg.content : "";
 

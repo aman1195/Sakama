@@ -57,6 +57,15 @@ def _post(url: str, headers: dict, payload: dict, timeout: int = 120) -> dict:
         return json.loads(r.read().decode())
 
 
+# ModelBeat (docs/API.md) is OpenAI-compatible, so it reuses the OpenRouter
+# path with a different base URL. Its catalog has no Gemini, and an
+# unrecognised pin SILENTLY falls back to another model with HTTP 200 — so
+# every call records resolved_model_used and the runner refuses to score a
+# response served by a model we did not ask for.
+MODELBEAT_URL = "https://api.beta.modelbeat.ai/v1/chat/completions"
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+
 def call_openrouter(model: str, image: Path, api_key: str) -> str:
     body = {
         "model": model,
@@ -82,7 +91,13 @@ def call_openrouter(model: str, image: Path, api_key: str) -> str:
         "HTTP-Referer": "https://sakama.app",
         "X-Title": "Sakama PhotoSnap spike",
     }
-    resp = _post("https://openrouter.ai/api/v1/chat/completions", headers, body)
+    url = MODELBEAT_URL if api_key.startswith("mb_") else OPENROUTER_URL
+    resp = _post(url, headers, body)
+    served = (resp.get("extra_fields") or {}).get("resolved_model_used")
+    if served and model.split("/")[-1] not in served:
+        raise RuntimeError(
+            f"SILENT FALLBACK: asked for {model!r}, served by {served!r}. "
+            "Scoring this would attribute another model's accuracy to it.")
     return resp["choices"][0]["message"]["content"]
 
 
@@ -126,7 +141,7 @@ def main() -> int:
     ap.add_argument("--provider", choices=["openrouter", "gemini"], help="force a provider")
     args = ap.parse_args()
 
-    or_key = os.environ.get("OPENROUTER_API_KEY")
+    or_key = os.environ.get("MODELBEAT_API_KEY") or os.environ.get("OPENROUTER_API_KEY")
     gem_key = os.environ.get("GEMINI_API_KEY")
     if not or_key and not gem_key:
         print("ERROR: set OPENROUTER_API_KEY (recommended) or GEMINI_API_KEY. See the docstring.")

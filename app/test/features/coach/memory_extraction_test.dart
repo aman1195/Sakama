@@ -59,6 +59,26 @@ void main() {
               'a summary wearing a fact\'s clothes');
     });
 
+    test('a markdown-fenced reply is still parsed', () {
+      // Measured 2026-08-11: qwen3-32b and glm-4.7-flash both fence their
+      // output despite response_format: json_object. Without de-fencing,
+      // jsonDecode throws, parse returns empty, and memory silently never
+      // populates — a feature that looks healthy while learning nothing.
+      const fenced = '```json\n'
+          '{"facts":[{"kind":"constraint","content":"Lactose intolerant",'
+          '"confidence":0.9}],"summary":"Talked about dairy."}\n```';
+      final e = EdgeFunctionMemoryExtractor.parse(fenced);
+      expect(e.facts.single.content, 'Lactose intolerant');
+      expect(e.facts.single.kind, 'constraint');
+      expect(e.summary, 'Talked about dairy.');
+    });
+
+    test('a bare ``` fence with no language tag also parses', () {
+      final e = EdgeFunctionMemoryExtractor.parse(
+          '```\n{"facts":[],"summary":"ok"}\n```');
+      expect(e.summary, 'ok');
+    });
+
     test('malformed JSON yields nothing rather than throwing', () {
       // Extraction is background work; a provider hiccup must never surface.
       expect(EdgeFunctionMemoryExtractor.parse('not json').isEmpty, isTrue);

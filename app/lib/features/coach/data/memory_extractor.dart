@@ -73,7 +73,7 @@ class EdgeFunctionMemoryExtractor implements MemoryExtractor {
   static Extraction parse(String raw) {
     Map<String, dynamic> j;
     try {
-      final d = jsonDecode(raw);
+      final d = jsonDecode(_unfence(raw));
       if (d is! Map) return const Extraction();
       j = d.cast<String, dynamic>();
     } catch (_) {
@@ -105,6 +105,25 @@ class EdgeFunctionMemoryExtractor implements MemoryExtractor {
           ? summary.trim().substring(0, summary.trim().length.clamp(0, 600))
           : null,
     );
+  }
+
+  /// Strip a markdown code fence if the model wrapped its JSON in one.
+  ///
+  /// NOT hypothetical: measured 2026-08-11, `qwen3-32b` and `glm-4.7-flash`
+  /// both fence their output DESPITE being asked for `response_format:
+  /// json_object`. Without this, jsonDecode throws, parse returns an empty
+  /// Extraction, and memory silently never populates — a feature that appears
+  /// to work (no errors anywhere) while learning nothing. Exactly the kind of
+  /// quiet failure that is hard to notice and harder to diagnose.
+  static String _unfence(String raw) {
+    final t = raw.trim();
+    if (!t.startsWith('```')) return t;
+    final firstNewline = t.indexOf('\n');
+    if (firstNewline < 0) return t;
+    var body = t.substring(firstNewline + 1);
+    final close = body.lastIndexOf('```');
+    if (close >= 0) body = body.substring(0, close);
+    return body.trim();
   }
 
   /// Non-finite values must be rejected at coercion, not by a range check:
