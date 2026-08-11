@@ -16,6 +16,7 @@ import '../features/plans/presentation/plans_page.dart';
 import '../features/capture/presentation/snap_page.dart';
 import '../features/foods/presentation/scan_page.dart';
 import '../features/settings/presentation/ai_privacy_page.dart';
+import '../features/coach/presentation/memory_page.dart';
 import '../features/settings/presentation/byok_page.dart';
 import '../features/settings/presentation/data_sources_page.dart';
 
@@ -62,6 +63,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/snap', builder: (_, _) => const SnapPage()),
       GoRoute(path: '/byok', builder: (_, _) => const ByokPage()),
       GoRoute(path: '/ai-privacy', builder: (_, _) => const AiPrivacyPage()),
+      GoRoute(path: '/memory', builder: (_, _) => const MemoryPage()),
       GoRoute(
         path: '/add',
         builder: (context, state) {

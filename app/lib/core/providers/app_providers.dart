@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../features/capture/data/food_log_repository.dart';
 import '../../features/capture/data/photosnap_service.dart';
 import '../../features/coach/data/chat_repository.dart';
+import '../../features/coach/data/memory_extractor.dart';
+import '../../features/coach/data/memory_repository.dart';
 import '../../features/coach/data/vita_service.dart';
 import '../../features/foods/data/food_repository.dart';
 import '../../features/foods/data/user_food_repository.dart';
@@ -52,6 +54,13 @@ final authServiceProvider = Provider<AuthService>((ref) {
   auth.onIdentityChanged = () async {
     final repo = await ref.read(chatRepositoryProvider.future);
     await repo.deleteAll();
+    // Memory is DISTILLED health data — the most sensitive thing on the
+    // device — so it must be dropped on the same signal. Blanket, not
+    // user-scoped: at identity-change time the departing uid is precisely what
+    // has just gone away, so forgetAll(oldId) would leave rows behind in
+    // exactly the case this exists to handle (review of #106).
+    final memory = await ref.read(memoryRepositoryProvider.future);
+    await memory.deleteAll();
   };
   return auth;
 });
@@ -110,6 +119,26 @@ final chatRepositoryProvider = FutureProvider<ChatRepository>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return ChatRepository(db);
 });
+
+/// What Vita has learned (ADR 0016 phase 4). DEVICE-LOCAL, like the
+/// conversations it is derived from.
+final memoryRepositoryProvider =
+    FutureProvider<MemoryRepository>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return MemoryRepository(db);
+});
+
+/// Everything Vita has learned, for the memory screen. Most useful first.
+final memoryFactsProvider = StreamProvider<List<MemoryFact>>((ref) async* {
+  final repo = await ref.watch(memoryRepositoryProvider.future);
+  yield* repo.watchAll(ref.watch(currentUserIdProvider));
+});
+
+/// Distils a transcript into durable facts. Behind an interface so an
+/// on-device implementation (Apple Foundation Models) can replace the Edge
+/// Function without touching a caller.
+final memoryExtractorProvider =
+    Provider<MemoryExtractor>((ref) => EdgeFunctionMemoryExtractor());
 
 /// User plans store (M4). Offline-first over the synced `user_plans` table.
 final planRepositoryProvider = FutureProvider<PlanRepository>((ref) async {
