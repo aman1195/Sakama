@@ -164,6 +164,18 @@ class ChatThreads extends Table {
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()(); // last activity; thread list sorts on this
 
+  /// Rolling summary of this thread (ADR 0016 decision 4), so a long
+  /// conversation can be carried into the prompt without resending every turn.
+  /// Regenerated rather than corrected, which is why it lives here as a column
+  /// rather than in memory_facts: it is derived state, not something the user
+  /// curates.
+  TextColumn get summary => text().nullable()();
+
+  /// Message count at the last extraction. Extraction is batched every N turns
+  /// (decision 5), and this is what makes "N turns since last time" answerable
+  /// without counting rows on every send.
+  IntColumn get summarizedUpTo => integer().withDefault(const Constant(0))();
+
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -181,6 +193,51 @@ class ChatMessages extends Table {
   TextColumn get content => text()();
   BoolColumn get synthetic => boolean().withDefault(const Constant(false))();
   IntColumn get createdAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('MemoryFact')
+/// What Vita has learned about you (ADR 0016 decisions 4 and 10).
+///
+/// LOCAL-ONLY, like the conversations it is derived from: no Supabase mirror,
+/// no RLS policy, no sync-streams entry. The claim we make to users is that
+/// what Vita remembers never leaves the phone at rest, and that is only true
+/// if the table cannot sync — a promise enforced by schema, not by policy.
+///
+/// Deletion is the ONLY correction mechanism (decision 10). There is no
+/// free-text edit, because a user-edited fact and an extracted one would be
+/// indistinguishable downstream, and provenance is the whole point of
+/// [sourceThreadId] — a user who sees a wrong fact needs to be able to find
+/// the conversation it came from.
+class MemoryFacts extends Table {
+  TextColumn get id => text()();
+  TextColumn get userId => text().nullable()();
+
+  /// preference | constraint | routine | goal | observation.
+  /// A closed vocabulary so the UI can group and the prompt can prioritise —
+  /// a constraint ("lactose intolerant") must outrank an observation.
+  TextColumn get kind => text()();
+
+  /// One self-contained statement, e.g. "Prefers home-cooked over restaurant".
+  /// Self-contained on purpose: a fragment needing its thread for meaning would
+  /// be useless once that thread is deleted.
+  TextColumn get content => text()();
+
+  /// 0..1, from the extractor. Low-confidence facts are stored but ranked below
+  /// confident ones rather than discarded — the user can see and delete them,
+  /// which is more honest than silently dropping what we half-heard.
+  RealColumn get confidence => real().withDefault(const Constant(0.5))();
+
+  /// The thread this was learned from. NULLABLE, and deliberately not a foreign
+  /// key: deleting a thread must not cascade away what was learned from it
+  /// (decision 9 keeps threads anyway, but a user who deletes one thread does
+  /// not thereby intend to make Vita forget them).
+  TextColumn get sourceThreadId => text().nullable()();
+
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -253,7 +310,7 @@ class OffFoods extends Table {
 
 @DriftDatabase(
     tables: [FoodLogs, Profiles, WaterLogs, WeightLogs, UserPlans, UserFoods,
-      ChatThreads, ChatMessages, Foods, OffFoods])
+      ChatThreads, ChatMessages, MemoryFacts, Foods, OffFoods])
 class SakamaDatabase extends _$SakamaDatabase {
   SakamaDatabase()
       : managedExternally = false,
@@ -271,7 +328,7 @@ class SakamaDatabase extends _$SakamaDatabase {
   final bool managedExternally;
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => managedExternally
@@ -313,6 +370,28 @@ class SakamaDatabase extends _$SakamaDatabase {
               // Favourites + custom foods (#35). Additive — no existing row is
               // touched. Synced, so it also has a Supabase mirror + RLS.
               await m.createTable(userFoods);
+            }
+            if (from < 8) {
+              // ADR 0016 phase 4: on-device memory. Local-only, like the
+              // conversations it derives from.
+              await m.createTable(memoryFacts);
+            }
+            // FIRST migration here to ALTER an existing table rather than only
+            // add new ones. Both columns are additive and safe by construction:
+            // `summary` is nullable and `summarizedUpTo` has a default, so
+            // every existing chat_threads row stays valid and none is
+            // rewritten.
+            //
+            // THE `from >= 6` GUARD IS LOAD-BEARING, and its absence failed
+            // every migration test with "duplicate column name: summary".
+            // createTable() emits the CURRENT Dart definition, so a device
+            // coming from below v6 gets chat_threads built at step 6 WITH these
+            // columns already present — adding them again is an error that
+            // aborts the whole upgrade. Only a device that already has the
+            // v6/v7 shape of the table needs them added.
+            if (from >= 6 && from < 8) {
+              await m.addColumn(chatThreads, chatThreads.summary);
+              await m.addColumn(chatThreads, chatThreads.summarizedUpTo);
             }
           },
         );
