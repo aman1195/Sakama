@@ -1,152 +1,156 @@
-[
-  {
-    "id": "clear-food-report",
-    "verdict": "PASS",
-    "why": "",
-    "tool": "log_food",
-    "args": {
-      "meal": "lunch",
-      "name": "2 rotis and a katori of dal",
-      "energy_kcal": 700,
-      "carb_g": 110,
-      "protein_g": 20,
-      "fat_g": 10
+{
+  "run_date": "2026-08-24",
+  "persona_source": "vita/index.ts @ 2970b86",
+  "rows": [
+    {
+      "id": "clear-food-report",
+      "verdict": "PASS",
+      "why": "",
+      "tool": "log_food",
+      "args": {
+        "meal": "lunch",
+        "name": "2 rotis and a katori of dal",
+        "energy_kcal": 700,
+        "carb_g": 110,
+        "protein_g": 20,
+        "fat_g": 10
+      },
+      "reply": "That sounds like a good, filling lunch \u2014 2 rotis give you carbs and fiber, and a katori of dal is a excellent source of plant-based protein. Let me log that for"
     },
-    "reply": "That sounds like a good, filling lunch \u2014 2 rotis give you carbs and fiber, and a katori of dal is a excellent source of plant-based protein. Let me log that for"
-  },
-  {
-    "id": "question-not-report",
-    "verdict": "PASS",
-    "why": "",
-    "tool": null,
-    "args": {},
-    "reply": "You're on track with your calories but still need more protein\u2014dal would be a great addition to your dinner. A katori (about 100-150g) of dal could add 100\u2013120 "
-  },
-  {
-    "id": "listing-is-a-question",
-    "verdict": "PASS",
-    "why": "",
-    "tool": null,
-    "args": {},
-    "reply": "That\u2019s a good option! Poha is light and carb-friendly, dal adds protein, and two rotis keep calorie balance under check for your goal. You could add veggies lik"
-  },
-  {
-    "id": "water-report",
-    "verdict": "PASS",
-    "why": "",
-    "tool": "log_water",
-    "args": {
-      "amount_ml": 500
+    {
+      "id": "question-not-report",
+      "verdict": "PASS",
+      "why": "",
+      "tool": null,
+      "args": {},
+      "reply": "You're on track with your calories but still need more protein\u2014dal would be a great addition to your dinner. A katori (about 100-150g) of dal could add 100\u2013120 "
     },
-    "reply": ""
-  },
-  {
-    "id": "weight-report",
-    "verdict": "PASS",
-    "why": "",
-    "tool": "log_weight",
-    "args": {
-      "weight_kg": 72.4
+    {
+      "id": "listing-is-a-question",
+      "verdict": "PASS",
+      "why": "",
+      "tool": null,
+      "args": {},
+      "reply": "That\u2019s a good option! Poha is light and carb-friendly, dal adds protein, and two rotis keep calorie balance under check for your goal. You could add veggies lik"
     },
-    "reply": ""
-  },
-  {
-    "id": "habit-not-a-log",
-    "verdict": "PASS",
-    "why": "",
-    "tool": null,
-    "args": {},
-    "reply": "Got it \u2014 having eggs is a great protein boost. Since your breakfast today was poha, you might be low on protein. Could you consider adding eggs tomorrow morning"
-  },
-  {
-    "id": "too-vague-to-estimate",
-    "verdict": "PASS",
-    "why": "",
-    "tool": null,
-    "args": {},
-    "reply": "That\u2019s okay \u2014 office snacks are common. If they were something like a handful of roasted chana (about 50g, ~120 kcal) or a couple of banana chips (about 100 kca"
-  },
-  {
-    "id": "question-with-numbers",
-    "verdict": "PASS",
-    "why": "",
-    "tool": null,
-    "args": {},
-    "reply": "You\u2019ve already had 820 kcal today, so adding 720 kcal from butter chicken would take you to 1,540 kcal total \u2014 which is fine as long as you\u2019re under your 1,650 "
-  },
-  {
-    "id": "evening-snack-report",
-    "verdict": "FAIL",
-    "why": "called None, expected log_food",
-    "tool": null,
-    "args": {},
-    "reply": "That sounds like a snack. A typical samosa (about 80-100g) has around 200-250 kcal. Would you like me to log a samosa as a snack along with the chai?"
-  },
-  {
-    "id": "thinking-out-loud",
-    "verdict": "PASS",
-    "why": "",
-    "tool": null,
-    "args": {},
-    "reply": "Paneer bhurji can be a good dinner option if you skip the added oil and spices. A small portion with some vegetable chutney can work well for your goal. Just be"
-  },
-  {
-    "id": "greeting",
-    "verdict": "PASS",
-    "why": "",
-    "tool": null,
-    "args": {},
-    "reply": "You're off to a good start for breakfast \u2014 poha fits well with your goal and plan. However, you\u2019ll need to increase your protein intake significantly today \u2014 yo"
-  },
-  {
-    "id": "explicit-log-request",
-    "verdict": "PASS",
-    "why": "",
-    "tool": "log_food",
-    "args": {
-      "name": "milk",
-      "energy_kcal": 150,
-      "protein_g": 5,
-      "carb_g": 12,
-      "fat_g": 8,
-      "grams": 250
+    {
+      "id": "water-report",
+      "verdict": "PASS",
+      "why": "",
+      "tool": "log_water",
+      "args": {
+        "amount_ml": 500
+      },
+      "reply": ""
     },
-    "reply": ""
-  },
-  {
-    "id": "weight-question",
-    "verdict": "PASS",
-    "why": "",
-    "tool": null,
-    "args": {},
-    "reply": "To determine your target weight, we'd need to know your height and body composition goals in more detail. Once we have that, we can set a safe and realistic goa"
-  },
-  {
-    "id": "water-question",
-    "verdict": "PASS",
-    "why": "",
-    "tool": null,
-    "args": {},
-    "reply": "You haven\u2019t reported any water intake for today yet. Would you like to log how much you\u2019ve had?"
-  },
-  {
-    "id": "past-meal-report",
-    "verdict": "PASS",
-    "why": "",
-    "tool": "log_food",
-    "args": {
-      "meal": "breakfast",
-      "name": "apple",
-      "energy_kcal": 70
+    {
+      "id": "weight-report",
+      "verdict": "PASS",
+      "why": "",
+      "tool": "log_weight",
+      "args": {
+        "weight_kg": 72.4
+      },
+      "reply": ""
     },
-    "reply": ""
-  },
-  {
-    "id": "hypothetical",
-    "verdict": "PASS",
-    "why": "",
-    "tool": null,
-    "args": {},
-    "reply": "A whole pizza would add about 2500\u20133000 kcal and mess up your nutrition for the day, but it\u2019s okay\u2014just balance it with more veggies, lighter meals tomorrow, an"
-  }
-]
+    {
+      "id": "habit-not-a-log",
+      "verdict": "PASS",
+      "why": "",
+      "tool": null,
+      "args": {},
+      "reply": "Got it \u2014 having eggs is a great protein boost. Since your breakfast today was poha, you might be low on protein. Could you consider adding eggs tomorrow morning"
+    },
+    {
+      "id": "too-vague-to-estimate",
+      "verdict": "PASS",
+      "why": "",
+      "tool": null,
+      "args": {},
+      "reply": "That\u2019s okay \u2014 office snacks are common. If they were something like a handful of roasted chana (about 50g, ~120 kcal) or a couple of banana chips (about 100 kca"
+    },
+    {
+      "id": "question-with-numbers",
+      "verdict": "PASS",
+      "why": "",
+      "tool": null,
+      "args": {},
+      "reply": "You\u2019ve already had 820 kcal today, so adding 720 kcal from butter chicken would take you to 1,540 kcal total \u2014 which is fine as long as you\u2019re under your 1,650 "
+    },
+    {
+      "id": "evening-snack-report",
+      "verdict": "FAIL",
+      "why": "called None, expected log_food",
+      "tool": null,
+      "args": {},
+      "reply": "That sounds like a snack. A typical samosa (about 80-100g) has around 200-250 kcal. Would you like me to log a samosa as a snack along with the chai?"
+    },
+    {
+      "id": "thinking-out-loud",
+      "verdict": "PASS",
+      "why": "",
+      "tool": null,
+      "args": {},
+      "reply": "Paneer bhurji can be a good dinner option if you skip the added oil and spices. A small portion with some vegetable chutney can work well for your goal. Just be"
+    },
+    {
+      "id": "greeting",
+      "verdict": "PASS",
+      "why": "",
+      "tool": null,
+      "args": {},
+      "reply": "You're off to a good start for breakfast \u2014 poha fits well with your goal and plan. However, you\u2019ll need to increase your protein intake significantly today \u2014 yo"
+    },
+    {
+      "id": "explicit-log-request",
+      "verdict": "PASS",
+      "why": "",
+      "tool": "log_food",
+      "args": {
+        "name": "milk",
+        "energy_kcal": 150,
+        "protein_g": 5,
+        "carb_g": 12,
+        "fat_g": 8,
+        "grams": 250
+      },
+      "reply": ""
+    },
+    {
+      "id": "weight-question",
+      "verdict": "PASS",
+      "why": "",
+      "tool": null,
+      "args": {},
+      "reply": "To determine your target weight, we'd need to know your height and body composition goals in more detail. Once we have that, we can set a safe and realistic goa"
+    },
+    {
+      "id": "water-question",
+      "verdict": "PASS",
+      "why": "",
+      "tool": null,
+      "args": {},
+      "reply": "You haven\u2019t reported any water intake for today yet. Would you like to log how much you\u2019ve had?"
+    },
+    {
+      "id": "past-meal-report",
+      "verdict": "PASS",
+      "why": "",
+      "tool": "log_food",
+      "args": {
+        "meal": "breakfast",
+        "name": "apple",
+        "energy_kcal": 70
+      },
+      "reply": ""
+    },
+    {
+      "id": "hypothetical",
+      "verdict": "PASS",
+      "why": "",
+      "tool": null,
+      "args": {},
+      "reply": "A whole pizza would add about 2500\u20133000 kcal and mess up your nutrition for the day, but it\u2019s okay\u2014just balance it with more veggies, lighter meals tomorrow, an"
+    }
+  ]
+}

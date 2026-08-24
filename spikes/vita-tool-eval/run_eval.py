@@ -46,7 +46,11 @@ TOOLS = [
 
 def persona() -> str:
     src = (ROOT / "supabase/functions/vita/index.ts").read_text()
-    return src.split("const PERSONA =\n  `")[1].split("`;")[0]
+    parts = src.split("const PERSONA =\n  `")
+    # Fails LOUD if the TS declaration is reformatted — a confusing IndexError
+    # two lines later would send the next person hunting in the wrong file.
+    assert len(parts) == 2, "PERSONA declaration in vita/index.ts changed shape; update this split"
+    return parts[1].split("`;")[0]
 
 
 def call(model: str, message: str, context: str, key: str, url: str) -> dict:
@@ -105,7 +109,13 @@ def main() -> int:
             except Exception as e:  # noqa: BLE001
                 rows.append({"id": f["id"], "verdict": "ERROR", "why": f"{type(e).__name__}: {e}"})
             time.sleep(0.5)
-        out.write_text(json.dumps(rows, indent=2))
+        out.write_text(json.dumps({
+            # Point-in-time evidence must say WHEN: these age silently against
+            # the live PERSONA otherwise (review of #114).
+            "run_date": time.strftime("%Y-%m-%d"),
+            "persona_source": "supabase/functions/vita/index.ts (read at run time)",
+            "rows": rows,
+        }, indent=2))
         results[model] = rows
 
     print(f"\n{'model':28} {'pass':>5} {'fail':>5} {'err':>4}   failures")
