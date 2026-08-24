@@ -90,7 +90,50 @@ now de-fences, with tests.
    never built). Moving them on the strength of a vision bake-off would be exactly the assumption
    this document exists to avoid.
 
-## 5. Limits of this evidence
+## 5. RULE-3 GATE — must be cleared before `MODELBEAT_API_KEY` is set in production
+
+Raised by the re-review of #107, and it is the right call. **Extraction forwards the conversation
+turns themselves**, not just the distilled facts: the `messages` array is the raw Vita dialogue —
+dietary constraints, conditions, goals. That is the most sensitive text in the app, and
+[CLAUDE.md](../../CLAUDE.md) rule 3 requires a **paid tier that does not train on data** for anything
+touching it.
+
+**The code defaults to compliant.** With `MODELBEAT_API_KEY` unset, extraction runs on OpenRouter
+exactly as before. So the code is safe to merge; what is gated is *enabling* it.
+
+### Evidence that exists
+
+| Source | Statement |
+|---|---|
+| ModelBeat API.md §8 | "**What is not [recorded]:** prompt and response bodies. There are no columns for them in the schema." |
+| ModelBeat API.md §5 | All twelve models are "served through **AWS Bedrock** in `us-west-2`" |
+| ModelBeat API.md §6 | Billing is a **prepaid balance**, i.e. a paid product, not a free consumer tier |
+
+That is a genuinely favourable chain: a gateway that does not store bodies, in front of a provider
+whose enterprise terms are strong on not training against customer content.
+
+### What is NOT yet established, and must be
+
+1. **The tier we are actually on.** Credits were *granted by the ModelBeat team*. Granted credits on
+   a prepaid product are not obviously the same as a contracted paid tier, and rule 3 turns on that
+   distinction. Needs confirming in writing.
+2. **AWS Bedrock's data terms, cited from source.** A gateway inherits its provider's behaviour, so
+   "ModelBeat does not log bodies" is necessary but not sufficient. The Bedrock terms for the
+   specific models used must be read and cited, not assumed.
+3. **Which upstream actually serves `deepseek-v3.2`.** `resolved_model_used` returns
+   `deepseek.v3.2`, consistent with Bedrock, but the responsible legal entity should be named.
+4. **The privacy data inventory must list ModelBeat as a recipient of health-derived data**
+   (ties to #64/#67, alongside the active-plan-context item). Adding a sub-processor for health data
+   is a disclosure obligation, not a configuration change.
+
+### A name collision worth stating
+
+The `api.beta.modelbeat.ai` **gateway** in this document is a different thing from the **ModelBeat
+web project** referenced elsewhere in our docs as a *process* reference. Do not conflate them. If
+they are the same organisation, question 1 above can probably be answered directly; if not, it needs
+the upstream trace.
+
+## 6. Limits of this evidence
 
 - **22 web photos, not user photos** — the Phase 0 caveat still applies.
 - **One extraction fixture.** Enough to separate fencing and calibration, not enough to rank

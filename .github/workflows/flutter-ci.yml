@@ -42,3 +42,21 @@ jobs:
       - name: Tests (includes test/migration — mandatory per docs/MOBILE.md)
         working-directory: app
         run: flutter test
+
+  # The Edge Functions had NO automated coverage until #107: `deno check` was
+  # only ever run by hand, and a hand-run check is one someone forgets. These
+  # functions hold the AI budget enforcement, the key handling (rule 3), and
+  # the silent-model-swap guard — the last of which shipped failing OPEN
+  # precisely because nothing tested it.
+  #
+  # No path filter, for the reason given at the top of this file.
+  edge-functions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with: {deno-version: v2.x}
+      - name: Type-check every function
+        run: deno check supabase/functions/*/index.ts supabase/functions/_shared/*.ts
+      - name: Unit tests
+        run: deno test supabase/functions/_shared/

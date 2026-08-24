@@ -12,6 +12,7 @@
 // server-side only (rule 3).
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { servedModelVerified } from "../_shared/model_guard.ts";
 
 const DAILY_CAP = 30;   // coach turns/user/day — text is cheap, conversation matters
 
@@ -293,11 +294,19 @@ Deno.serve(async (req) => {
   // data, and the first symptom would be worse memories months later.
   //
   // A 502 here costs one skipped extraction, which is invisible by design.
+  // ABSENT COUNTS AS UNVERIFIED. The first version of this check only fired
+  // when resolved_model_used was a present string, so a missing or renamed
+  // field skipped it entirely — a block labelled "fail closed" that failed
+  // OPEN, which is worse than no check because it reads as protection. If
+  // ModelBeat ever drops the field, the swap this exists to catch returns
+  // silently. On health data the safe default is to refuse what we cannot
+  // confirm (review of #107).
   if (useModelBeat) {
     const served = or?.extra_fields?.resolved_model_used;
-    if (typeof served === "string" && !served.includes(EXTRACT_MODEL)) {
+    if (!servedModelVerified(served, EXTRACT_MODEL)) {
       console.error(
-        `modelbeat SILENT FALLBACK: pinned ${EXTRACT_MODEL}, served ${served}`,
+        `modelbeat UNVERIFIED MODEL: pinned ${EXTRACT_MODEL}, ` +
+          `resolved_model_used=${JSON.stringify(served)}`,
       );
       await supabase.rpc("refund_ai_usage", { p_feature: "memory" });
       return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
