@@ -90,6 +90,31 @@ now de-fences, with tests.
    never built). Moving them on the strength of a vision bake-off would be exactly the assumption
    this document exists to avoid.
 
+## 4b. Tool-selection eval — the harness decision 7 required (added 2026-08-24)
+
+The fixture set [ADR 0016](../adr/0016-vita-as-assistant.md) decision 7 specified now exists:
+[`spikes/vita-tool-eval/`](../../spikes/vita-tool-eval/) — 16 fixtures, 6 requiring a tool call
+(with arg spot-checks) and 10 requiring **restraint**: questions, habits, hypotheticals, and the
+exact #97 regression ("what do you think of this meal…"). The runner reads the PERSONA out of
+`vita/index.ts` at run time so the eval cannot drift from the deployed prompt, and rejects any
+ModelBeat response served by a model other than the pin.
+
+| model | pass | failure(s) | polarity |
+|---|---|---|---|
+| **deepseek-v3.2** | **15/16** | logged a meal the user only mused about cooking | over-eager |
+| **qwen3-32b** | **15/16** | asked instead of proposing on a clear snack report | under-eager |
+| glm-4.7-flash | 13/16 | logged a question; missed a report | mixed |
+| kimi-k2.5 | 13/16 | **missed `clear-food-report`** — fails the core job | under-eager |
+| glm-5 | 12/16 | logged a hypothetical ("if I ate a whole pizza…") | over-eager |
+
+Both top failures are absorbed by the propose-confirm contract (decision 2): an over-eager
+proposal is an ignorable card, an under-eager one costs the user a "yes, log it". Neither writes.
+
+**No migration decision follows from this yet.** The `gemini-2.5-flash` baseline on the same 16
+fixtures is the number that decides whether Vita chat moves anywhere, and it runs once the
+OpenRouter balance is topped up. The rule-3 gate below applies to chat exactly as it does to
+extraction — chat turns are the same sensitive text.
+
 ## 5. RULE-3 GATE — must be cleared before `MODELBEAT_API_KEY` is set in production
 
 Raised by the re-review of #107, and it is the right call. **Extraction forwards the conversation

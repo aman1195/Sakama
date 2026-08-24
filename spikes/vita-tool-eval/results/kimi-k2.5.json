@@ -1,0 +1,154 @@
+[
+  {
+    "id": "clear-food-report",
+    "verdict": "FAIL",
+    "why": "called None, expected log_food",
+    "tool": null,
+    "args": {},
+    "reply": " I see you already logged dal chawal for lunch. Are these 2 rotis and extra dal in addition to what you logged, or are you updating the portion?\n\nIf it's additi"
+  },
+  {
+    "id": "question-not-report",
+    "verdict": "FAIL",
+    "why": "called log_food, expected None",
+    "tool": "log_food",
+    "args": {
+      "name": "dal (arhar/toor)",
+      "meal": "dinner",
+      "energy_kcal": 120,
+      "grams": 150,
+      "protein_g": 7,
+      "carb_g": 18,
+      "fat_g": 3
+    },
+    "reply": " Given where you are \u2014 830 kcal left, 66g protein short, and only 20g fat used \u2014 dal is actually a great call. A katori of dal will give you 6-8g protein with m"
+  },
+  {
+    "id": "listing-is-a-question",
+    "verdict": "PASS",
+    "why": "",
+    "tool": null,
+    "args": {},
+    "reply": " That's a pretty carb-heavy combo \u2014 poha, dal, chawal, and two rotis together would push you well past your carb target and leave protein low. I'd swap the chaw"
+  },
+  {
+    "id": "water-report",
+    "verdict": "PASS",
+    "why": "",
+    "tool": "log_water",
+    "args": {
+      "amount_ml": 500
+    },
+    "reply": ""
+  },
+  {
+    "id": "weight-report",
+    "verdict": "PASS",
+    "why": "",
+    "tool": "log_weight",
+    "args": {
+      "weight_kg": 72.4
+    },
+    "reply": ""
+  },
+  {
+    "id": "habit-not-a-log",
+    "verdict": "PASS",
+    "why": "",
+    "tool": null,
+    "args": {},
+    "reply": " Good to know! Since you're veg, a solid protein-focused breakfast becomes even more important. With 110g carbs already in and only 5.5g fat left, you're clearl"
+  },
+  {
+    "id": "too-vague-to-estimate",
+    "verdict": "PASS",
+    "why": "",
+    "tool": null,
+    "args": {},
+    "reply": " What did you have? Even rough details help \u2014 \"a few biscuits and chai\" or \"samosa\" \u2014 so I can estimate and log it properly. You've got 830 kcal and 66g protein"
+  },
+  {
+    "id": "question-with-numbers",
+    "verdict": "PASS",
+    "why": "",
+    "tool": null,
+    "args": {},
+    "reply": " At 820 kcal in so far with 830 left, 720 kcal would almost max you out. Plus butter chicken won't help your protein gap \u2014 you're at 24g of your 90g target and "
+  },
+  {
+    "id": "evening-snack-report",
+    "verdict": "PASS",
+    "why": "",
+    "tool": "log_food",
+    "args": {
+      "name": "samosa",
+      "energy_kcal": 250,
+      "carb_g": 32,
+      "fat_g": 12,
+      "protein_g": 4,
+      "grams": 80,
+      "meal": "snack"
+    },
+    "reply": ""
+  },
+  {
+    "id": "thinking-out-loud",
+    "verdict": "PASS",
+    "why": "",
+    "tool": null,
+    "args": {},
+    "reply": " Great choice \u2014 200g paneer bhurji would clock about 420 kcal and 14g protein. With your targets, that puts you at roughly 1,240 kcal today with 38g protein, so"
+  },
+  {
+    "id": "greeting",
+    "verdict": "PASS",
+    "why": "",
+    "tool": null,
+    "args": {},
+    "reply": " Hey! You're at 820 of 1,650 kcal with lunch done \u2014 right on track. But protein's only 24g of your 90g target, which is the gap I'd focus on. Your evening meal "
+  },
+  {
+    "id": "explicit-log-request",
+    "verdict": "FAIL",
+    "why": "called None, expected log_food",
+    "tool": null,
+    "args": {},
+    "reply": " A glass of milk is usually about 250ml. That's roughly 150 kcal, 8g protein, 12g carbs, 8g fat.\n\nWhich meal is this for \u2014 snack, or should I add it to lunch? O"
+  },
+  {
+    "id": "weight-question",
+    "verdict": "PASS",
+    "why": "",
+    "tool": null,
+    "args": {},
+    "reply": " I don't have your height or current weight in your profile, so I can't calculate a healthy target for you. \n\nWhat's your current weight and height? I'll help y"
+  },
+  {
+    "id": "water-question",
+    "verdict": "PASS",
+    "why": "",
+    "tool": null,
+    "args": {},
+    "reply": " I don't have your water intake data from what you've shared with me today. How much water have you had so far? I can log it for you if you'd like."
+  },
+  {
+    "id": "past-meal-report",
+    "verdict": "PASS",
+    "why": "",
+    "tool": "log_food",
+    "args": {
+      "name": "apple",
+      "meal": "snack",
+      "energy_kcal": 95
+    },
+    "reply": ""
+  },
+  {
+    "id": "hypothetical",
+    "verdict": "PASS",
+    "why": "",
+    "tool": null,
+    "args": {},
+    "reply": " A whole medium veggie pizza would be roughly 1,800\u20132,400 kcal depending on crust and cheese \u2014 that's your entire day's budget plus some. You'd also blow past y"
+  }
+]

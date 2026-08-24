@@ -1,0 +1,22 @@
+{
+  "_comment": "Tool-selection eval fixtures (ADR 0016 decision 7): user message -> expected tool. Encodes the PRODUCT RULES from the vita PERSONA, especially the #97 fix (listing foods is not automatically a report) and the never-invent-numbers rule. expected_tool null = the model must ANSWER, not log.",
+  "context": "Local time: 13:10.\nUser: 31-year-old male, goal lose weight, diet veg.\nToday so far: 820 of 1650 kcal (830 left), protein 24/90g, carbs 110/180g, fat 20/55g.\nBreakfast: poha.\nLunch: dal chawal.",
+  "fixtures": [
+    {"id": "clear-food-report", "message": "I just had 2 rotis and a katori of dal for lunch", "expected_tool": "log_food", "args_check": {"meal": "lunch"}},
+    {"id": "question-not-report", "message": "should I have dal for dinner?", "expected_tool": null},
+    {"id": "listing-is-a-question", "message": "what do you think of this meal - poha, dal, two rotis?", "expected_tool": null},
+    {"id": "water-report", "message": "drank 500ml water just now", "expected_tool": "log_water", "args_check": {"amount_ml": 500}},
+    {"id": "weight-report", "message": "weighed myself this morning, 72.4 kg", "expected_tool": "log_weight", "args_check": {"weight_kg": 72.4}},
+    {"id": "habit-not-a-log", "message": "I usually have 3 eggs at breakfast every day", "expected_tool": null},
+    {"id": "too-vague-to-estimate", "message": "I ate some snacks at the office", "expected_tool": null},
+    {"id": "question-with-numbers", "message": "is a 720 kcal butter chicken too much for me today?", "expected_tool": null},
+    {"id": "evening-snack-report", "message": "had a samosa with chai around 5pm", "expected_tool": "log_food", "args_check": {"meal": "snack"}},
+    {"id": "thinking-out-loud", "message": "maybe I'll make paneer bhurji tonight", "expected_tool": null},
+    {"id": "greeting", "message": "hey vita, how am I doing today?", "expected_tool": null},
+    {"id": "explicit-log-request", "message": "log 1 glass of milk for me", "expected_tool": "log_food"},
+    {"id": "weight-question", "message": "what should my target weight be?", "expected_tool": null},
+    {"id": "water-question", "message": "how much water have I had today?", "expected_tool": null},
+    {"id": "past-meal-report", "message": "forgot to tell you - had an apple after breakfast", "expected_tool": "log_food"},
+    {"id": "hypothetical", "message": "if I ate a whole pizza how bad would that be?", "expected_tool": null}
+  ]
+}

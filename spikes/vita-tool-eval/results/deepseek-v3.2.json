@@ -1,0 +1,165 @@
+[
+  {
+    "id": "clear-food-report",
+    "verdict": "PASS",
+    "why": "",
+    "tool": "log_food",
+    "args": {
+      "meal": "lunch",
+      "name": "roti and dal",
+      "energy_kcal": 400,
+      "grams": 270,
+      "protein_g": 15,
+      "carb_g": 70,
+      "fat_g": 7
+    },
+    "reply": "Perfect! That's a great balanced lunch with good protein and fiber. For about 2 rotis (~120g) and a katori (~150g) of dal, I can log that for you.\n\n<\uff5cDSML\uff5cfunct"
+  },
+  {
+    "id": "question-not-report",
+    "verdict": "PASS",
+    "why": "",
+    "tool": null,
+    "args": {},
+    "reply": "Based on your protein target\u2014you're at 24g out of 90g\u2014adding dal for dinner would be an excellent choice. A katori of dal typically gives you about 7-8g of prot"
+  },
+  {
+    "id": "listing-is-a-question",
+    "verdict": "PASS",
+    "why": "",
+    "tool": null,
+    "args": {},
+    "reply": "Based on your data today, this meal would be a great addition! \n\nLooking at your targets: you've had 820 kcal so far with 24g protein, and this meal would give "
+  },
+  {
+    "id": "water-report",
+    "verdict": "PASS",
+    "why": "",
+    "tool": "log_water",
+    "args": {
+      "amount_ml": 500
+    },
+    "reply": "Great job staying hydrated! Drinking 500ml of water is a wonderful choice, especially while working on weight management.\n\n<\uff5cDSML\uff5cfunction_calls"
+  },
+  {
+    "id": "weight-report",
+    "verdict": "PASS",
+    "why": "",
+    "tool": "log_weight",
+    "args": {
+      "weight_kg": 72.4
+    },
+    "reply": "\n\n<\uff5cDSML\uff5cfunction_calls"
+  },
+  {
+    "id": "habit-not-a-log",
+    "verdict": "PASS",
+    "why": "",
+    "tool": null,
+    "args": {},
+    "reply": "With your goal to lose weight, 3 eggs daily gives you excellent protein (21g) and keeps you full. Since you're vegetarian, eggs are a great protein source. Woul"
+  },
+  {
+    "id": "too-vague-to-estimate",
+    "verdict": "PASS",
+    "why": "",
+    "tool": null,
+    "args": {},
+    "reply": "Got it - office snacks during the day! Would you like me to log those as a snack to give you a clearer view of your day so far? I just need to know roughly what"
+  },
+  {
+    "id": "question-with-numbers",
+    "verdict": "PASS",
+    "why": "",
+    "tool": null,
+    "args": {},
+    "reply": "Given your goal to lose weight and your daily limit of 1,650 kcal, a 720 kcal butter chicken would use:\n\n- **830 kcal left** \u2192 after the meal: **110 kcal remain"
+  },
+  {
+    "id": "evening-snack-report",
+    "verdict": "PASS",
+    "why": "",
+    "tool": "log_food",
+    "args": {
+      "meal": "snack",
+      "name": "samosa",
+      "energy_kcal": 170
+    },
+    "reply": "Based on your day so far, you're still within your calorie target with 830 kcal left, but your protein intake is currently quite low at only 24g of your 90g goa"
+  },
+  {
+    "id": "thinking-out-loud",
+    "verdict": "FAIL",
+    "why": "called log_food, expected None",
+    "tool": "log_food",
+    "args": {
+      "name": "paneer bhurji",
+      "meal": "dinner",
+      "energy_kcal": 150
+    },
+    "reply": "Good idea! Paneer bhurji is a great choice for dinner - it's high in protein and fits your weight loss goals well. Since I don't know how much paneer you plan t"
+  },
+  {
+    "id": "greeting",
+    "verdict": "PASS",
+    "why": "",
+    "tool": null,
+    "args": {},
+    "reply": "You're about halfway through your day with 820 calories eaten of your 1650 goal, so you've got a good 830 left for dinner and snacks. Your protein is a bit low "
+  },
+  {
+    "id": "explicit-log-request",
+    "verdict": "PASS",
+    "why": "",
+    "tool": "log_food",
+    "args": {
+      "meal": "snack",
+      "name": "milk",
+      "energy_kcal": 120,
+      "protein_g": 8,
+      "fat_g": 5,
+      "carb_g": 9,
+      "grams": 200
+    },
+    "reply": "I'll log that glass of milk for you. For a standard glass (approx 200ml cows milk), I'll use typical nutritional values:\n\n<\uff5cDSML\uff5cfunction_calls"
+  },
+  {
+    "id": "weight-question",
+    "verdict": "PASS",
+    "why": "",
+    "tool": null,
+    "args": {},
+    "reply": "For weight loss, aiming for a healthy BMI range is a good target. For men, that's typically between 18.5-24.9 BMI, but the ideal range depends on your height.\n\n"
+  },
+  {
+    "id": "water-question",
+    "verdict": "PASS",
+    "why": "",
+    "tool": null,
+    "args": {},
+    "reply": "I don't have access to your water intake data right now - that feature isn't available in my current tools. You'd need to check your water log in the app separa"
+  },
+  {
+    "id": "past-meal-report",
+    "verdict": "PASS",
+    "why": "",
+    "tool": "log_food",
+    "args": {
+      "meal": "snack",
+      "name": "apple",
+      "energy_kcal": 80,
+      "carb_g": 21,
+      "fat_g": 0,
+      "protein_g": 0.5
+    },
+    "reply": "Thanks for letting me know! An apple is a great wholesome snack choice - gives you fiber and vitamins without too many calories.\n\n<\uff5cDSML\uff5cfunction_calls"
+  },
+  {
+    "id": "hypothetical",
+    "verdict": "PASS",
+    "why": "",
+    "tool": null,
+    "args": {},
+    "reply": "For your weight-loss goal (1,650 kcal target), a whole standard pizza is typically 1,500-2,000+ calories, likely exceeding your entire day's allowance plus resu"
+  }
+]
