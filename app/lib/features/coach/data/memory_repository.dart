@@ -121,6 +121,17 @@ class MemoryRepository {
   Future<int> forgetAll(String? userId) =>
       (_db.delete(_db.memoryFacts)..where((t) => _ownedBy(t, userId))).go();
 
+  /// Drop EVERY fact, whoever owned it. Wired to a confirmed identity change,
+  /// mirroring `ChatRepository.deleteAll` (#83).
+  ///
+  /// Blanket, not [forgetAll], and the distinction is the whole point: at
+  /// identity-change time the departing uid is precisely what has just gone
+  /// away, so a user-scoped delete would leave rows behind in exactly the case
+  /// this exists to handle. User B must never inherit user A's distilled
+  /// health facts, and strict read-scoping is a visibility control — this is
+  /// the deletion.
+  Future<int> deleteAll() => _db.delete(_db.memoryFacts).go();
+
   /// Adopt pre-auth facts once a session resolves, mirroring
   /// [ChatRepository.adoptOrphanThreads]. Without this, everything Vita learned
   /// before the first sign-in would be stranded and invisible forever.

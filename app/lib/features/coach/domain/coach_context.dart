@@ -20,6 +20,7 @@ class CoachContext {
     required DateTime now,
     PlanDay? planDay,
     List<String> favouriteFoods = const [],
+    List<({String kind, String content})> memories = const [],
   }) {
     final totals = DayTotals.fromLogs(todayLogs);
     final b = StringBuffer();
@@ -76,6 +77,18 @@ class CoachContext {
     // advice. Explicit data, deliberately not inferred memory.
     if (favouriteFoods.isNotEmpty) {
       b.writeln('Foods they like (saved): ${favouriteFoods.take(15).join(', ')}.');
+    }
+
+    // What Vita has learned over time (ADR 0016 phase 4). Placed AFTER the
+    // day's numbers and BEFORE the meal list on purpose: a remembered
+    // constraint must be visible when advising, but today's real data is what
+    // a reply should lead with. Kinds are labelled so the model can weigh a
+    // constraint above a preference rather than treating them as one list.
+    if (memories.isNotEmpty) {
+      b.writeln('What you remember about them:');
+      for (final m in memories) {
+        b.writeln('- (${m.kind}) ${m.content}');
+      }
     }
 
     if (todayLogs.isEmpty) {

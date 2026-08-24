@@ -66,6 +66,20 @@ class MePage extends ConsumerWidget {
                 ),
               ),
             ),
+            Card(
+              margin: const EdgeInsets.only(top: 16),
+              child: Semantics(
+                identifier: 'nav-memory',
+                button: true,
+                child: ListTile(
+                  leading: const Icon(Icons.psychology_outlined),
+                  title: const Text('What Vita remembers'),
+                  subtitle: const Text('Stays on your phone — view or delete'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push('/memory'),
+                ),
+              ),
+            ),
             // Attribution surface — a legal obligation for licensed data
             // (ASSET_CREDITS.md), plus the OSS dependency notices.
             Card(

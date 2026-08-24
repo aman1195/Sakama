@@ -107,7 +107,14 @@ class CoachController extends Notifier<CoachState> {
       // Pre-auth threads are born with a null user_id and no server ever
       // backfills a local-only row, so adopt them once a session exists —
       // otherwise they strand invisible forever (review #83).
-      if (uid != null) await repo.adoptOrphanThreads(uid);
+      if (uid != null) {
+        await repo.adoptOrphanThreads(uid);
+        // Facts learned before the first sign-in strand the same way threads
+        // do, and a stranded memory is worse: the user sees Vita forget them
+        // for no visible reason.
+        final memory = await ref.read(memoryRepositoryProvider.future);
+        await memory.adoptOrphans(uid);
+      }
       final thread = await repo.latestThread(uid);
       if (thread == null) {
         _set(force
@@ -205,6 +212,11 @@ class CoachController extends Notifier<CoachState> {
         ],
         sending: false,
       ));
+      // Distil AFTER the reply is on screen, never before: extraction is
+      // background work and must never add latency to the turn the user is
+      // waiting on (ADR 0016 decision 5). Unawaited on purpose — a failure
+      // here is invisible by design.
+      unawaited(maybeExtract());
     }
 
     try {
@@ -504,13 +516,75 @@ class CoachController extends Notifier<CoachState> {
     final favourites = (ref.read(favouriteFoodsProvider).value ?? const [])
         .map((f) => f.row.name)
         .toList();
+    final memory = await ref.read(memoryRepositoryProvider.future);
+    final facts = await memory.topFor(ref.read(currentUserIdProvider));
     return CoachContext.build(
         profile: profile,
         targets: targets,
         todayLogs: logs,
         now: now,
         planDay: planDay,
-        favouriteFoods: favourites);
+        favouriteFoods: favourites,
+        memories: [
+          for (final f in facts) (kind: f.kind, content: f.content),
+        ]);
+  }
+
+  /// How many new turns before a distillation pass runs. Batched, never on the
+  /// reply path (ADR 0016 decision 5): the reply turn already has two jobs, and
+  /// a third degrades all three on a cheap model. 6 is two or three exchanges —
+  /// often enough to feel like it is listening, rare enough to stay inside the
+  /// small extraction cap.
+  static const extractEveryNTurns = 6;
+
+  /// Distil the current thread if enough has been said since the last pass.
+  ///
+  /// FIRE-AND-FORGET AND SILENT BY DESIGN. This is background work the user did
+  /// not ask for, so a failure — offline, budget spent, provider down — must
+  /// never surface as an error or block the conversation. The worst outcome of
+  /// a miss is that Vita learns it next time.
+  Future<void> maybeExtract() async {
+    final threadId = state.threadId;
+    if (threadId == null) return;
+    try {
+      final chat = await ref.read(chatRepositoryProvider.future);
+      final thread = await chat.threadById(threadId);
+      if (thread == null) return;
+      final rows = await chat.messagesOf(threadId);
+      if (rows.length - thread.summarizedUpTo < extractEveryNTurns) return;
+
+      final extractor = ref.read(memoryExtractorProvider);
+      final byok = await ref.read(byokStoreProvider).read();
+      final result = await extractor.extract(
+        // Synthetic rows are OUR chrome (budget notices, errors), not the
+        // user's words — extracting from them would invent facts about the
+        // app rather than the person.
+        turns: [
+          for (final r in rows.where((r) => !r.synthetic))
+            (role: r.role == 'user' ? 'user' : 'assistant', content: r.content),
+        ],
+        priorSummary: thread.summary,
+        byok: byok,
+      );
+
+      final memory = await ref.read(memoryRepositoryProvider.future);
+      final uid = ref.read(currentUserIdProvider);
+      for (final f in result.facts) {
+        await memory.remember(
+          kind: f.kind,
+          content: f.content,
+          confidence: f.confidence,
+          sourceThreadId: threadId,
+          userId: uid,
+        );
+      }
+      // Advance the watermark even when nothing was learned, or a quiet
+      // stretch of conversation would re-trigger extraction on every send.
+      await chat.saveSummary(threadId,
+          summary: result.summary, upTo: rows.length);
+    } catch (e) {
+      debugPrint('memory extraction skipped: $e');
+    }
   }
 }
 

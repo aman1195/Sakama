@@ -144,6 +144,23 @@ class ChatRepository {
 
   /// Strict ownership: current uid only. Null `user_id` matches nobody once a
   /// session exists; with no session, only the pre-auth (null) rows are visible.
+  /// One thread by id, or null if it has been deleted.
+  Future<ChatThreadRow?> threadById(String id) =>
+      (_db.select(_db.chatThreads)..where((t) => t.id.equals(id)))
+          .getSingleOrNull();
+
+  /// Store the rolling summary and advance the extraction watermark
+  /// (ADR 0016 decision 4). Deliberately does NOT touch `updatedAt`: this is
+  /// background distillation, and letting it reorder the thread list would
+  /// make conversations jump around for reasons the user cannot see.
+  Future<void> saveSummary(String threadId,
+          {String? summary, required int upTo}) =>
+      (_db.update(_db.chatThreads)..where((t) => t.id.equals(threadId)))
+          .write(ChatThreadsCompanion(
+        summary: summary == null ? const Value.absent() : Value(summary),
+        summarizedUpTo: Value(upTo),
+      ));
+
   Expression<bool> _ownedBy($ChatThreadsTable t, String? userId) =>
       userId == null ? t.userId.isNull() : t.userId.equals(userId);
 

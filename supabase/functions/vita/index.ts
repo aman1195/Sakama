@@ -12,8 +12,68 @@
 // server-side only (rule 3).
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { servedModelVerified } from "../_shared/model_guard.ts";
 
 const DAILY_CAP = 30;   // coach turns/user/day — text is cheap, conversation matters
+
+/// Extraction runs on its OWN small cap (ADR 0016 decision 6), never against
+/// the conversation budget. Charging it to `vita` would mean background work
+/// silently eating the turns the user can see and paid attention to — the
+/// worst possible way to spend a budget. Small because extraction is batched
+/// every N turns, not per message.
+const EXTRACT_CAP = 12;
+
+// EXTRACTION RUNS ON A DIFFERENT GATEWAY (docs/research/model-bakeoff-2026-08.md).
+// ModelBeat is OpenAI-compatible, so this is a base-URL + key swap, and the
+// spike showed its models are NOT good enough for vision — but extraction is
+// text-only, structured, background work where a miss costs nothing. Keeping
+// it off OpenRouter leaves that balance serving only PhotoSnap, the one path
+// where the model demonstrably matters.
+//
+// Configurable per feature ON PURPOSE: ModelBeat is a beta endpoint, so an
+// outage there must degrade extraction alone, never the whole app. Unset the
+// secret and this falls back to OpenRouter with no deploy.
+const MODELBEAT_URL = "https://api.beta.modelbeat.ai/v1/chat/completions";
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+// deepseek-v3.2, chosen on evidence (2026-08-11, five-turn transcript fixture):
+// all of qwen3-32b, glm-4.7-flash and deepseek-v3.2 extracted the same three
+// correct facts and all correctly REFUSED to remember "I had dal chawal for
+// lunch today" (a diary entry, not a memory) — the hardest instruction in the
+// prompt. Two things separated them:
+//   - qwen3-32b and glm-4.7-flash wrap output in ```json fences DESPITE
+//     response_format: json_object; deepseek does not.
+//   - glm-4.7-flash reports confidence 1.0 for everything, which is useless
+//     for a ranking that sorts on confidence.
+// kimi-k2-thinking returned null content entirely (a reasoning model) and is
+// unusable here without extra handling.
+const EXTRACT_MODEL = Deno.env.get("MODELBEAT_EXTRACT_MODEL") || "deepseek-v3.2";
+
+/// Distil a transcript into durable facts. Deliberately NOT the coach persona:
+/// this call has one job, and mixing it with conversation degrades both on a
+/// cheap model (decision 5 is why extraction is a separate pass at all).
+const EXTRACT_PROMPT = `You extract durable facts about a user from a nutrition
+coaching conversation, for a personal health app.
+
+Return STRICT JSON: {"facts":[{"kind":"...","content":"...","confidence":0.0-1.0}],"summary":"..."}
+
+kind MUST be one of: constraint, goal, routine, preference, observation
+- constraint: a hard limit — allergy, intolerance, medical restriction, religious rule
+- goal: what they are working towards
+- routine: a stable habit — when they eat, how they cook, when they train
+- preference: a like or dislike
+- observation: anything else worth remembering that is not the above
+
+RULES
+- Only facts that stay TRUE BEYOND TODAY. "I had dal for lunch" is a diary
+  entry, not a memory. "I eat dal most days" is a routine.
+- Each fact must stand alone without the conversation. Write "Allergic to
+  peanuts", never "she said she is allergic to it".
+- Prefer FEW, high-value facts. Zero is a valid and common answer.
+- Never invent. If the user did not say it, it is not a fact.
+- confidence: 0.9 stated plainly, 0.6 implied, 0.3 guessed.
+- summary: 2-3 sentences capturing what this conversation was about, for
+  continuing it later. Plain text.
+- Health data: record what the user told you. Never diagnose.`;
 const MODEL = "google/gemini-2.5-flash";
 const MAX_TURNS = 12;   // trailing history window sent upstream (cost bound)
 
@@ -129,8 +189,17 @@ Deno.serve(async (req) => {
   // and DO NOT charge our budget (they pay their provider). Never logged.
   const byokRaw = typeof body?.byok === "string" ? body.byok.trim() : "";
   const byok = byokRaw.startsWith("sk-") && byokRaw.length > 20 ? byokRaw : "";
-  const turns = Array.isArray(body?.messages) ? body.messages : null;
+  // Extraction (ADR 0016 phase 4) is a separate MODE of this function rather
+  // than a new function: same auth, same key handling, same refund path, one
+  // fewer deployment to keep in step.
+  const extractMode = body?.mode === "extract";
+  const turns = Array.isArray(body?.messages)
+    ? body.messages
+    : (extractMode && Array.isArray(body?.turns) ? body.turns : null);
   const context = typeof body?.context === "string" ? body.context : "";
+  const priorSummary = typeof body?.prior_summary === "string"
+    ? body.prior_summary.slice(0, 1000)
+    : "";
   if (!turns || turns.length === 0) {
     return new Response(JSON.stringify({ error: "bad_request" }), { status: 400 });
   }
@@ -146,14 +215,20 @@ Deno.serve(async (req) => {
       role: m.role,
       content: m.content.slice(0, 2000),
     }));
-  if (clean.length === 0 || clean[clean.length - 1].role !== "user") {
+  // A conversation turn must END with the user; an extraction pass is over a
+  // finished slice of transcript and has no such requirement.
+  if (clean.length === 0 ||
+      (!extractMode && clean[clean.length - 1].role !== "user")) {
     return new Response(JSON.stringify({ error: "bad_request" }), { status: 400 });
   }
 
   // Budget (atomic, charge-on-attempt, before the provider call).
   if (!byok) {
     const { data: newCount, error: usageErr } = await supabase
-      .rpc("increment_ai_usage", { p_feature: "vita", p_cap: DAILY_CAP });
+      .rpc("increment_ai_usage", {
+        p_feature: extractMode ? "memory" : "vita",
+        p_cap: extractMode ? EXTRACT_CAP : DAILY_CAP,
+      });
     if (usageErr) {
       return new Response(JSON.stringify({ error: "usage_error" }), { status: 500 });
     }
@@ -162,21 +237,40 @@ Deno.serve(async (req) => {
     }
   }
 
-  const system = context
+  const system = extractMode
+    ? (priorSummary
+        ? `${EXTRACT_PROMPT}\n\n--- Summary so far ---\n${priorSummary}`
+        : EXTRACT_PROMPT)
+    : context
     ? `${PERSONA}\n\n--- The user's data right now ---\n${context.slice(0, 4000)}`
     : PERSONA;
 
-  const orRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  // BYOK is always the user's own OpenRouter key, so it pins the OpenRouter
+  // path regardless of mode — we must never spend a user's key on a gateway
+  // they did not choose.
+  const mbKey = Deno.env.get("MODELBEAT_API_KEY");
+  const useModelBeat = extractMode && !byok && !!mbKey;
+  const endpoint = useModelBeat ? MODELBEAT_URL : OPENROUTER_URL;
+  const upstreamKey = byok ||
+    (useModelBeat ? mbKey : Deno.env.get("OPENROUTER_API_KEY"));
+  const upstreamModel = useModelBeat ? EXTRACT_MODEL : MODEL;
+
+  const orRes = await fetch(endpoint, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${byok || Deno.env.get("OPENROUTER_API_KEY")}`,
+      "Authorization": `Bearer ${upstreamKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: MODEL,
+      model: upstreamModel,
       messages: [{ role: "system", content: system }, ...clean],
-      tools: TOOLS,
-      max_tokens: 500,
+      // Extraction must NOT be given tools: its job is to distil, and a
+      // background pass that could propose a write would be a way to log food
+      // without the user ever seeing a confirm card (ADR 0016 decision 2).
+      ...(extractMode
+        ? { response_format: { type: "json_object" } }
+        : { tools: TOOLS }),
+      max_tokens: extractMode ? 700 : 500,
     }),
   });
   // Refund a rejected request (see the 0009 migration): no tokens billed, so
@@ -184,12 +278,55 @@ Deno.serve(async (req) => {
   if (!orRes.ok) {
     const detail = await orRes.text().catch(() => "");
     console.error(`openrouter ${orRes.status} feature=vita :: ${detail.slice(0, 500)}`);
-    if (!byok) await supabase.rpc("refund_ai_usage", { p_feature: "vita" });
+    if (!byok) {
+      await supabase.rpc("refund_ai_usage",
+        { p_feature: extractMode ? "memory" : "vita" });
+    }
     return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
   }
   const or = await orRes.json();
+
+  // FAIL CLOSED ON A SILENT MODEL SWAP. ModelBeat returns HTTP 200 served by a
+  // DIFFERENT model when a pin is unrecognised or retired — no error, no
+  // warning field (their API.md §4.3; reproduced 2026-08-11: asking for
+  // "google/gemini-2.5-flash" was served by ministral-3-8b). Without this
+  // check, a retired pin would silently change what distils a user's health
+  // data, and the first symptom would be worse memories months later.
+  //
+  // A 502 here costs one skipped extraction, which is invisible by design.
+  // ABSENT COUNTS AS UNVERIFIED. The first version of this check only fired
+  // when resolved_model_used was a present string, so a missing or renamed
+  // field skipped it entirely — a block labelled "fail closed" that failed
+  // OPEN, which is worse than no check because it reads as protection. If
+  // ModelBeat ever drops the field, the swap this exists to catch returns
+  // silently. On health data the safe default is to refuse what we cannot
+  // confirm (review of #107).
+  if (useModelBeat) {
+    const served = or?.extra_fields?.resolved_model_used;
+    if (!servedModelVerified(served, EXTRACT_MODEL)) {
+      console.error(
+        `modelbeat UNVERIFIED MODEL: pinned ${EXTRACT_MODEL}, ` +
+          `resolved_model_used=${JSON.stringify(served)}`,
+      );
+      await supabase.rpc("refund_ai_usage", { p_feature: "memory" });
+      return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
+    }
+  }
+
   const msg = or?.choices?.[0]?.message;
   const reply = typeof msg?.content === "string" ? msg.content : "";
+
+  // Extraction returns the model's JSON straight through; the CLIENT validates
+  // every field hard (a junk memory is worse than a missing one, because the
+  // user can see it, cannot edit it, and it steers later replies).
+  if (extractMode) {
+    if (reply.trim().length === 0) {
+      return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
+    }
+    return new Response(reply, {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   // A tool call is a PROPOSAL passed straight through: the client bounds-checks
   // every argument (ToolCallParser) and the user confirms before any write.
