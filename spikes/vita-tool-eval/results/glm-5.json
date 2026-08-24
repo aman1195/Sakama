@@ -1,0 +1,180 @@
+{
+  "run_date": "2026-08-24",
+  "persona_source": "vita/index.ts @ 2970b86",
+  "rows": [
+    {
+      "id": "clear-food-report",
+      "verdict": "PASS",
+      "why": "",
+      "tool": "log_food",
+      "args": {
+        "name": "roti",
+        "meal": "lunch",
+        "grams": 120,
+        "energy_kcal": 180,
+        "carb_g": 60,
+        "protein_g": 6,
+        "fat_g": 3
+      },
+      "reply": ""
+    },
+    {
+      "id": "question-not-report",
+      "verdict": "PASS",
+      "why": "",
+      "tool": null,
+      "args": {},
+      "reply": "You're only at 24g protein with 90g as your target \u2014 a katori of dal would be a smart move. It'll give you roughly 6g protein and keep you light for the evening"
+    },
+    {
+      "id": "listing-is-a-question",
+      "verdict": "PASS",
+      "why": "",
+      "tool": null,
+      "args": {},
+      "reply": "That's a solid, balanced plate \u2014 carbs from poha and rotis, protein from dal, and you're keeping fat light which works for your weight loss goal. Portion-wise, "
+    },
+    {
+      "id": "water-report",
+      "verdict": "PASS",
+      "why": "",
+      "tool": "log_water",
+      "args": {
+        "amount_ml": 500
+      },
+      "reply": ""
+    },
+    {
+      "id": "weight-report",
+      "verdict": "PASS",
+      "why": "",
+      "tool": "log_weight",
+      "args": {
+        "weight_kg": 72.4
+      },
+      "reply": "Logged: 72.4 kg this morning.\n\nTrend's what matters now \u2014 let's see how it moves over the next couple of weeks. How are you feeling about today's meals so far?"
+    },
+    {
+      "id": "habit-not-a-log",
+      "verdict": "PASS",
+      "why": "",
+      "tool": null,
+      "args": {},
+      "reply": "Got it \u2014 that's a solid protein foundation when you're on eggs. Since I have you as vegetarian, egg days mean you're getting around 18g protein just from breakf"
+    },
+    {
+      "id": "too-vague-to-estimate",
+      "verdict": "FAIL",
+      "why": "called log_food, expected None",
+      "tool": "log_food",
+      "args": {
+        "name": "office snacks",
+        "energy_kcal": 0,
+        "meal": "snack"
+      },
+      "reply": "Got it \u2014 office snacks happen! To log this, could you tell me what you had? Something like namkeen, biscuits, samosa, or fruit would help me estimate it properl"
+    },
+    {
+      "id": "question-with-numbers",
+      "verdict": "FAIL",
+      "why": "called log_food, expected None",
+      "tool": "log_food",
+      "args": {
+        "name": "butter chicken",
+        "energy_kcal": 720,
+        "meal": "dinner",
+        "protein_g": 30,
+        "fat_g": 40,
+        "carb_g": 20
+      },
+      "reply": "Butter chicken is very rich in cream and butter, so it's calorie-dense. At 720 kcal, it would fill up about 85% of your remaining calories for the day (you have"
+    },
+    {
+      "id": "evening-snack-report",
+      "verdict": "PASS",
+      "why": "",
+      "tool": "log_food",
+      "args": {
+        "name": "samosa",
+        "meal": "snack",
+        "energy_kcal": 260,
+        "carb_g": 30,
+        "fat_g": 14,
+        "protein_g": 4
+      },
+      "reply": ""
+    },
+    {
+      "id": "thinking-out-loud",
+      "verdict": "FAIL",
+      "why": "called log_food, expected None",
+      "tool": "log_food",
+      "args": {
+        "name": "paneer bhurji",
+        "meal": "dinner",
+        "energy_kcal": 250,
+        "protein_g": 18,
+        "carb_g": 8,
+        "fat_g": 18
+      },
+      "reply": "Paneer bhurji sounds great \u2014 just keep the oil moderate since you're at 20g of your 55g fat target already. A 100-150g portion would give you roughly 15-22g pro"
+    },
+    {
+      "id": "greeting",
+      "verdict": "PASS",
+      "why": "",
+      "tool": null,
+      "args": {},
+      "reply": "Hey! You're about halfway through your calories at 820 of 1,650 \u2014 nice pacing for 1:10pm. But protein's lagging a bit at 24g of 90g. A solid afternoon snack wit"
+    },
+    {
+      "id": "explicit-log-request",
+      "verdict": "FAIL",
+      "why": "called log_water, expected log_food",
+      "tool": "log_water",
+      "args": {
+        "amount_ml": 250
+      },
+      "reply": ""
+    },
+    {
+      "id": "weight-question",
+      "verdict": "PASS",
+      "why": "",
+      "tool": null,
+      "args": {},
+      "reply": "Good question \u2014 I'd need your current weight and height to work this out properly. A realistic target is usually what gets you into a healthy BMI range (18.5\u201323"
+    },
+    {
+      "id": "water-question",
+      "verdict": "PASS",
+      "why": "",
+      "tool": null,
+      "args": {},
+      "reply": "I don't have water tracking data for you today, so there's nothing logged yet. If you've had any water, tell me how much \u2014 a glass, bottle, or exact ml \u2014 and I "
+    },
+    {
+      "id": "past-meal-report",
+      "verdict": "PASS",
+      "why": "",
+      "tool": "log_food",
+      "args": {
+        "name": "Apple (medium)",
+        "meal": "snack",
+        "energy_kcal": 95,
+        "carb_g": 25,
+        "protein_g": 0,
+        "fat_g": 0
+      },
+      "reply": "Nice catch! An apple after breakfast \u2014 I'll log that as a snack. Apple (medium) using standard estimates. Let me add it now."
+    },
+    {
+      "id": "hypothetical",
+      "verdict": "PASS",
+      "why": "",
+      "tool": null,
+      "args": {},
+      "reply": "Given your day so far \u2014 820 kcal and only 24g protein \u2014 a whole pizza would likely overshoot your 1650 kcal target and wouldn't help much with your 90g protein "
+    }
+  ]
+}
