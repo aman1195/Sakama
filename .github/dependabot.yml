@@ -16,31 +16,31 @@ updates:
     # APIs and MUST move in lockstep. Bumping one alone breaks codegen/tests
     # (PR #29: `drift` 2.34.2 with `drift_dev` 2.34.0 → the migration harness
     # failed to compile). Group each family so Dependabot bumps them together.
+    # update-types on every group: MAJORS OPEN AS THEIR OWN PR, never inside a
+    # group. Learned the hard way (#111, 2026-08-24): the "riverpod group" PR
+    # carried freezed ^3 -> ^4 as an unadvertised member and the major was
+    # merged on CI-greenness — hours after the same major was deliberately
+    # declined in #112. A group title must never hide a major again. (A major
+    # can still ride in as a transitive requirement of a grouped bump; that
+    # residual case is why group PRs get their members read in review.)
     groups:
       drift:
         patterns: ["drift", "drift_dev", "drift_flutter", "drift_sqlite_async"]
+        update-types: ["minor", "patch"]
       riverpod:
         patterns: ["riverpod", "flutter_riverpod", "riverpod_annotation",
                    "riverpod_generator", "riverpod_lint"]
+        update-types: ["minor", "patch"]
       freezed:
         patterns: ["freezed", "freezed_annotation"]
+        update-types: ["minor", "patch"]
       envied:
         patterns: ["envied", "envied_generator"]
-    # drift is pinned exact at 2.34.0 ON PURPOSE. drift >=2.34.1 requires
-    # analyzer ^13, but freezed ^3 + riverpod_generator (source_gen/analyzer)
-    # cap analyzer below 13, so drift_dev cannot reach a drift-2.34.3-compatible
-    # version and the migration harness fails to COMPILE (proven in PRs #34,
-    # #84 — `allSchemaEntities` gone from GeneratedDatabase). Until the codegen
-    # stack supports analyzer 13, every drift patch/minor bump is un-takeable,
-    # so ignore them to stop the weekly un-mergeable PR. REMOVE this ignore when
-    # freezed/riverpod move to analyzer ^13 (then bump drift + drift_dev in
-    # lockstep). A MAJOR bump is left un-ignored so a deliberate migration still
-    # surfaces.
-    ignore:
-      - dependency-name: "drift"
-        update-types:
-          - "version-update:semver-patch"
-          - "version-update:semver-minor"
+        update-types: ["minor", "patch"]
+    # The drift pin + ignore that lived here (PRs #34/#84: analyzer ^13 bind)
+    # was REMOVED 2026-08-24, per its own stated removal condition: freezed 4 +
+    # riverpod_generator 4 moved the stack to analyzer 13.3.0, drift 2.34.3
+    # resolves, and the migration harness compiles and passes against it.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule: {interval: "weekly"}
