@@ -53,6 +53,7 @@ dependencies:
   mobile_scanner: ^7.4.0
   image_picker: ^1.2.3
   flutter_secure_storage: ^11.0.0
+  speech_to_text: ^7.3.0
 
 dev_dependencies:
   flutter_test:
