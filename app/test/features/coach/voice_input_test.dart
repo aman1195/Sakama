@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sakama/features/coach/data/voice_input.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Records what was asked of the platform. The point of these tests is not
 /// that dictation returns words — it is that we never ask for recognition
@@ -104,21 +105,55 @@ void main() {
     expect(r.outcome, VoiceOutcome.empty);
   });
 
+  group('the Android disclosure is genuinely one-time', () {
+    // Review of #120: the first version claimed "one-time" in three comments
+    // while re-prompting on every dictation. Nagging is not consent.
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    test('asked before the first use, never again after acknowledging',
+        () async {
+      final prefs = await SharedPreferences.getInstance();
+      final v = VoiceInput(
+          engine: _FakeEngine(), isAndroidOverride: true, prefs: prefs);
+
+      expect(await v.needsNetworkDisclosure(), isTrue);
+      await v.rememberNetworkDisclosure();
+      expect(await v.needsNetworkDisclosure(), isFalse);
+
+      // And it survives a fresh instance — the point of persisting it.
+      final again = VoiceInput(
+          engine: _FakeEngine(), isAndroidOverride: true, prefs: prefs);
+      expect(await again.needsNetworkDisclosure(), isFalse);
+    });
+
+    test('iOS is never asked, and acknowledging is a no-op there', () async {
+      final prefs = await SharedPreferences.getInstance();
+      final v = VoiceInput(
+          engine: _FakeEngine(), isAndroidOverride: false, prefs: prefs);
+      expect(await v.needsNetworkDisclosure(), isFalse);
+      await v.rememberNetworkDisclosure();
+      expect(prefs.getBool('voice_android_network_ack'), isNull,
+          reason: 'nothing to remember on a platform that refuses instead');
+    });
+  });
+
   group('the Android/iOS asymmetry is surfaced, not hidden', () {
     // Verified against speech_to_text 7.3.0 source (2026-08-25): iOS errors
     // when on-device is unavailable; Android SILENTLY builds a network
     // recogniser instead. We cannot detect that from Dart, so we tell people.
-    test('Android needs the network disclosure', () {
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    test('Android needs the network disclosure', () async {
       expect(
-          VoiceInput(engine: _FakeEngine(), isAndroidOverride: true)
-              .needsNetworkDisclosure,
+          await VoiceInput(engine: _FakeEngine(), isAndroidOverride: true)
+              .needsNetworkDisclosure(),
           isTrue);
     });
 
-    test('iOS does not — it refuses instead of falling back', () {
+    test('iOS does not — it refuses instead of falling back', () async {
       expect(
-          VoiceInput(engine: _FakeEngine(), isAndroidOverride: false)
-              .needsNetworkDisclosure,
+          await VoiceInput(engine: _FakeEngine(), isAndroidOverride: false)
+              .needsNetworkDisclosure(),
           isFalse);
     });
   });

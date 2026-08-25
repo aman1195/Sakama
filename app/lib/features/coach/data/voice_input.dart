@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
 /// The narrow slice of dictation this app needs.
@@ -113,13 +114,15 @@ class VoiceResult {
 /// the platform may use network recognition. Refusing what we cannot verify is
 /// the same rule the AI gateway follows.
 class VoiceInput {
-  VoiceInput({SpeechEngine? engine, bool? isAndroidOverride})
+  VoiceInput({SpeechEngine? engine, bool? isAndroidOverride, SharedPreferences? prefs})
       : _engine = engine ?? PluginSpeechEngine(),
+        _prefs = prefs, // ignore: prefer_initializing_formals
         _isAndroid = isAndroidOverride ??
             (!kIsWeb && defaultTargetPlatform == TargetPlatform.android);
 
   final SpeechEngine _engine;
   final bool _isAndroid;
+  final SharedPreferences? _prefs;
 
   /// Android's on-device recogniser is API 31+ (Android 12). Below that the
   /// plugin's `onDevice: true` is silently ignored, so voice is a promise we
@@ -169,7 +172,26 @@ class VoiceInput {
 
   Future<void> stop() => _engine.stop();
 
-  /// Android cannot promise on-device recognition, so the UI must say so once
-  /// before the first use. iOS needs no such warning: it refuses instead.
-  bool get needsNetworkDisclosure => _isAndroid;
+  /// Android cannot promise on-device recognition, so the user is told before
+  /// the FIRST use and the acknowledgement is remembered. iOS needs no such
+  /// warning: it refuses rather than falling back.
+  ///
+  /// Persisted, because the review of #120 caught the first version claiming
+  /// "one-time" in three comments while re-prompting on every single
+  /// dictation. Nagging is not consent, and a claim the code does not keep is
+  /// the thing worth fixing whichever way it is resolved.
+  Future<bool> needsNetworkDisclosure() async {
+    if (!_isAndroid) return false;
+    final p = _prefs ?? await SharedPreferences.getInstance();
+    return !(p.getBool(_ackKey) ?? false);
+  }
+
+  /// Record that the Android disclosure was accepted.
+  Future<void> rememberNetworkDisclosure() async {
+    if (!_isAndroid) return;
+    final p = _prefs ?? await SharedPreferences.getInstance();
+    await p.setBool(_ackKey, true);
+  }
+
+  static const _ackKey = 'voice_android_network_ack';
 }

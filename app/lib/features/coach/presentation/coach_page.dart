@@ -35,7 +35,7 @@ class _CoachPageState extends ConsumerState<CoachPage> {
   /// iOS, which refuses outright rather than falling back to Apple's servers.
   /// Android cannot make that promise (its recogniser silently falls back to
   /// Google below API 31 / without a downloaded model), so Android users are
-  /// told once, before the first use, rather than discovering it never.
+  /// told before the first use, rather than discovering it never.
   ///
   /// The transcript lands in the text field UNSENT. Dictation is often
   /// misheard, and a health app that fires off "I ate two rotis" when you said
@@ -47,7 +47,11 @@ class _CoachPageState extends ConsumerState<CoachPage> {
       if (mounted) setState(() => _listening = false);
       return;
     }
-    if (_voice.needsNetworkDisclosure && !await _confirmAndroidVoice()) return;
+    if (await _voice.needsNetworkDisclosure()) {
+      if (!await _confirmAndroidVoice()) return;
+      await _voice.rememberNetworkDisclosure();
+    }
+    if (!mounted) return;
 
     setState(() => _listening = true);
     final result = await _voice.listenOnce(
@@ -83,8 +87,9 @@ class _CoachPageState extends ConsumerState<CoachPage> {
   void _toast(String message) => ScaffoldMessenger.of(context)
       .showSnackBar(SnackBar(content: Text(message)));
 
-  /// One-time honesty on Android, where on-device recognition cannot be
-  /// guaranteed and the platform will not tell us when it falls back.
+  /// Honesty on Android, where on-device recognition cannot be guaranteed and
+  /// the platform will not tell us when it falls back. Shown before the first
+  /// use and then remembered — nagging is not consent.
   Future<bool> _confirmAndroidVoice() async =>
       await showDialog<bool>(
         context: context,

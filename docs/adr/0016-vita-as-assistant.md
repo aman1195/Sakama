@@ -97,9 +97,11 @@ adoption.
 > - Android's on-device recogniser needs **API 31+**, which a large share of budget Indian handsets
 >   do not have — the same minimum-spec reality that ruled out bundling a local model.
 >
-> So the promise holds unconditionally on **iOS only**. Android gets a one-time disclosure before
-> first use, because the honest thing to say is that we cannot tell which path the phone took.
-> The licence gate passed independently: BSD-3-Clause, already on the allowlist.
+> So the promise holds unconditionally on **iOS only**. Android gets a disclosure before first use —
+> shown once and then remembered, because nagging is not consent — since the honest thing to say is
+> that we cannot tell which path the phone took. The licence gate passed independently:
+> BSD-3-Clause, already on the allowlist. Audited against 7.3.0 and re-verified against the shipped
+> 7.4.0: the on-device code paths are byte-identical on both platforms.
 
 **13 · Sequencing.** Conversation persistence + threads → tools/propose-confirm → photo-in-chat →
 memory → voice.
