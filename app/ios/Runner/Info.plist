@@ -5,6 +5,10 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Sakama can read a meal photo you choose to estimate its nutrition.</string>
 
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Sakama uses the microphone so you can talk to Vita instead of typing.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Speech is turned into text on your iPhone. Your voice is not sent anywhere.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Sakama uses the camera to photograph your meals for instant nutrition estimates, and to scan food barcodes.</string>
 

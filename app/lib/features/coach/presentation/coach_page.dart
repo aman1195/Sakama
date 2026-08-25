@@ -6,6 +6,7 @@ import '../../capture/presentation/snap_controller.dart' show captureJpegBase64;
 import '../../settings/presentation/ai_disclosure.dart';
 import '../domain/coach_message.dart';
 import '../domain/tool_draft.dart';
+import '../data/voice_input.dart';
 import 'coach_controller.dart';
 
 /// Vita — the coach tab. A persistent chat grounded in today's real data.
@@ -17,6 +18,8 @@ class CoachPage extends ConsumerStatefulWidget {
 
 class _CoachPageState extends ConsumerState<CoachPage> {
   final _input = TextEditingController();
+  final _voice = VoiceInput();
+  bool _listening = false;
   final _scroll = ScrollController();
 
   @override
@@ -25,6 +28,84 @@ class _CoachPageState extends ConsumerState<CoachPage> {
     _scroll.dispose();
     super.dispose();
   }
+
+  /// Dictate into the composer (ADR 0016 decision 12).
+  ///
+  /// Speech is recognised ON DEVICE — the audio never leaves the phone on
+  /// iOS, which refuses outright rather than falling back to Apple's servers.
+  /// Android cannot make that promise (its recogniser silently falls back to
+  /// Google below API 31 / without a downloaded model), so Android users are
+  /// told once, before the first use, rather than discovering it never.
+  ///
+  /// The transcript lands in the text field UNSENT. Dictation is often
+  /// misheard, and a health app that fires off "I ate two rotis" when you said
+  /// "I ate two rusks" has made a mistake the user cannot see coming. Same
+  /// propose-confirm instinct as every other write path here.
+  Future<void> _dictate() async {
+    if (_listening) {
+      await _voice.stop();
+      if (mounted) setState(() => _listening = false);
+      return;
+    }
+    if (_voice.needsNetworkDisclosure && !await _confirmAndroidVoice()) return;
+
+    setState(() => _listening = true);
+    final result = await _voice.listenOnce(
+      onPartial: (t) {
+        if (!mounted) return;
+        _input.text = t;
+        _input.selection = TextSelection.collapsed(offset: t.length);
+      },
+    );
+    if (!mounted) return;
+    setState(() => _listening = false);
+
+    switch (result.outcome) {
+      case VoiceOutcome.ok:
+        _input.text = result.text;
+        _input.selection =
+            TextSelection.collapsed(offset: result.text.length);
+      case VoiceOutcome.denied:
+        _toast('Sakama needs microphone and speech access. Enable it in '
+            'Settings to talk to Vita.');
+      case VoiceOutcome.noOnDevice:
+        // The platform refused rather than uploading the audio. Say that
+        // plainly — it is a protection, not a malfunction.
+        _toast('This phone cannot transcribe speech privately, so nothing was '
+            'recorded. Type instead.');
+      case VoiceOutcome.empty:
+        _toast("Didn't catch that.");
+      case VoiceOutcome.failed:
+        _toast('Could not start the microphone.');
+    }
+  }
+
+  void _toast(String message) => ScaffoldMessenger.of(context)
+      .showSnackBar(SnackBar(content: Text(message)));
+
+  /// One-time honesty on Android, where on-device recognition cannot be
+  /// guaranteed and the platform will not tell us when it falls back.
+  Future<bool> _confirmAndroidVoice() async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('About voice on Android'),
+          content: const Text(
+              'Sakama asks Android to transcribe on your phone. On some '
+              'devices Android uses its online service instead, which means '
+              'what you say is sent to Google. We cannot tell which your '
+              'phone does.\n\nTyping always stays on your phone.'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Not now')),
+            FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Use voice')),
+          ],
+        ),
+      ) ??
+      false;
 
   /// Attach a photo and send it with whatever is typed as the question.
   Future<void> _sendPhoto() async {
@@ -117,6 +198,21 @@ class _CoachPageState extends ConsumerState<CoachPage> {
                         icon: const Icon(Icons.add_a_photo_outlined),
                         tooltip: 'Send a photo',
                         onPressed: state.sending ? null : _sendPhoto,
+                      ),
+                    ),
+                    Semantics(
+                      identifier: 'coach-mic',
+                      button: true,
+                      child: IconButton(
+                        icon: Icon(_listening ? Icons.stop_circle_outlined
+                                              : Icons.mic_none),
+                        // Colour, not just a swapped glyph: a mic that is
+                        // recording must be unmistakable at a glance.
+                        color: _listening
+                            ? Theme.of(context).colorScheme.error
+                            : null,
+                        tooltip: _listening ? 'Stop' : 'Speak',
+                        onPressed: state.sending ? null : _dictate,
                       ),
                     ),
                     Expanded(

@@ -79,9 +79,27 @@ already reads by key). One vision call returns `items` (for the log draft) *and*
 `description` (so follow-up turns need not re-send the image) *and* the conversational `answer`.
 Any feature needing vision uses it.
 
-**12 · Voice input uses on-device STT** (iOS Speech / Android SpeechRecognizer): free, offline,
-no audio egress. **Gate:** the plugin's licence must be permissive (rule 4) and pass the CI
-licence-checker before adoption.
+**12 · Voice input uses on-device STT** (iOS Speech / Android SpeechRecognizer): free, offline.
+**Gate:** the plugin's licence must be permissive (rule 4) and pass the CI licence-checker before
+adoption.
+
+> **AMENDED 2026-08-25, on building it.** This decision originally promised "no audio egress"
+> unconditionally. That was wrong, and verifying it against `speech_to_text` 7.3.0's source before
+> adoption is the only reason it was caught:
+>
+> - **`onDevice` defaults to FALSE on both platforms.** Dictation without that flag streams audio to
+>   Apple or Google. `VoiceInput` therefore always sets it, and a test asserts the source never
+>   contains `onDevice: false`.
+> - **The two platforms then behave OPPOSITELY.** iOS fails LOUD — `supportsOnDeviceRecognition`
+>   false returns a `FlutterError` and captures nothing. Android fails OPEN — when
+>   `isOnDeviceRecognitionAvailable()` is false the plugin silently constructs an ordinary network
+>   recogniser and uploads the audio, with no error and no signal reachable from Dart.
+> - Android's on-device recogniser needs **API 31+**, which a large share of budget Indian handsets
+>   do not have — the same minimum-spec reality that ruled out bundling a local model.
+>
+> So the promise holds unconditionally on **iOS only**. Android gets a one-time disclosure before
+> first use, because the honest thing to say is that we cannot tell which path the phone took.
+> The licence gate passed independently: BSD-3-Clause, already on the allowlist.
 
 **13 · Sequencing.** Conversation persistence + threads → tools/propose-confirm → photo-in-chat →
 memory → voice.

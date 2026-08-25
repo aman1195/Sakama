@@ -50,6 +50,8 @@ are signed in, replicated to our backend so it survives a device change.
 | Body metrics | weight entries over time, water intake | On device; synced to backend |
 | Plans | a plan you import or have generated: daily targets, day types, eating windows, foods to avoid, checklists | On device; synced to backend |
 | Saved foods | foods you keep as favourites, and any you create yourself, with your usual portion | On device; synced to backend |
+| What Vita remembers | short facts distilled from your chats — a restriction, a goal, a habit, a preference — each with the conversation it came from | **Only on your device.** Never uploaded, never synced. You can see every one and delete any of them (Me → What Vita remembers), or forget them all at once. Signing out or switching accounts deletes them. |
+| Voice input (optional) | speech you dictate instead of typing | Turned into text **on your phone** on iPhone, where your voice never leaves the device. On Android the system may use Google's online recognition instead and we cannot tell which — you are told this before the first use. Sakama never records or stores audio. |
 | Coach conversations | the chats you have with Vita, and their titles | **Only on your device.** Never uploaded to our servers and never synced, even when you are signed in. Signing out or switching accounts deletes them from the device. |
 | Account identity | an anonymous device identifier by default; your email address only if you create an account | Backend authentication |
 | Your own AI key (optional) | an OpenRouter API key you choose to add ("BYOK") | **Only** in your device's secure storage (Keychain / Android Keystore). It is never stored on our servers and never written to our logs. |
