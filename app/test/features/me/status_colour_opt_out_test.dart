@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sakama/app/status_surface.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sakama/core/providers/app_providers.dart';
 import 'package:sakama/core/settings/status_colour_pref.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -66,4 +68,36 @@ void main() {
     });
   });
 
+
+  group('the opt-out must not flash on cold start', () {
+    // The #127 review nit, and the reason the provider is synchronous. As a
+    // FutureProvider the card rendered COLOURED for the first frame(s), then
+    // snapped to neutral — showing an opted-out user exactly the judgement
+    // they had switched off, every single launch.
+    test('an opted-out preference reads false on the FIRST synchronous read',
+        () async {
+      SharedPreferences.setMockInitialValues({'status_colour_enabled': false});
+      final prefs = await SharedPreferences.getInstance();
+
+      final container = ProviderContainer(overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+      ]);
+      addTearDown(container.dispose);
+
+      // No pump, no await: this is what the first frame sees.
+      expect(container.read(statusColourEnabledProvider), isFalse,
+          reason: 'a frame of colour is the whole thing being opted out of');
+    });
+
+    test('without prefs wired it yields the DEFAULT, never a wrong verdict',
+        () {
+      // Widget tests mount screens without prefs. Degrading to the default
+      // experience is correct; crashing the screen over a display setting is
+      // not, and Riverpod turns a throw here into an error state for every
+      // dependent provider.
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      expect(container.read(statusColourEnabledProvider), isTrue);
+    });
+  });
 }

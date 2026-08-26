@@ -140,7 +140,7 @@ class _StatusColourSwitch extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
-    final on = ref.watch(statusColourEnabledProvider).value ?? true;
+    final on = ref.watch(statusColourEnabledProvider);
     return Semantics(
       identifier: 'toggle-status-colour',
       child: SwitchListTile(

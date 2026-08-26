@@ -87,7 +87,7 @@ class HomePage extends ConsumerWidget {
                   // Honours the opt-out: neutral keeps the card a plain
                   // surface while every number on it stays identical. The
                   // switch removes the colour judgement, never the data.
-                  status: (ref.watch(statusColourEnabledProvider).value ?? true)
+                  status: ref.watch(statusColourEnabledProvider)
                       ? trackStatus(
                           value: totals.calories,
                           target: (targets?.calories ?? 0).toDouble(),

@@ -29,5 +29,17 @@ class StatusColourPref {
   /// not the muted one.
   Future<bool> enabled() async => (await _prefs).getBool(_key) ?? true;
 
+  /// The same read, without an await.
+  ///
+  /// Required so the hero card is painted correctly on the FIRST frame.
+  /// Resolving it asynchronously showed an opted-out user their day graded in
+  /// colour for a frame before snapping to neutral — a flash of precisely the
+  /// thing they turned off.
+  ///
+  /// With no injected instance (widget tests) this returns the default rather
+  /// than throwing: the caller wants a display preference, not a crash, and
+  /// the default is what an unset preference means anyway.
+  bool enabledSync() => _injected?.getBool(_key) ?? true;
+
   Future<void> set(bool value) async => (await _prefs).setBool(_key, value);
 }
