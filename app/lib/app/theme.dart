@@ -1,23 +1,33 @@
 import 'package:flutter/material.dart';
 
-/// The visual system (SAK-124 refresh).
+/// The visual system (SAK-124 refresh, revised by SAK-125).
 ///
-/// DIRECTION, and what we deliberately did NOT take. The refresh draws its
-/// grammar from a set of modern fintech references: near-black surfaces, a
-/// single saturated accent, large confident display numerals, generous corner
-/// radii, pill-shaped controls, and a floating bottom bar. That grammar
-/// transfers to a health app almost entirely.
+/// DIRECTION. The refresh draws its grammar from modern fintech references:
+/// near-black surfaces, a single saturated accent, large confident display
+/// numerals, generous corner radii, pill controls, a floating bottom bar.
 ///
-/// One thing does not, and it is the important one. Those references colour an
-/// ENTIRE card by a single metric — a lime balance card when the number is
-/// good, a red portfolio card when it is bad. In fintech that is neutral
-/// information about money. In a health app it is the guilt loop PRODUCT.md
-/// names as anti-reference #1, and it contradicts principle 5 outright:
-/// "Earn every colour... never colour the whole screen by a calorie deficit."
+/// THE STATUS RULE WAS REVERSED — read this before "fixing" anything below.
+/// An earlier version of this comment said the accent marks identity and
+/// never judgement, because colouring a whole card by one metric was a
+/// PRODUCT.md anti-reference. **That is no longer true.** Principle 5 was
+/// deliberately revised on 2026-08-26 to "colour carries state, copy stays
+/// neutral", and the day's hero card is now filled by where the user actually
+/// is. See PRODUCT.md principle 5 and DESIGN.md 0.1, both of which record the
+/// reversal as a decision rather than a drift.
 ///
-/// So: the accent marks IDENTITY (brand surfaces, the primary action, the
-/// selected tab), never JUDGEMENT. Amber and red stay reserved for attention
-/// and genuine problems, exactly as before.
+/// SO THE ACCENT NOW DOES DOUBLE DUTY, and that is intentional rather than an
+/// oversight: it is the brand colour (primary action, selected tab) AND the
+/// `onTrack` status fill in [TrackStatus]. The reference apps do exactly this
+/// — their brand lime is also the healthy-balance colour — and the ambiguity
+/// is tolerable because the two uses never share a surface: the accent as
+/// brand appears on chrome, the accent as status fills the hero card.
+///
+/// What did NOT change is the discipline underneath. Amber and red are still
+/// earned, "over" still begins past the target rather than near it, an empty
+/// day is still neutral rather than congratulated, and macro colours are still
+/// identity only — a macro must never take a status colour, or a glance cannot
+/// tell "this is fat" from "this is going badly". All of it is enforced in
+/// test/app/theme_test.dart, not trusted.
 ThemeData sakamaTheme(Brightness brightness) {
   final light = brightness == Brightness.light;
   final scheme = ColorScheme.fromSeed(

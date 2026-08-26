@@ -48,6 +48,39 @@ never be reused as a macro colour, no macro may be alarm-red, and the four macro
 distinct. Contrast is asserted at WCAG AA on both themes — which caught a real trap, since the raw
 lime cannot carry white text, so light mode uses a darkened variant and only dark mode uses it neat.
 
+## 0.1 Reversal: the surface IS the state (2026-08-26)
+
+§0 above recorded that we took the fintech grammar but **refused** the
+whole-card-coloured-by-a-metric pattern. **That refusal was reversed the same
+day, on purpose.** Both this document and [PRODUCT.md](../PRODUCT.md) principle
+5 were amended rather than left contradicting the code, because a north star
+the codebase quietly disagrees with is worse than either direction.
+
+**What it looks like now.** The day's hero card is filled by where you actually
+are: lime within target, amber nearing, warm red past it. A glance answers "how
+am I doing" before any number is read — which is exactly what the reference apps
+do with a balance, and it is genuinely more legible than a ring alone.
+
+**The guardrails, which are the whole reason this is safe to do in a health
+app.** A full-bleed status colour is a loud signal, and here it lands on
+somebody's body rather than their bank balance:
+
+| Guardrail | Why |
+|---|---|
+| **Over starts *past* target, never at 90%** | A person eating their planned dinner crosses 90% every day. Treating that as "over" makes the app shout at normal eating. |
+| **Over is warm red (`#FD8A5F`), not alarm red** | Being slightly over is information, not an emergency. Pure red stays reserved for genuine problems. |
+| **Empty day is neutral, not lime** | Logging nothing is not being on track. Colouring it green congratulates a user for not eating. |
+| **Copy never editorialises** | Colour carries the state; words stay factual. "Over by 240", never "you blew your budget". The guilt-driven-fitness anti-reference stands. |
+| **Every state clears WCAG AA on its own fill** | A saturated card that cannot carry its own text is worse than no colour. |
+| **Macro colours are identity, never status** | Protein is teal because it is protein. If a macro drifted onto a status colour, a glance could not tell "this is fat" from "this is going badly". |
+
+All six are enforced in `test/app/theme_test.dart`, which previously asserted
+the opposite rule — the tests were rewritten deliberately, not deleted.
+
+**Implementation:** `lib/app/status_surface.dart` — `TrackStatus`,
+`trackStatus()`, and `StatusSurface`, a card that resolves its own on-colour so
+no caller can put low-contrast text on a saturated fill by accident.
+
 ## 1. What we take from Fud AI
 
 Fud AI's core insight, and the one we adopt wholesale: **the AI is the logging mechanism, not a feature

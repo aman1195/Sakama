@@ -36,7 +36,7 @@ Sakama should feel like a friend who happens to be a brilliant nutritionist — 
 
 - **Guilt-driven fitness apps** — red "over budget" banners, streak-loss shaming, aggressive push notifications. Health is not a punishment loop.
 - **Spreadsheet-with-a-skin trackers** — endless manual entry, gram-level data entry as the primary path, no intelligence.
-- **Generic AI-branded UI** — gradient cards, glowing purple accents, animated counters, a sparkle icon on everything. The AI should be felt in the *quality of the answer*, not the chrome.
+- **Generic AI-branded UI** — gradient cards, animated counters, a sparkle icon on everything. The AI should be felt in the *quality of the answer*, not the chrome. (Saturated brand colour is no longer on this list: see principle 5, revised 2026-08-26.)
 - **Western-default food apps** — where "1 serving" means a cup, Indian dishes are missing, and a roti has to be logged as "flatbread, generic".
 - **Premium walls on basics** — locking calorie tracking or the food database behind a subscription.
 
@@ -46,7 +46,15 @@ Sakama should feel like a friend who happens to be a brilliant nutritionist — 
 2. **India is the default, not a locale.** Katori, roti, idli, dosa, phulka are first-class units. Regional cuisines, veg/non-veg/eggetarian/Jain, and conditions like PCOD, thyroid, and fatty liver are built in, not bolted on.
 3. **Show the confidence.** AI estimates are estimates. Surface confidence, make correction one tap, and let the user's correction teach the system. Never present a guess as a fact.
 4. **The coach earns its place.** Every coach message must reference something real — today's logs, the plan, the streak. Generic advice is worse than silence.
-5. **Earn every color.** Green for on-track, amber for attention, red only for genuine problems. Never colour the whole screen by a calorie deficit.
+5. **Colour carries state, copy stays neutral.** *(Revised 2026-08-26 — this principle previously read "never colour the whole screen by a calorie deficit". It was reversed deliberately, not drifted into.)*
+
+   The day's surface is coloured by where you actually are: lime within target, amber nearing it, warm red past it. A glance should answer "how am I doing" before a single number is read.
+
+   The guardrails are what make this safe in a health app rather than a finance one, and they are not optional:
+   - **Over is warm red, not alarm red**, and it starts *past* the target — not at 90%. Being slightly over is normal eating, and the surface must not scream at 2,001 kcal against a 2,000 target.
+   - **Words never editorialise.** Colour says the state; copy stays factual. "Over by 240", never "you blew your budget". The anti-reference against guilt-driven fitness apps stands unchanged.
+   - **Every state clears WCAG AA on its own fill**, enforced in `test/app/theme_test.dart`. A coloured surface that cannot carry its own text is worse than no colour.
+   - **Macro identity colours are not status colours.** Protein is teal because it is protein, not because it is going well.
 6. **Works on a train with no signal.** Offline is not a degraded mode. Local is the source of truth; sync is invisible.
 7. **Free at the core, honestly.** No dark patterns, no artificial limits on basic tracking, no selling data. If we ever monetize, it never touches the core loop.
 

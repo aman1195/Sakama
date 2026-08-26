@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/db/database.dart';
+import '../../../app/status_surface.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/current_date_provider.dart';
 import '../../onboarding/domain/nutrition_targets.dart';
@@ -77,10 +78,17 @@ class HomePage extends ConsumerWidget {
               // card's "+" (seen in the eyes-on pass).
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
               children: [
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-                    child: Column(
+                // The card's COLOUR is the state (DESIGN.md 0.1): lime within
+                // target, amber nearing, warm red past it. Deliberate reversal
+                // of the old "never colour the whole screen" rule — see
+                // PRODUCT.md, amended rather than quietly contradicted.
+                StatusSurface(
+                  identifier: 'today-status-card',
+                  status: trackStatus(
+                    value: totals.calories,
+                    target: (targets?.calories ?? 0).toDouble(),
+                  ),
+                  child: Column(
                       children: [
                         CalorieBudgetRing(
                           target: targets?.calories ?? 0,
@@ -99,7 +107,6 @@ class HomePage extends ConsumerWidget {
                         ],
                       ],
                     ),
-                  ),
                 ),
                 const SizedBox(height: 12),
                 if (targets != null) WaterChip(targetMl: targets.waterMl),
