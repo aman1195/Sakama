@@ -8,6 +8,12 @@ import '../log_entry_sheet.dart';
 ///
 /// Visual pass: the HealthifyMe scannable-row pattern — a leading tinted icon
 /// circle giving each meal a stable identity, one hero fact (kcal), one action.
+///
+/// SAK-126: the icon circle is now a FILLED accent chip rather than an
+/// outlined ring, matching the reference apps' merchant-avatar rows, and an
+/// empty slot is visibly quieter than a filled one. A day with three meals
+/// logged and one empty should look different at arm's length — that is the
+/// entire job of a list like this.
 class MealSlotCard extends StatelessWidget {
   const MealSlotCard({
     super.key,
@@ -32,6 +38,7 @@ class MealSlotCard extends StatelessWidget {
     final kcal = entries.fold<double>(0, (a, e) => a + e.energyKcal);
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
+    final filled = entries.isNotEmpty;
     return Semantics(
       identifier: 'meal-${meal.key}',
       child: Card(
@@ -41,19 +48,30 @@ class MealSlotCard extends StatelessWidget {
             children: [
               ListTile(
                 leading: Container(
-                  width: 42,
-                  height: 42,
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: Border.all(
-                        color: scheme.primary.withValues(alpha: 0.25),
-                        width: 1.5),
+                    // Filled once the meal has something in it; a faint tint
+                    // while empty. Presence is legible before any text is read.
+                    color: filled
+                        ? scheme.primaryContainer
+                        : scheme.onSurface.withValues(alpha: 0.06),
                   ),
-                  child: Icon(_icons[meal], size: 21, color: scheme.primary),
+                  child: Icon(_icons[meal],
+                      size: 21,
+                      color: filled
+                          ? scheme.onPrimaryContainer
+                          : scheme.onSurface.withValues(alpha: 0.45)),
                 ),
                 title: Text(meal.label,
-                    style: text.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w600)),
+                    style: text.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        // An empty slot recedes rather than shouting for
+                        // attention — it is an invitation, not a failure.
+                        color: filled
+                            ? null
+                            : scheme.onSurface.withValues(alpha: 0.65))),
                 subtitle: Text(
                   entries.isEmpty
                       ? 'Nothing yet'
@@ -64,9 +82,9 @@ class MealSlotCard extends StatelessWidget {
                 ),
                 trailing: Semantics(
                   identifier: 'meal-${meal.key}-add',
-                  child: IconButton(
-                    icon: const Icon(Icons.add_circle_outline),
-                    color: scheme.primary,
+                  child: IconButton.filledTonal(
+                    icon: const Icon(Icons.add, size: 20),
+                    visualDensity: VisualDensity.compact,
                     onPressed: onAdd,
                   ),
                 ),
@@ -81,8 +99,11 @@ class MealSlotCard extends StatelessWidget {
                     contentPadding: const EdgeInsets.only(left: 74, right: 20),
                     title: Text(e.name, overflow: TextOverflow.ellipsis),
                     trailing: Text('${e.energyKcal.round()} kcal',
-                        style: text.bodySmall
-                            ?.copyWith(color: scheme.onSurfaceVariant)),
+                        // Tabular figures so a column of calories aligns on
+                        // the decimal rather than shimmying per row.
+                        style: text.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                            fontFeatures: const [FontFeature.tabularFigures()])),
                     // A logged row was write-only until now: no macros, no fix,
                     // no delete. Tap opens the entry.
                     onTap: () => LogEntrySheet.show(context, e),
