@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../features/capture/data/food_log_repository.dart';
 import '../../features/capture/data/photosnap_service.dart';
 import '../../features/coach/data/chat_repository.dart';
+import '../settings/status_colour_pref.dart';
 import '../../features/coach/data/memory_extractor.dart';
 import '../../features/coach/data/memory_repository.dart';
 import '../../features/coach/data/vita_service.dart';
@@ -119,6 +120,15 @@ final chatRepositoryProvider = FutureProvider<ChatRepository>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return ChatRepository(db);
 });
+
+/// Whether the hero card is filled by status colour (PRODUCT.md principle 5).
+/// Defaults on; the switch exists so a user can opt out of having their day
+/// graded in colour.
+final statusColourPrefProvider =
+    Provider<StatusColourPref>((ref) => StatusColourPref());
+
+final statusColourEnabledProvider = FutureProvider<bool>(
+    (ref) => ref.watch(statusColourPrefProvider).enabled());
 
 /// What Vita has learned (ADR 0016 phase 4). DEVICE-LOCAL, like the
 /// conversations it is derived from.

@@ -313,9 +313,11 @@ class _Bubble extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: isUser ? scheme.primary : scheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(16).copyWith(
-            bottomRight: isUser ? const Radius.circular(4) : null,
-            bottomLeft: isUser ? null : const Radius.circular(4),
+          // 20 to match the card radius the refresh set; the 6dp tail corner
+          // is what makes a bubble read as speech rather than as a card.
+          borderRadius: BorderRadius.circular(20).copyWith(
+            bottomRight: isUser ? const Radius.circular(6) : null,
+            bottomLeft: isUser ? null : const Radius.circular(6),
           ),
         ),
         child: Text(
@@ -337,7 +339,9 @@ class _Typing extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20).copyWith(
+          bottomLeft: const Radius.circular(6),
+        ),
       ),
       child: const SizedBox(
         width: 20,

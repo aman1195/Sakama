@@ -55,6 +55,7 @@ Sakama should feel like a friend who happens to be a brilliant nutritionist — 
    - **Words never editorialise.** Colour says the state; copy stays factual. "Over by 240", never "you blew your budget". The anti-reference against guilt-driven fitness apps stands unchanged.
    - **Every state clears WCAG AA on its own fill**, enforced in `test/app/theme_test.dart`. A coloured surface that cannot carry its own text is worse than no colour.
    - **Macro identity colours are not status colours.** Protein is teal because it is protein, not because it is going well.
+   - **It can be turned off.** *Me → Colour my day* returns the hero card to a plain surface with every number unchanged. Colour is judgement even when the copy is neutral, and a person who does not want their day graded in colour should not have to leave the app to avoid it.
 6. **Works on a train with no signal.** Offline is not a degraded mode. Local is the source of truth; sync is invisible.
 7. **Free at the core, honestly.** No dark patterns, no artificial limits on basic tracking, no selling data. If we ever monetize, it never touches the core loop.
 

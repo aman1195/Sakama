@@ -84,10 +84,15 @@ class HomePage extends ConsumerWidget {
                 // PRODUCT.md, amended rather than quietly contradicted.
                 StatusSurface(
                   identifier: 'today-status-card',
-                  status: trackStatus(
-                    value: totals.calories,
-                    target: (targets?.calories ?? 0).toDouble(),
-                  ),
+                  // Honours the opt-out: neutral keeps the card a plain
+                  // surface while every number on it stays identical. The
+                  // switch removes the colour judgement, never the data.
+                  status: (ref.watch(statusColourEnabledProvider).value ?? true)
+                      ? trackStatus(
+                          value: totals.calories,
+                          target: (targets?.calories ?? 0).toDouble(),
+                        )
+                      : TrackStatus.neutral,
                   child: Column(
                       children: [
                         CalorieBudgetRing(
