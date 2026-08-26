@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
-/// The hero of Home (DESIGN.md): target · eaten · remaining. Green while within
-/// budget; amber once over — red is reserved for genuine problems, never a
-/// calorie overshoot (PRODUCT.md "earn every color").
+/// The hero of Home (DESIGN.md): target · eaten · remaining.
+///
+/// The ring now sits ON a status-coloured surface (StatusSurface), so it no
+/// longer carries the state itself — the card does. Its job is contrast
+/// against whatever fill it lands on, which is why the track and sweep are
+/// drawn from the inherited on-colour rather than from the scheme: a
+/// scheme-primary ring on a lime card would vanish.
 ///
 /// Visual pass: the remaining number is the single hero (one big number per
 /// card — the HealthifyMe pattern), the ring sweeps in with an ease-out curve
@@ -24,7 +28,10 @@ class CalorieBudgetRing extends StatelessWidget {
     final progress = target <= 0 ? 0.0 : (eaten / target).clamp(0.0, 1.0);
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    final ringColor = over ? Colors.amber.shade700 : scheme.primary;
+    // Inherited from StatusSurface's DefaultTextStyle so the ring reads on
+    // any status fill. Falls back to scheme.primary off a status surface.
+    final onSurface = DefaultTextStyle.of(context).style.color ?? scheme.primary;
+    final ringColor = onSurface;
     final reduceMotion = MediaQuery.of(context).disableAnimations;
 
     return Semantics(
@@ -48,7 +55,9 @@ class CalorieBudgetRing extends StatelessWidget {
                   value: value,
                   strokeWidth: 14,
                   strokeCap: StrokeCap.round,
-                  backgroundColor: scheme.surfaceContainerHighest,
+                  // A translucent version of the same ink, so the unfilled
+                  // track never fights the card colour.
+                  backgroundColor: onSurface.withValues(alpha: 0.18),
                   valueColor: AlwaysStoppedAnimation(ringColor),
                 ),
               ),
