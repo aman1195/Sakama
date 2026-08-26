@@ -45,6 +45,30 @@ after approval users must *update*. A bad build is in your users' hands until th
   widening.
 - **Server-side kill switches / feature flags** for anything risky. If a feature can be disabled from
   Supabase without a new build, it can be saved. If it cannot, it is a permanent liability.
+## OS support floor
+
+Two different "minimum version" ideas live in this document; do not confuse them. The gate below is
+about **our app's** version (force-update a known-broken build). This section is about the **OS**
+version we compile against, which decides who can install us at all.
+
+| Platform | Floor | Oldest device it admits |
+|---|---|---|
+| iOS | **15.0** | iPhone 6s (2015). iPhone 6, 6 Plus, 5s and older top out below iOS 15 and are excluded. |
+
+**This floor is set by the Flutter toolchain, not chosen by us.** Running `flutter build ios` on
+Flutter 3.47 prints `Updating minimum iOS deployment target to 15.0` and rewrites
+`project.pbxproj` itself. Committing 13.0 does not keep 13.0 — it only guarantees a dirty working
+tree on every developer's machine, and a repo that claims support it does not have.
+
+**Recorded because it was never decided.** The floor moved from 13.0 to 15.0 as a side effect of a
+routine dependency upgrade, and nothing in these docs noted that a class of devices had just been
+dropped. For an India-first audience where older hardware persists in the second-hand market, that
+is exactly the decision that should not happen silently.
+
+**When a toolchain upgrade moves this floor again**, treat it as a product decision: commit the
+change deliberately, update this table, and say who it excludes. Do not let it arrive as an
+uncommitted diff.
+
 - **Minimum-version gate.** The app must be able to tell the user "please update" and block a known-broken
   build. Build this in M0-M1, not after the first incident.
 - Never ship a risky change and a store submission on the same day as a deadline.

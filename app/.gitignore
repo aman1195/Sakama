@@ -43,3 +43,11 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Xcode resolves SwiftPM pins locally on every build; the app declares no
+# direct SwiftPM dependencies of its own, so committing these files would put
+# a machine-generated, CI-UNGATED native dependency graph into the repo.
+# `dependency-licences` scans pub packages only (rule 4), so a pin landing here
+# would pass review with a green tick and no licence check at all.
+ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+ios/Runner.xcworkspace/xcshareddata/swiftpm/
