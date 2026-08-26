@@ -5,6 +5,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../features/capture/data/food_log_repository.dart';
 import '../../features/capture/data/photosnap_service.dart';
 import '../../features/coach/data/chat_repository.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../settings/status_colour_pref.dart';
 import '../../features/coach/data/memory_extractor.dart';
 import '../../features/coach/data/memory_repository.dart';
 import '../../features/coach/data/vita_service.dart';
@@ -119,6 +122,31 @@ final chatRepositoryProvider = FutureProvider<ChatRepository>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return ChatRepository(db);
 });
+
+/// Resolved in main() before the first frame and injected here, so display
+/// preferences are readable SYNCHRONOUSLY.
+///
+/// Null when nothing overrode it — widget tests, which mount screens without
+/// wiring prefs and do not exercise these preferences. Deliberately NOT a
+/// throwing provider: Riverpod wraps a thrown error into a ProviderException
+/// that puts every dependent provider into an error state, so a missing
+/// override would take out the whole screen rather than degrading one setting.
+final sharedPreferencesProvider = Provider<SharedPreferences?>((ref) => null);
+
+final statusColourPrefProvider = Provider<StatusColourPref>(
+    (ref) => StatusColourPref(prefs: ref.watch(sharedPreferencesProvider)));
+
+/// Whether the hero card is filled by status colour (PRODUCT.md principle 5).
+///
+/// SYNCHRONOUS on purpose. As a FutureProvider this rendered the coloured card
+/// for a frame before resolving to neutral — showing an opted-out user the
+/// exact judgement they had switched off (review of #127).
+///
+/// Falling back to `true` without prefs is safe rather than lazy: it yields
+/// the DEFAULT experience, which is what a user with no stored preference gets
+/// anyway. It cannot mute the app and it cannot invent a verdict.
+final statusColourEnabledProvider =
+    Provider<bool>((ref) => ref.watch(statusColourPrefProvider).enabledSync());
 
 /// What Vita has learned (ADR 0016 phase 4). DEVICE-LOCAL, like the
 /// conversations it is derived from.

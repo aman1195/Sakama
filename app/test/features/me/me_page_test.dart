@@ -93,6 +93,16 @@ void main() {
     await dispose(t);
   });
 
+  testWidgets('the status-colour opt-out is reachable without hunting', (t) async {
+    // A setting that exists for people who find the default uncomfortable
+    // should sit in the main list, not behind a "Display" sub-screen.
+    await pump(t);
+    expect(find.bySemanticsIdentifier('toggle-status-colour'), findsOneWidget);
+    // And it says what it does rather than whether it is good for you.
+    expect(find.textContaining('Colour my day'), findsOneWidget);
+    await dispose(t);
+  });
+
   testWidgets('an unconfigured build shows no account section at all',
       (t) async {
     // The other half, and the reason the first test needed pinning: with no

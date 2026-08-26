@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/providers/app_providers.dart';
 import '../../weight/presentation/weight_section.dart';
 import 'account_section.dart';
 
@@ -55,6 +56,8 @@ class MePage extends ConsumerWidget {
                       title: 'What Vita remembers',
                       subtitle: 'Stays on your phone — view or delete',
                       route: '/memory'),
+                  _divider(context),
+                  const _StatusColourSwitch(),
                   _divider(context),
                   _navRow(context,
                       id: 'nav-data-sources',
@@ -125,3 +128,54 @@ Widget _divider(BuildContext context) => Divider(
       indent: 72,
       color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.06),
     );
+
+/// The opt-out for colour-as-judgement (PRODUCT.md principle 5).
+///
+/// Lives in the same grouped card as the navigation rows rather than behind a
+/// "Display" sub-screen: a setting that exists for people who find the default
+/// uncomfortable should not require finding it first.
+class _StatusColourSwitch extends ConsumerWidget {
+  const _StatusColourSwitch();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+    final on = ref.watch(statusColourEnabledProvider);
+    return Semantics(
+      identifier: 'toggle-status-colour',
+      child: SwitchListTile(
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        secondary: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: scheme.primaryContainer,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(Icons.palette_outlined,
+              size: 20, color: scheme.onPrimaryContainer),
+        ),
+        title: Text('Colour my day',
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
+        // Says what it does, not whether it is good for you.
+        subtitle: Text(
+            on
+                ? "Today's card is coloured by how you're tracking"
+                : "Today's card stays plain — the numbers are unchanged",
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: scheme.onSurfaceVariant)),
+        value: on,
+        onChanged: (v) async {
+          await ref.read(statusColourPrefProvider).set(v);
+          ref.invalidate(statusColourEnabledProvider);
+        },
+      ),
+    );
+  }
+}
