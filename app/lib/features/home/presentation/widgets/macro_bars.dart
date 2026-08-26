@@ -32,12 +32,19 @@ class MacroBars extends StatelessWidget {
   }
 
   /// Each macro keeps ONE identity color app-wide (recognition, not
-  /// decoration). Amber only when genuinely over target.
+  /// decoration) — and a macro colour is NEVER a status colour, so a glance
+  /// can always tell "this is fat" from "this is going badly".
+  ///
+  /// These bars sit ON the status-coloured hero card, so everything that is
+  /// not a macro identity — labels, numbers, the unfilled track — is drawn
+  /// from the INHERITED on-colour. Drawing them from the scheme (as this did
+  /// before SAK-126) left grey-on-lime text and an invisible track.
   Widget _bar(
       BuildContext context, String label, double eaten, int target, Color color) {
     final progress = target <= 0 ? 0.0 : (eaten / target).clamp(0.0, 1.0);
     final over = target > 0 && eaten > target;
     final scheme = Theme.of(context).colorScheme;
+    final ink = DefaultTextStyle.of(context).style.color ?? scheme.onSurface;
     final reduceMotion = MediaQuery.of(context).disableAnimations;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 7),
@@ -52,11 +59,14 @@ class MacroBars extends StatelessWidget {
                       .textTheme
                       .bodyMedium
                       ?.copyWith(fontWeight: FontWeight.w600)),
+              // Over is carried by WEIGHT, not by a second status colour: the
+              // card behind it already says how the day is going, and a second
+              // amber here would be the same message shouted twice.
               Text('${eaten.round()} / ${target}g',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: over
-                          ? Colors.amber.shade700
-                          : scheme.onSurfaceVariant)),
+                        color: ink.withValues(alpha: over ? 1.0 : 0.7),
+                        fontWeight: over ? FontWeight.w700 : FontWeight.w500,
+                      )),
             ],
           ),
           const SizedBox(height: 5),
@@ -71,8 +81,8 @@ class MacroBars extends StatelessWidget {
               builder: (context, value, _) => LinearProgressIndicator(
                 value: value,
                 minHeight: 8,
-                color: over ? Colors.amber.shade700 : color,
-                backgroundColor: scheme.surfaceContainerHighest,
+                color: color,
+                backgroundColor: ink.withValues(alpha: 0.18),
               ),
             ),
           ),
