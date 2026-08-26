@@ -11,6 +11,43 @@
 
 ---
 
+## 0. Visual refresh — August 2026 (SAK-124)
+
+The visual language was refreshed from a set of modern **fintech** design references (a banking app
+and an investing app). Provenance matters here as much as it did for food data: those are somebody
+else's design shots, read for **direction only**. Nothing is reproduced screen-for-screen, and no
+asset from them ships. Both typefaces they use are **SIL OFL** — checked before adoption, rule 4 —
+and we bundle Plus Jakarta Sans with its licence file rather than fetching it, because offline-first
+applies to typography too.
+
+**What we took**
+
+| From the references | Why it transfers |
+|---|---|
+| Near-black surfaces (`#101010` / `#1A1C19`) | Reads modern, saves OLED battery, and lets one accent carry the whole brand |
+| One saturated accent (`#98EF5A`) | A single identity colour is easier to keep disciplined than a palette |
+| Large display numerals, heavy weight, tight tracking | A day's calorie total should read like a headline, not a table cell |
+| 20dp cards, stadium pills, borderless filled inputs | Softer, more touchable, fewer visual lines competing with data |
+| Floating bottom bar with a pill indicator | Clear current-tab signal without chrome |
+
+**What we refused, and this is the load-bearing part**
+
+Both references **colour an entire card by a single metric** — a lime balance card when the number is
+good, a red portfolio card when it is down. We did not take that, and the refusal is written into
+`theme.dart` so it is not re-added later as an improvement.
+
+In fintech, a red card is neutral information about money. In a health app, a red screen because you
+ate too much *is* the guilt loop — [PRODUCT.md](../PRODUCT.md) anti-reference #1 — and it contradicts
+principle 5 outright: *"Earn every colour... never colour the whole screen by a calorie deficit."*
+
+So the rule is: **the accent marks identity, never judgement.** Brand surfaces, the primary action,
+the selected tab. Amber and red stay reserved for attention and genuine problems.
+
+Three tests in `test/app/theme_test.dart` enforce it rather than trusting discipline: the accent can
+never be reused as a macro colour, no macro may be alarm-red, and the four macros must stay
+distinct. Contrast is asserted at WCAG AA on both themes — which caught a real trap, since the raw
+lime cannot carry white text, so light mode uses a darkened variant and only dark mode uses it neat.
+
 ## 1. What we take from Fud AI
 
 Fud AI's core insight, and the one we adopt wholesale: **the AI is the logging mechanism, not a feature
