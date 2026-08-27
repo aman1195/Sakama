@@ -313,8 +313,15 @@ class _Intro extends ConsumerWidget {
             child: SkCard(
               padding: const EdgeInsets.symmetric(
                   horizontal: Sk.lg, vertical: Sk.md),
-              onTap: () =>
-                  ref.read(coachControllerProvider.notifier).send(q),
+              // MUST gate on consent like every other send path. The
+              // redesign added this tile calling send() directly, which would
+              // have shipped the grounding snapshot — profile and health
+              // CONDITIONS — without the consent #60/#62 exist to require.
+              // A new entry point to an existing action inherits its gates.
+              onTap: () async {
+                if (!await ensureAiConsent(context, ref)) return;
+                await ref.read(coachControllerProvider.notifier).send(q);
+              },
               child: Row(
                 children: [
                   Expanded(child: Text(q, style: text.bodyLarge)),
