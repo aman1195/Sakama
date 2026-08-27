@@ -208,3 +208,49 @@ the upstream trace.
   tool-selection harness.
 - **Costs are estimates** from the published per-million rates and the Phase 0 token profile
   (~1.3K in, ~600 out), not measured invoices.
+
+
+---
+
+## 4. Development routing (2026-08-27)
+
+PhotoSnap now tries an ordered chain rather than a single upstream, best
+accuracy first: **Gemini direct → ModelBeat → OpenRouter**. A link is skipped
+on transport failure, on a non-2xx, or (for ModelBeat) on unverified routing.
+A rough number beats no number, but only after the good one is unavailable.
+
+The first link uses Google's **unpaid** tier, and that is gated by an
+allowlist, not a flag.
+
+Google's Gemini API terms, read 2026-08-27, say of the Unpaid Services:
+
+> "Google uses the content you submit to the Services and any generated
+> responses to provide, improve, and develop Google products and services and
+> machine learning technologies"
+
+> "human reviewers may read, annotate, and process your API input and output"
+
+> "Do not submit sensitive, confidential, or personal information to the Unpaid
+> Services."
+
+A meal photograph attached to a health profile is sensitive personal
+information by any reading, so the free tier is usable **only for the
+developer's own account during development**. This is CLAUDE.md rule 3 exactly:
+paid tiers only, because free tiers train on data.
+
+Two secrets are required and neither alone does anything:
+
+| Secret | Effect |
+|---|---|
+| `GEMINI_FREE_KEY_DEV_ONLY` | the key. Inert without the allowlist. |
+| `GEMINI_FREE_USER_IDS` | comma-separated user ids. Unset means **nobody**. |
+
+An allowlist rather than a flag is the whole point. A flag gets forgotten and
+then quietly serves strangers. An allowlist can only ever serve the people
+written into it, so rule 3 is enforced by construction instead of by memory.
+`gateway_test.ts` proves the closed cases: unset list, empty id, prefix and
+case mismatches, key-without-allowlist, and BYOK never chaining onward.
+
+**Before real users:** delete both secrets and top up OpenRouter. Gemini via
+OpenRouter is a paid tier, so it carries the accuracy without the data terms,
+at roughly $0.0020 a photo.
