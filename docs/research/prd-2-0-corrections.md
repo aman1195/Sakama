@@ -96,5 +96,12 @@ localisation and launch**. The content matches the PRD; only the labels differ.
   counts measure pulls, including CI and re-pulls, not instances. Either accept it as a directional
   proxy or add opt-in telemetry, which conflicts with the privacy promise. Accepting the proxy is
   the honest choice.
+- **§6.3 and §9.2** put the AI entry point on an Edge Function in one row and a Node
+  endpoint in another without reconciling either against
+  [ADR 0011](../adr/0011-serverless-ai-gateway.md), which rejected a self-hosted proxy.
+  [ADR 0017](../adr/0017-dual-deployment-cloud-and-self-hosted.md) now states the
+  distinction: ADR 0011 rejected *us* operating a proxy, not an operator running their own
+  server on their own hardware with their own key. M11 must still decide whose key pays for
+  a self-hosted instance's AI, and document that an air-gapped one has none.
 - **§9.2** shows BYOK keys fetched from Vault into the Edge Function. Correct, and the redaction
   requirement (OWASP M1) should be stated there too, not only in §11.

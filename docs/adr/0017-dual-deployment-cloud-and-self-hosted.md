@@ -66,6 +66,34 @@ This distinction must be stated in the self-hosting documentation before the Doc
 release, not after. A self-hoster who discovers it post-install will reasonably feel
 misled.
 
+### Reconciling with ADR 0011
+
+[ADR 0011](0011-serverless-ai-gateway.md) chose a serverless AI gateway and explicitly
+rejected a self-hosted proxy. A self-hosted deployment has no Edge Functions, so on its
+face this ADR contradicts that one. It does not, and the distinction needs stating before
+someone reads the two and picks whichever suits them.
+
+ADR 0011's rejection was of **us operating a proxy** — a long-lived server we run, patch
+and pay for, sitting between the client and the provider. That reasoning is unchanged for
+the managed cloud, where the Edge Function remains the only AI entry point.
+
+The self-hosted Node endpoint is not that proxy. It is the operator's own server, on their
+own infrastructure, holding their own key. It performs the identical job the Edge Function
+performs — verify the JWT, apply RLS, assemble context, enforce budget, decrypt BYOK,
+redact — by importing the same module, and it is operated by the person whose data flows
+through it.
+
+Two consequences follow, and M11 must decide them explicitly rather than inherit them:
+
+- **Whose key pays.** A self-hosted instance has no access to our provider account. Either
+  the operator supplies a key (BYOK becomes mandatory rather than optional for self-hosted),
+  or they authenticate to our gateway and we meter them. The first is simpler and matches
+  the sovereignty promise; assume it unless M11 argues otherwise.
+- **An air-gapped instance has no AI at all.** Every AI feature calls a provider over the
+  internet. Offline degradation is already the rule for the mobile app ([ARCHITECTURE.md](../ARCHITECTURE.md)),
+  so an air-gapped deployment is a permanently-degraded case of a state the product already
+  handles, not a new one. It must be documented as such, not discovered.
+
 ### Other consequences
 
 - Every schema change is now two migrations to keep in step, or one shared migration
