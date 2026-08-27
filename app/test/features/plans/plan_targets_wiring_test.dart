@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sakama/core/db/database.dart';
 import 'package:sakama/core/providers/app_providers.dart';
 import 'package:sakama/features/home/presentation/home_page.dart';
-import 'package:sakama/features/home/presentation/widgets/calorie_budget_ring.dart';
+import 'package:sakama/features/home/presentation/widgets/today_hero.dart';
 import 'package:sakama/features/onboarding/domain/enums.dart';
 import 'package:sakama/features/onboarding/domain/profile_record.dart';
 
@@ -39,7 +39,7 @@ Future<void> _seedActivePlan(SakamaDatabase db, String config) =>
           active: const Value(true), createdAt: 1, updatedAt: 1));
 
 void main() {
-  testWidgets('active plan target drives the dashboard ring, overlaying computed',
+  testWidgets('active plan target drives the dashboard hero, overlaying computed',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(500, 3000));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -58,7 +58,7 @@ void main() {
       child: const MaterialApp(home: HomePage()),
     ));
     for (var i = 0;
-        i < 40 && tester.widgetList(find.byType(CalorieBudgetRing)).isEmpty;
+        i < 40 && tester.widgetList(find.byType(TodayHero)).isEmpty;
         i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
@@ -68,7 +68,11 @@ void main() {
     }
 
     // The ring shows the PLAN's 1500 target, not the computed maintenance value.
-    expect(find.textContaining('180 of 1500 eaten'), findsOneWidget);
+    // The point of the test is that the PLAN's 1500 wins over the computed
+    // maintenance target; the hero states it as "of 1500 kcal" alongside what
+    // has been eaten.
+    expect(find.textContaining('of 1500 kcal'), findsOneWidget);
+    expect(find.textContaining('180 eaten'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(milliseconds: 50));

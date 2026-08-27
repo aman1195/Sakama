@@ -96,8 +96,30 @@ ThemeData sakamaTheme(Brightness brightness) {
       indicatorColor: SakamaPalette.accent,
       indicatorShape: const StadiumBorder(),
       elevation: 0,
-      labelTextStyle: const WidgetStatePropertyAll(
-          TextStyle(fontFamily: _font, fontSize: 12, fontWeight: FontWeight.w600)),
+      // THE SELECTED ICON MUST BE SET EXPLICITLY. Material defaults it to
+      // onSecondaryContainer, which the seed makes a pale mint — on our lime
+      // indicator that measured a contrast ratio of 1.10, i.e. invisible. It
+      // shipped that way and was spotted on device, not by any test.
+      //
+      // The rule this now follows everywhere: WE choose the indicator colour,
+      // so WE owe it a legible on-colour. Anything Material paints for itself
+      // will reach for a scheme pairing that knows nothing about our accent.
+      iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
+            size: 24,
+            color: states.contains(WidgetState.selected)
+                ? SakamaPalette.onAccent
+                : (light ? SakamaPalette.inkDark : Colors.white)
+                    .withValues(alpha: 0.75),
+          )),
+      labelTextStyle: WidgetStateProperty.resolveWith((states) => TextStyle(
+            fontFamily: _font,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            // Labels sit BELOW the pill, on the bar, so they take the bar's
+            // on-colour rather than the accent's.
+            color: (light ? SakamaPalette.inkDark : Colors.white).withValues(
+                alpha: states.contains(WidgetState.selected) ? 1.0 : 0.65),
+          )),
     ),
     extensions: [SakamaColors.of(brightness)],
   );
@@ -111,6 +133,11 @@ abstract final class SakamaPalette {
   /// Identity. Used for brand surfaces, the primary action and the selected
   /// tab — NEVER to signal that a number is good or bad.
   static const accent = Color(0xFF98EF5A);
+
+  /// Ink for anything drawn ON [accent]. Near-black, because the accent is a
+  /// bright fill in BOTH themes — white on it measures 1.42, which is not a
+  /// contrast ratio so much as a rumour.
+  static const onAccent = Color(0xFF10240A);
 
   /// The same hue darkened enough to carry white text and to pass contrast on
   /// a light background, where the raw accent cannot.

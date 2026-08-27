@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../app/kit/kit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -98,7 +100,10 @@ class _PlansPageState extends ConsumerState<PlansPage> {
     return Semantics(
       identifier: 'plans-page',
       child: Scaffold(
-        appBar: AppBar(title: const Text('Plans')),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          scrolledUnderElevation: 0,
+        ),
         floatingActionButton: Semantics(
           identifier: 'plans-import',
           button: true,
@@ -114,6 +119,7 @@ class _PlansPageState extends ConsumerState<PlansPage> {
           data: (plans) => ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
             children: [
+              SkTitle('Plans'),
               // Active-plan summary — or the maintenance-default fallback.
               Card(
                 child: Padding(

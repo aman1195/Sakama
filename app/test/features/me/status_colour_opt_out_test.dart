@@ -52,18 +52,33 @@ void main() {
       }
     });
 
-    test('neutral is not one of the judgement fills', () async {
-      // If neutral resolved to a status colour, opting out would just pick a
-      // different verdict rather than withholding one.
+    test('muted is not one of the judgement fills', () {
+      // Opting out must WITHHOLD a verdict, not pick a quieter one.
+      //
+      // This used to assert the same of `neutral`. That changed on device:
+      // making an empty day grey meant the very first screen anyone opens had
+      // no colour at all and the treatment was invisible. `neutral` now shares
+      // the BRAND colour with onTrack — a card reading "1,750 kcal left"
+      // praises nothing — and `muted` carries the opt-out instead.
       for (final b in Brightness.values) {
-        final neutral = TrackStatus.neutral.surface(b);
+        final muted = TrackStatus.muted.surface(b);
         for (final judged in [
-          TrackStatus.onTrack,
           TrackStatus.nearing,
-          TrackStatus.over
+          TrackStatus.over,
+          TrackStatus.onTrack,
         ]) {
-          expect(neutral, isNot(judged.surface(b)));
+          expect(muted, isNot(judged.surface(b)));
         }
+      }
+    });
+
+    test('an empty day is the brand colour, not a verdict', () {
+      // The fix for the grey first screen, pinned so it cannot regress.
+      for (final b in Brightness.values) {
+        expect(TrackStatus.neutral.surface(b), TrackStatus.onTrack.surface(b),
+            reason: 'a normal day should look like the app');
+        expect(TrackStatus.neutral.surface(b),
+            isNot(TrackStatus.over.surface(b)));
       }
     });
   });

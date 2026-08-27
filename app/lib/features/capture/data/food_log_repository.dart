@@ -11,6 +11,20 @@ class FoodLogRepository {
 
   Stream<List<FoodLog>> watchDay(String date) => _db.watchDay(date);
 
+  /// Every log from [fromYmd] onward, newest day first.
+  ///
+  /// One query for the whole window rather than N per-day watches: the Diary
+  /// shows a month at a time, and thirty live streams to render one list is
+  /// how a scroll turns into a battery complaint.
+  Stream<List<FoodLog>> watchSince(String fromYmd) =>
+      (_db.select(_db.foodLogs)
+            ..where((t) => t.date.isBiggerOrEqualValue(fromYmd))
+            ..orderBy([
+              (t) => OrderingTerm.desc(t.date),
+              (t) => OrderingTerm.desc(t.createdAt),
+            ]))
+          .watch();
+
   /// The foods you actually eat, newest first, one row per distinct name.
   ///
   /// Repeat eating is the norm — most people cycle the same few dishes — so

@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/db/database.dart';
+import '../../../app/kit/kit.dart';
 import '../../../app/status_surface.dart';
+import 'widgets/today_hero.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/current_date_provider.dart';
 import '../../onboarding/domain/nutrition_targets.dart';
@@ -11,9 +13,6 @@ import '../../onboarding/domain/target_calculator.dart';
 import '../../plans/application/plan_providers.dart';
 import '../../water/presentation/water_chip.dart';
 import '../domain/day_totals.dart';
-import 'widgets/calorie_budget_ring.dart';
-import 'widgets/empty_day_card.dart';
-import 'widgets/macro_bars.dart';
 import 'widgets/meal_slot_card.dart';
 
 String _ymd(DateTime d) =>
@@ -52,90 +51,123 @@ class HomePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final targets = ref.watch(targetsProvider);
     final logsAsync = ref.watch(todayLogsProvider);
+    final date = ref.watch(currentDateProvider);
 
     return Semantics(
       identifier: 'home-page',
       child: Scaffold(
-        appBar: AppBar(title: const Text('Today')),
-        floatingActionButton: Semantics(
-          identifier: 'home-photosnap',
-          child: FloatingActionButton.extended(
-            onPressed: () => context.push('/snap'),
-            icon: const Icon(Icons.photo_camera_outlined),
-            label: const Text('Snap'),
-          ),
-        ),
-        body: logsAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(child: Text('Error: $e')),
-          data: (logs) {
-            final totals = DayTotals.fromLogs(logs);
-            final byMeal = groupByMeal(logs);
-            // Ring + macros belong together — one "today" card, one hero
-            // number (visual pass SAK-37, HealthifyMe structure).
-            return ListView(
-              // Extra bottom inset so the FAB never sits on the last meal
-              // card's "+" (seen in the eyes-on pass).
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-              children: [
-                // The card's COLOUR is the state (DESIGN.md 0.1): lime within
-                // target, amber nearing, warm red past it. Deliberate reversal
-                // of the old "never colour the whole screen" rule — see
-                // PRODUCT.md, amended rather than quietly contradicted.
-                StatusSurface(
-                  identifier: 'today-status-card',
-                  // Honours the opt-out: neutral keeps the card a plain
-                  // surface while every number on it stays identical. The
-                  // switch removes the colour judgement, never the data.
-                  status: ref.watch(statusColourEnabledProvider)
-                      ? trackStatus(
-                          value: totals.calories,
-                          target: (targets?.calories ?? 0).toDouble(),
-                        )
-                      : TrackStatus.neutral,
-                  child: Column(
-                      children: [
-                        CalorieBudgetRing(
-                          target: targets?.calories ?? 0,
-                          eaten: totals.calories,
-                        ),
-                        if (targets != null) ...[
-                          const SizedBox(height: 20),
-                          MacroBars(
-                            proteinEaten: totals.proteinG,
+        // No AppBar: the reference apps put the title inline with the content
+        // and give the hero the top of the screen. A 56dp bar above a bright
+        // card wastes the most valuable space on the phone.
+        body: SafeArea(
+          bottom: false,
+          child: logsAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => Center(child: Text('Error: $e')),
+            data: (logs) {
+              final totals = DayTotals.fromLogs(logs);
+              final byMeal = groupByMeal(logs);
+              return ListView(
+                padding: const EdgeInsets.fromLTRB(Sk.lg, 0, Sk.lg, Sk.xxl),
+                children: [
+                  SkTitle(_greeting(date), trailing: [
+                    SkCircleAction(
+                      identifier: 'home-history',
+                      icon: Icons.calendar_today_outlined,
+                      label: 'Diary',
+                      size: 40,
+                      onTap: () => context.go('/diary'),
+                    ),
+                  ]),
+                  TodayHero(
+                    status: ref.watch(statusColourEnabledProvider)
+                        ? trackStatus(
+                            value: totals.calories,
+                            target: (targets?.calories ?? 0).toDouble(),
+                          )
+                        : TrackStatus.muted,
+                    target: targets?.calories ?? 0,
+                    eaten: totals.calories,
+                    actions: [
+                      SkCircleAction(
+                          identifier: 'hero-snap',
+                          icon: Icons.photo_camera_outlined,
+                          label: 'Snap a photo',
+                          onTap: () => context.push('/snap')),
+                      SkCircleAction(
+                          identifier: 'hero-add',
+                          icon: Icons.add,
+                          label: 'Add food',
+                          onTap: () => context.push('/add')),
+                      SkCircleAction(
+                          identifier: 'hero-scan',
+                          icon: Icons.qr_code_scanner,
+                          label: 'Scan a barcode',
+                          onTap: () => context.push('/scan')),
+                      SkCircleAction(
+                          identifier: 'hero-coach',
+                          icon: Icons.auto_awesome_outlined,
+                          label: 'Ask Vita',
+                          onTap: () => context.go('/coach')),
+                    ],
+                    macros: targets == null
+                        ? null
+                        : MacroRow(
+                            protein: totals.proteinG,
                             proteinTarget: targets.proteinG,
-                            carbEaten: totals.carbG,
+                            carbs: totals.carbG,
                             carbTarget: targets.carbG,
-                            fatEaten: totals.fatG,
+                            fat: totals.fatG,
                             fatTarget: targets.fatG,
                           ),
-                        ],
-                      ],
-                    ),
-                ),
-                const SizedBox(height: 12),
-                if (targets != null) WaterChip(targetMl: targets.waterMl),
-                const SizedBox(height: 20),
-                // Empty day: the teaching card REPLACES the four empty
-                // slots (review #53 — card + four "Nothing yet" rows was
-                // redundant). Slots appear from the first log onward.
-                if (logs.isEmpty)
-                  EmptyDayCard(onLog: () => context.push('/add'))
-                else
-                  for (final meal in Meal.values) ...[
-                    MealSlotCard(
-                      meal: meal,
-                      entries: byMeal[meal]!,
-                      onAdd: () => context.push('/add?meal=${meal.key}'),
-                    ),
-                    const SizedBox(height: 12),
+                  ),
+                  if (targets != null) ...[
+                    const SizedBox(height: Sk.md),
+                    WaterChip(targetMl: targets.waterMl),
                   ],
-              ],
-            );
-          },
+                  const SkSection('Meals'),
+                  if (logs.isEmpty)
+                    SkCard(
+                      padding: EdgeInsets.zero,
+                      child: SkEmpty(
+                        identifier: 'empty-day',
+                        icon: Icons.restaurant_outlined,
+                        title: 'Nothing logged yet',
+                        body: 'Snap a photo, scan a barcode, or add it by hand '
+                            '— whichever is fastest right now.',
+                        actionLabel: 'Log your first meal',
+                        onAction: () => context.push('/add'),
+                      ),
+                    )
+                  else
+                    SkCard(
+                      padding: const EdgeInsets.symmetric(vertical: Sk.sm),
+                      child: Column(
+                        children: [
+                          for (final meal in Meal.values)
+                            MealSlotCard(
+                              meal: meal,
+                              entries: byMeal[meal]!,
+                              onAdd: () =>
+                                  context.push('/add?meal=${meal.key}'),
+                            ),
+                        ],
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
   }
 
+  /// A greeting instead of "Today". The reference apps lead with the person,
+  /// not with the noun for the screen.
+  static String _greeting(DateTime now) {
+    if (now.hour < 12) return 'Good morning';
+    if (now.hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
 }

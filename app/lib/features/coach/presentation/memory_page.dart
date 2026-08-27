@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../app/kit/kit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/database.dart';
@@ -27,7 +29,8 @@ class MemoryPage extends ConsumerWidget {
       identifier: 'memory-page',
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('What Vita remembers'),
+          backgroundColor: Colors.transparent,
+          scrolledUnderElevation: 0,
           actions: [
             if ((async.value ?? const []).isNotEmpty)
               Semantics(
@@ -46,8 +49,9 @@ class MemoryPage extends ConsumerWidget {
           data: (facts) => facts.isEmpty
               ? _empty(context)
               : ListView(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.fromLTRB(Sk.lg, 0, Sk.lg, Sk.xxl),
                   children: [
+                    const SkTitle('What Vita remembers'),
                     Text(
                       'Vita learns from your chats to give better advice. This '
                       'stays on your phone and is never uploaded. Delete '
@@ -63,23 +67,21 @@ class MemoryPage extends ConsumerWidget {
     );
   }
 
-  Widget _empty(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.psychology_outlined, size: 40),
-              const SizedBox(height: 12),
-              Text(
-                "Vita hasn't learned anything yet. Chat about your food, "
-                'habits or goals and what matters will show up here.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ],
+  Widget _empty(BuildContext context) => ListView(
+        padding: const EdgeInsets.fromLTRB(Sk.lg, 0, Sk.lg, Sk.xxl),
+        children: [
+          const SkTitle('What Vita remembers'),
+          SkCard(
+            padding: EdgeInsets.zero,
+            child: const SkEmpty(
+              identifier: 'memory-empty',
+              icon: Icons.psychology_outlined,
+              title: "Nothing learned yet",
+              body: 'Chat about your food, habits or goals and what matters '
+                  'will show up here — on this phone only.',
+            ),
           ),
-        ),
+        ],
       );
 
   Widget _tile(BuildContext context, WidgetRef ref, MemoryFact f) => Card(

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../../../app/kit/kit.dart';
+import '../../../app/theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -54,7 +57,6 @@ class _SnapPageState extends ConsumerState<SnapPage> {
     return Semantics(
       identifier: 'snap-page',
       child: Scaffold(
-        appBar: AppBar(title: const Text('PhotoSnap')),
         body: switch (state) {
           SnapIdle() || SnapAnalyzing() => const _Analyzing(),
           SnapReady(:final drafts) => _ConfirmList(drafts: drafts),
@@ -104,14 +106,43 @@ class _SnapPageState extends ConsumerState<SnapPage> {
 
 class _Analyzing extends StatelessWidget {
   const _Analyzing();
+
   @override
-  Widget build(BuildContext context) => const Center(
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.all(Sk.lg),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Reading your plate…'),
+            const SkTitle('PhotoSnap'),
+            SkHero(
+              identifier: 'snap-analyzing',
+              padding: const EdgeInsets.fromLTRB(22, 28, 22, 28),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(
+                    width: 26,
+                    height: 26,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 3, color: SakamaPalette.onAccent),
+                  ),
+                  const SizedBox(height: Sk.lg),
+                  Text('Reading your plate',
+                      style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                            color: SakamaPalette.onAccent,
+                            fontSize: 34,
+                            height: 1.1,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -1.2,
+                          )),
+                  const SizedBox(height: 6),
+                  Text('Finding each dish and estimating the portions.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: SakamaPalette.onAccent
+                              .withValues(alpha: 0.75))),
+                ],
+              ),
+            ),
           ],
         ),
       );
@@ -148,19 +179,58 @@ class _ConfirmListState extends ConsumerState<_ConfirmList> {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final scheme = Theme.of(context).colorScheme;
     final keptCount = widget.drafts.where((d) => d.keep).length;
     return Column(
       children: [
+        // The result gets a hero too: the total is the number the user is
+        // deciding on, so it should be the largest thing on the screen rather
+        // than buried in the button label.
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          padding: const EdgeInsets.fromLTRB(Sk.lg, 0, Sk.lg, Sk.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('We found these', style: text.titleMedium),
-              Text('AI estimate — tap to adjust',
-                  style:
-                      text.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
+              const SkTitle('On your plate'),
+              SkHero(
+                identifier: 'snap-total',
+                padding: const EdgeInsets.fromLTRB(22, 16, 22, 18),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('AI ESTIMATE · TAP ANY ITEM TO ADJUST',
+                              style: text.labelSmall?.copyWith(
+                                color: SakamaPalette.onAccent
+                                    .withValues(alpha: 0.65),
+                                letterSpacing: 1.1,
+                                fontWeight: FontWeight.w700,
+                              )),
+                          const SizedBox(height: 4),
+                          Text('${_totalKcal.round()}',
+                              style: text.displaySmall?.copyWith(
+                                color: SakamaPalette.onAccent,
+                                fontSize: 46,
+                                height: 1.05,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -2,
+                              )),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                          'kcal · $keptCount of ${widget.drafts.length}',
+                          style: text.labelLarge?.copyWith(
+                              color: SakamaPalette.onAccent
+                                  .withValues(alpha: 0.75))),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -323,28 +393,41 @@ class _Retry extends StatelessWidget {
   final String id, text;
   final IconData icon;
   final VoidCallback? onRetry;
+
   @override
-  Widget build(BuildContext context) => Center(
-        child: Semantics(
-          identifier: id,
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 44),
-                const SizedBox(height: 12),
-                Text(text, textAlign: TextAlign.center),
-                const SizedBox(height: 20),
-                if (onRetry != null)
-                  FilledButton(
-                      onPressed: onRetry, child: const Text('Take another')),
-                TextButton(
-                    onPressed: () => Navigator.of(context).maybePop(),
-                    child: const Text('Back')),
-              ],
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.all(Sk.lg),
+        child: Column(
+          children: [
+            const SkTitle('PhotoSnap'),
+            SkCard(
+              padding: EdgeInsets.zero,
+              child: SkEmpty(
+                identifier: id,
+                icon: icon,
+                title: _headline,
+                body: text,
+                actionLabel: onRetry != null ? 'Take another' : null,
+                onAction: onRetry,
+              ),
             ),
-          ),
+            const SizedBox(height: Sk.md),
+            TextButton(
+                onPressed: () => Navigator.of(context).maybePop(),
+                child: const Text('Back')),
+          ],
         ),
       );
+
+  /// A short headline above the explanation. The old states were one grey
+  /// paragraph under a grey icon, which read as an error even when the answer
+  /// was mundane ("that is not food").
+  String get _headline => switch (id) {
+        'snap-no-food' => 'That does not look like food',
+        'snap-budget' => "Today's photo estimates are used up",
+        'snap-provider-down' => 'The AI service is unavailable',
+        'snap-signin' => 'Could not sign in',
+        'snap-permission' => 'Camera access is off',
+        _ => 'Something went wrong',
+      };
 }

@@ -172,7 +172,8 @@ void main() {
     testWidgets('with nothing learned, it explains rather than showing a void',
         (t) async {
       await mount(t);
-      expect(find.textContaining("hasn't learned anything yet"), findsOneWidget);
+      expect(find.bySemanticsIdentifier('memory-empty'), findsOneWidget);
+      expect(find.textContaining('Nothing learned yet'), findsOneWidget);
       // Nothing to reset means no destructive action offered.
       expect(find.bySemanticsIdentifier('memory-reset'), findsNothing);
       await _dispose(t);

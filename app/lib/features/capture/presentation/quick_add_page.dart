@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import '../../../app/kit/kit.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -264,62 +266,50 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
   Widget _favouritesStrip() {
     final favs = ref.watch(favouriteFoodsProvider).value ?? const [];
     if (favs.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Saved', style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            children: [
-              for (final f in favs)
-                Semantics(
-                  identifier: 'qa-favourite-${f.row.id}',
-                  button: true,
-                  child: ActionChip(
-                    avatar: const Icon(Icons.bookmark, size: 16),
-                    label: Text(f.portionKcal == null
-                        ? f.row.name
-                        : '${f.row.name} · ${f.portionKcal!.round()} kcal'),
-                    onPressed: () => _pickFavourite(f),
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Repeat meals are the norm, so put them one tap away.
-  Widget _recentsStrip() => Padding(
-    padding: const EdgeInsets.only(top: 12),
-    child: Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Recent', style: Theme.of(context).textTheme.titleSmall),
-        const SizedBox(height: 6),
+        // A HEADING. Unlabelled pills floating under a search box told the
+        // user nothing about what they were or why they were there.
+        const SkSection('Saved foods'),
         Wrap(
-          spacing: 8,
-          runSpacing: 4,
+          spacing: Sk.sm,
+          runSpacing: Sk.sm,
           children: [
-            for (final r in _recents)
-              Semantics(
-                identifier: 'qa-recent-${r.id}',
-                button: true,
-                child: ActionChip(
-                  label: Text('${r.name} · ${r.energyKcal.round()} kcal'),
-                  onPressed: () => _pickRecent(r),
-                ),
+            for (final f in favs)
+              SkPill(
+                identifier: 'qa-favourite-${f.row.id}',
+                icon: Icons.bookmark,
+                label: f.row.name,
+                onTap: () => _pickFavourite(f),
               ),
           ],
         ),
       ],
-    ),
-  );
+    );
+  }
+
+  Widget _recentsStrip() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SkSection('Logged recently'),
+        Wrap(
+          spacing: Sk.sm,
+          runSpacing: Sk.sm,
+          children: [
+            for (final r in _recents)
+              SkPill(
+                identifier: 'qa-recent-${r.id}',
+                icon: Icons.history,
+                label: '${r.name} · ${r.energyKcal.round()} kcal',
+                onTap: () => _pickRecent(r),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
 
   void _pick(Food food) {
     _picked = food;
@@ -415,208 +405,188 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
 
   @override
   Widget build(BuildContext context) {
+    final searching = _search.text.isNotEmpty;
     return Semantics(
       identifier: 'quick-add-page',
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Add food'),
-          actions: [
-            Semantics(
-              identifier: 'qa-snap',
-              button: true,
-              child: IconButton(
-                icon: const Icon(Icons.photo_camera_outlined),
-                tooltip: 'PhotoSnap',
-                onPressed: () => context.push('/snap'),
-              ),
-            ),
-            Semantics(
-              identifier: 'qa-scan',
-              button: true,
-              child: IconButton(
-                icon: const Icon(Icons.qr_code_scanner),
-                tooltip: 'Scan barcode',
-                onPressed: () => context.push('/scan'),
-              ),
-            ),
-          ],
-        ),
-        body: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              // Active-plan reminder (M4.5): outside the eating window / foods to
-              // avoid. Advisory only — never blocks logging.
-              const PlanLogNoticeCard(),
-              // Corpus search — the primary path.
-              Semantics(
-                identifier: 'qa-search',
-                child: TextField(
-                  controller: _search,
-                  onChanged: _onSearchChanged,
-                  onTapOutside: (_) =>
-                      FocusManager.instance.primaryFocus?.unfocus(),
-                  decoration: const InputDecoration(
-                    labelText: 'Search foods',
-                    prefixIcon: Icon(Icons.search),
-                    border: OutlineInputBorder(),
+        body: SafeArea(
+          bottom: false,
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(Sk.lg, 0, Sk.lg, Sk.xxl),
+              children: [
+                SkTitle('Add food', trailing: [
+                  SkCircleAction(
+                      identifier: 'qa-snap',
+                      icon: Icons.photo_camera_outlined,
+                      label: 'PhotoSnap',
+                      size: 40,
+                      onTap: () => context.push('/snap')),
+                  const SizedBox(width: Sk.sm),
+                  SkCircleAction(
+                      identifier: 'qa-scan',
+                      icon: Icons.qr_code_scanner,
+                      label: 'Scan barcode',
+                      size: 40,
+                      onTap: () => context.push('/scan')),
+                ]),
+                const PlanLogNoticeCard(),
+                // Search is the PRIMARY path and now looks like it: a single
+                // prominent field, not one input among seven.
+                Semantics(
+                  identifier: 'qa-search',
+                  child: TextField(
+                    controller: _search,
+                    onChanged: _onSearchChanged,
+                    onTapOutside: (_) =>
+                        FocusManager.instance.primaryFocus?.unfocus(),
+                    style: Theme.of(context).textTheme.titleMedium,
+                    decoration: const InputDecoration(
+                      hintText: 'Search dal, roti, paneer…',
+                      prefixIcon: Icon(Icons.search),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: Sk.lg, vertical: 18),
+                    ),
                   ),
                 ),
-              ),
-              if (_results.isNotEmpty) _resultsList(),
-              if (_results.isEmpty && _search.text.isEmpty) _favouritesStrip(),
-              if (_results.isEmpty &&
-                  _search.text.isEmpty &&
-                  _recents.isNotEmpty)
-                _recentsStrip(),
-              if (_noResultQuery != null && _results.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Semantics(
-                        identifier: 'qa-estimate',
-                        child: OutlinedButton.icon(
-                          icon: _estimating
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.auto_awesome),
-                          label: Text(
-                            _estimating
-                                ? 'Estimating…'
-                                : 'Estimate "$_noResultQuery" with AI',
+                if (_results.isNotEmpty) _resultsList(),
+                // Strips get HEADINGS now. Unlabelled floating pills were the
+                // worst thing on this screen — no way to know what they were.
+                if (!searching && _results.isEmpty) _favouritesStrip(),
+                if (!searching && _results.isEmpty && _recents.isNotEmpty)
+                  _recentsStrip(),
+                if (_noResultQuery != null && _results.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: Sk.md),
+                    child: SkCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('No match for "$_noResultQuery"',
+                              style: Theme.of(context).textTheme.titleMedium),
+                          const SizedBox(height: 4),
+                          Text('Vita can estimate it from the name.',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant)),
+                          const SizedBox(height: Sk.md),
+                          Semantics(
+                            identifier: 'qa-estimate',
+                            child: FilledButton.icon(
+                              icon: _estimating
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2))
+                                  : const Icon(Icons.auto_awesome, size: 18),
+                              label: Text(
+                                  _estimating ? 'Estimating…' : 'Estimate it'),
+                              onPressed: _estimating ? null : _estimate,
+                            ),
                           ),
-                          onPressed: _estimating ? null : _estimate,
-                        ),
+                          if (_estimateError != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: Sk.sm),
+                              child: Semantics(
+                                identifier: 'qa-estimate-error',
+                                child: Text(_estimateError!,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall),
+                              ),
+                            ),
+                        ],
                       ),
-                      if (_estimateError != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
+                    ),
+                  ),
+                const SkSection('Which meal?'),
+                Wrap(
+                  spacing: Sk.sm,
+                  runSpacing: Sk.sm,
+                  children: [
+                    for (final m in Meal.values)
+                      SkPill(
+                        label: m.label,
+                        selected: _meal == m,
+                        onTap: () => setState(() => _meal = m),
+                      ),
+                  ],
+                ),
+                // The form is the FALLBACK, so it reads as one grouped block
+                // rather than as seven equal inputs competing with search.
+                const SkSection('Details'),
+                SkCard(
+                  child: Column(
+                    children: [
+                      _field(_name, 'Food name',
+                          id: 'qa-name', required: true, onChanged: (_) {
+                        if (_picked != null) setState(() => _picked = null);
+                      }),
+                      if (_picked != null)
+                        _field(_grams, 'Amount (g)',
+                            id: 'qa-grams',
+                            number: true,
+                            required: true,
+                            positive: true,
+                            onChanged: (_) => _recomputeFromGrams()),
+                      _field(_kcal, 'Calories (kcal)',
+                          id: 'qa-kcal',
+                          number: true,
+                          required: true,
+                          positive: true,
+                          onChanged: _dropPickedProvenance),
+                      Row(children: [
+                        Expanded(
+                            child: _field(_protein, 'Protein (g)',
+                                id: 'qa-protein',
+                                number: true,
+                                onChanged: _dropPickedProvenance)),
+                        const SizedBox(width: Sk.md),
+                        Expanded(
+                            child: _field(_carb, 'Carbs (g)',
+                                id: 'qa-carb',
+                                number: true,
+                                onChanged: _dropPickedProvenance)),
+                        const SizedBox(width: Sk.md),
+                        Expanded(
+                            child: _field(_fat, 'Fat (g)',
+                                id: 'qa-fat',
+                                number: true,
+                                onChanged: _dropPickedProvenance)),
+                      ]),
+                      if (_picked != null)
+                        Align(
+                          alignment: Alignment.centerLeft,
                           child: Semantics(
-                            identifier: 'qa-estimate-error',
-                            child: Text(
-                              _estimateError!,
-                              style: Theme.of(context).textTheme.bodySmall,
+                            identifier: 'qa-keep-food',
+                            button: true,
+                            child: TextButton.icon(
+                              icon: const Icon(Icons.bookmark_add_outlined,
+                                  size: 18),
+                              label: const Text('Save this food'),
+                              onPressed: _keepPicked,
                             ),
                           ),
                         ),
                     ],
                   ),
                 ),
-              const SizedBox(height: 16),
-              // Meal slot.
-              SegmentedButton<Meal>(
-                // No checkmark: it stole ~24px and wrapped "Lunch" onto two
-                // lines on device (SAK-38). Selection reads via fill color.
-                showSelectedIcon: false,
-                style: const ButtonStyle(
-                  visualDensity: VisualDensity.compact,
-                  padding: WidgetStatePropertyAll(
-                    EdgeInsets.symmetric(horizontal: 8),
-                  ),
-                ),
-                segments: [
-                  for (final m in Meal.values)
-                    ButtonSegment(
-                      value: m,
-                      label: Text(
-                        m.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                ],
-                selected: {_meal},
-                onSelectionChanged: (s) => setState(() => _meal = s.first),
-              ),
-              const SizedBox(height: 16),
-              _field(
-                _name,
-                'Food name',
-                id: 'qa-name',
-                required: true,
-                onChanged: (_) {
-                  // Hand-editing the name means it is no longer the picked food.
-                  if (_picked != null) setState(() => _picked = null);
-                },
-              ),
-              // Grams only matters for a picked food (drives derivation).
-              if (_picked != null)
-                _field(
-                  _grams,
-                  'Amount (g)',
-                  id: 'qa-grams',
-                  number: true,
-                  required: true,
-                  positive: true,
-                  onChanged: (_) => _recomputeFromGrams(),
-                ),
-              // Hand-editing ANY nutrition value means the row no longer
-              // equals scaleTo(grams) of the picked food, so it must not keep
-              // that food's provenance (issue #32).
-              _field(
-                _kcal,
-                'Calories (kcal)',
-                id: 'qa-kcal',
-                number: true,
-                required: true,
-                positive: true,
-                onChanged: _dropPickedProvenance,
-              ),
-              _field(
-                _protein,
-                'Protein (g)',
-                id: 'qa-protein',
-                number: true,
-                onChanged: _dropPickedProvenance,
-              ),
-              _field(
-                _carb,
-                'Carbs (g)',
-                id: 'qa-carb',
-                number: true,
-                onChanged: _dropPickedProvenance,
-              ),
-              _field(
-                _fat,
-                'Fat (g)',
-                id: 'qa-fat',
-                number: true,
-                onChanged: _dropPickedProvenance,
-              ),
-              // Keep a corpus match as a saved food. This is the POINTER path:
-              // it stores where the nutrition lives plus your portion, never a
-              // copy of the values — which is what keeps ODbL data out of the
-              // synced user_foods table (docs/architecture/08 §3).
-              if (_picked != null)
+                const SizedBox(height: Sk.xl),
                 Semantics(
-                  identifier: 'qa-keep-food',
-                  button: true,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      icon: const Icon(Icons.bookmark_add_outlined, size: 18),
-                      label: const Text('Save this food'),
-                      onPressed: _keepPicked,
-                    ),
+                  identifier: 'qa-save',
+                  child: FilledButton(
+                    onPressed: _saving ? null : _save,
+                    child: const Text('Log it'),
                   ),
                 ),
-              const SizedBox(height: 24),
-              Semantics(
-                identifier: 'qa-save',
-                child: FilledButton(
-                  onPressed: _saving ? null : _save,
-                  child: const Text('Log it'),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

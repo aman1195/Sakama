@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/kit/kit.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../weight/presentation/weight_section.dart';
 import 'account_section.dart';
@@ -17,16 +18,17 @@ class MePage extends ConsumerWidget {
       child: SafeArea(
         bottom: false,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(Sk.lg, 0, Sk.lg, Sk.xxl),
           children: [
+            const SkTitle('You'),
             const WeightSection(),
+            const SkSection('Settings'),
             // ONE grouped card instead of five floating ones (SAK-126).
             // The reference apps group settings rows into a single surface
             // with hairline dividers; five separate cards each holding one
             // row reads as five unrelated things, and wastes 64dp of vertical
             // space that a phone does not have to spare.
             Card(
-              margin: const EdgeInsets.only(top: 16),
               child: Column(
                 children: [
                   _navRow(context,
