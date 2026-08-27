@@ -24,6 +24,7 @@ import '../../features/onboarding/data/profile_repository.dart';
 import '../../features/water/data/water_repository.dart';
 import '../../features/plans/data/plan_repository.dart';
 import '../../features/weight/data/weight_repository.dart';
+import '../../features/workouts/data/workout_repository.dart';
 import '../../features/onboarding/domain/profile_record.dart';
 import '../ai/ai_consent_store.dart';
 import '../ai/byok_store.dart';
@@ -95,6 +96,12 @@ final waterRepositoryProvider = FutureProvider<WaterRepository>((ref) async {
 final weightRepositoryProvider = FutureProvider<WeightRepository>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return WeightRepository(db);
+});
+
+final workoutRepositoryProvider =
+    FutureProvider<WorkoutRepository>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return WorkoutRepository(db);
 });
 
 /// Favourites + custom foods (docs/architecture/08-user-foods.md). SYNCED, and

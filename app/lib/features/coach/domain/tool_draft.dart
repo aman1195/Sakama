@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import '../../home/domain/day_totals.dart' show Meal;
+import '../../workouts/data/workout_repository.dart';
+import '../../workouts/domain/workout_set.dart';
 
 /// A action Vita PROPOSES. Nothing here is written until the user confirms it
 /// (ADR 0016 decision 2) — a draft is a suggestion rendered as a confirm card,
@@ -49,6 +51,38 @@ class LogWeightDraft extends ToolDraft {
   String get summary => 'Weight · ${_n(weightKg)} kg';
 }
 
+class LogWorkoutDraft extends ToolDraft {
+  const LogWorkoutDraft({
+    required this.name,
+    required this.kind,
+    this.durationMin,
+    this.sets = const [],
+  });
+
+  final String name;
+  final String kind;
+  final int? durationMin;
+  final List<WorkoutSet> sets;
+
+  /// Deliberately no energyKcal. A model-guessed burn would be subtracted from
+  /// the day's target and change what the user eats, off a number nobody
+  /// measured. Exercise gets logged; the burn stays unknown until we compute
+  /// one from METs or read it from Health.
+  @override
+  String get summary {
+    final parts = <String>[name];
+    if (sets.isNotEmpty) {
+      final reps = sets.map((s) => s.reps).toSet();
+      final repPart = reps.length == 1 ? '×${reps.first}' : '';
+      final w = sets.map((s) => s.weightKg).nonNulls.toSet();
+      final wPart = w.length == 1 ? ' @ ${_n(w.first)} kg' : '';
+      parts.add('${sets.length} sets$repPart$wPart');
+    }
+    if (durationMin != null) parts.add('$durationMin min');
+    return parts.join(' · ');
+  }
+}
+
 String _n(double v) =>
     v == v.roundToDouble() ? v.round().toString() : v.toStringAsFixed(1);
 
@@ -83,6 +117,10 @@ class ToolCallParser {
   static const _waterMinMl = 10, _waterMaxMl = 5000;
   static const _weightMinKg = 20.0, _weightMaxKg = 500.0;
   static const _nameMax = 80;
+  static const _durationMaxMin = 1440; // one day
+  static const _setsMax = 50;
+  static const _repsMax = 1000;
+  static const _liftMaxKg = 1000.0; // above the world record, by design
 
   /// Atwater tolerance, matching the AI-estimate path.
   static const _atwaterTolerance = 0.4;
@@ -105,6 +143,7 @@ class ToolCallParser {
       'log_food' => _food(args),
       'log_water' => _water(args),
       'log_weight' => _weight(args),
+      'log_workout' => _workout(args),
       _ => (draft: null, rejection: ToolRejection.unknownTool),
     };
   }
@@ -176,6 +215,74 @@ class ToolCallParser {
       return (draft: null, rejection: ToolRejection.outOfRange);
     }
     return (draft: LogWeightDraft(kg), rejection: null);
+  }
+
+  ({ToolDraft? draft, ToolRejection? rejection}) _workout(
+      Map<String, dynamic> a) {
+    final name = _asStr(a['name'])?.trim();
+    if (name == null || name.isEmpty) {
+      return (draft: null, rejection: ToolRejection.missingField);
+    }
+    if (name.length > _nameMax) {
+      return (draft: null, rejection: ToolRejection.outOfRange);
+    }
+    // An unrecognised kind is a refusal, not a silent fallback to 'other': the
+    // CHECK constraint on the Supabase table would reject the row at sync time,
+    // which is a failure the user would never see.
+    final kind = _asStr(a['kind']) ?? 'strength';
+    if (!WorkoutRepository.isValidKind(kind)) {
+      return (draft: null, rejection: ToolRejection.outOfRange);
+    }
+    final duration = _asNum(a['duration_min'])?.round();
+    if (duration != null && (duration < 1 || duration > _durationMaxMin)) {
+      return (draft: null, rejection: ToolRejection.outOfRange);
+    }
+
+    final rawSets = a['sets'];
+    final sets = <WorkoutSet>[];
+    if (rawSets is List) {
+      if (rawSets.length > _setsMax) {
+        return (draft: null, rejection: ToolRejection.outOfRange);
+      }
+      for (final item in rawSets) {
+        if (item is! Map) {
+          return (draft: null, rejection: ToolRejection.missingField);
+        }
+        final m = item.cast<String, dynamic>();
+        final reps = _asNum(m['reps'])?.round();
+        if (reps == null) {
+          return (draft: null, rejection: ToolRejection.missingField);
+        }
+        if (reps < 1 || reps > _repsMax) {
+          return (draft: null, rejection: ToolRejection.outOfRange);
+        }
+        // Absent weight_kg means bodyweight. Present-but-uncoercible (a NaN,
+        // a word) is a malformed call and must be refused: degrading it to
+        // "bodyweight" would silently turn a broken 100 kg squat into a
+        // different exercise the user never did.
+        final hasWeight = m.containsKey('weight_kg') && m['weight_kg'] != null;
+        final w = _asNum(m['weight_kg']);
+        if (hasWeight && w == null) {
+          return (draft: null, rejection: ToolRejection.outOfRange);
+        }
+        if (w != null && (w < 0 || w > _liftMaxKg)) {
+          return (draft: null, rejection: ToolRejection.outOfRange);
+        }
+        sets.add(WorkoutSet(reps: reps, weightKg: w));
+      }
+    }
+
+    // Nothing to log. "I worked out" with no sets and no duration is a
+    // statement, not an entry, and a zero-content row is worse than none.
+    if (sets.isEmpty && duration == null) {
+      return (draft: null, rejection: ToolRejection.missingField);
+    }
+
+    return (
+      draft: LogWorkoutDraft(
+        name: name, kind: kind, durationMin: duration, sets: sets),
+      rejection: null
+    );
   }
 
   static String? _asStr(Object? v) => v is String ? v : null;

@@ -35,3 +35,7 @@ streams:
   user_foods:
     auto_subscribe: true
     query: SELECT * FROM user_foods WHERE user_id = auth.user_id()
+
+  user_workouts:
+    auto_subscribe: true
+    query: SELECT * FROM workouts WHERE user_id = auth.user_id()

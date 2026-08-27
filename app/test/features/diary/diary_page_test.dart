@@ -6,6 +6,8 @@ import 'package:sakama/core/db/database.dart';
 import 'package:sakama/core/providers/app_providers.dart';
 import 'package:sakama/core/providers/current_date_provider.dart';
 import 'package:sakama/features/diary/presentation/diary_page.dart';
+import 'package:sakama/features/workouts/data/workout_repository.dart';
+import 'package:sakama/features/workouts/domain/workout_set.dart';
 
 /// The Diary was a stub that rendered the word "Diary". These pin the two
 /// things that make it a feature: it groups history by day, and its summary
@@ -105,6 +107,56 @@ void main() {
     expect(find.text('dal tadka'), findsOneWidget);
     expect(find.bySemanticsIdentifier('diary-entry-2026-08-26-dal tadka'),
         findsOneWidget);
+    await dispose(t);
+  });
+
+  testWidgets('a day with only a workout still gets a row', (t) async {
+    // Keying the list off food alone would hide the gym session of someone
+    // who did not log lunch.
+    await WorkoutRepository(db).add(
+      date: '2026-08-25',
+      name: 'bench press',
+      sets: [const WorkoutSet(reps: 10, weightKg: 80)],
+    );
+    await pump(t);
+
+    expect(find.text('25 Aug'), findsOneWidget);
+    expect(find.textContaining('1 workout'), findsOneWidget);
+    // ...and it does not claim a day of zero eating.
+    expect(find.textContaining('0 kcal'), findsNothing);
+    await dispose(t);
+  });
+
+  testWidgets('an uncomputed burn shows nothing, never 0 kcal', (t) async {
+    await log('2026-08-26', 'dal', 200);
+    // Strength work with no duration: nothing to compute a burn from.
+    await WorkoutRepository(db).add(
+      date: '2026-08-26',
+      name: 'squats',
+      sets: [const WorkoutSet(reps: 5, weightKg: 100)],
+    );
+    await pump(t);
+
+    await t.tap(find.text('Today'));
+    await t.pumpAndSettle();
+
+    expect(find.text('MOVEMENT'), findsOneWidget);
+    expect(find.textContaining('squats'), findsOneWidget);
+    // "0 kcal out" for a real session would be a lie by rounding.
+    expect(find.textContaining('kcal out'), findsNothing);
+    await dispose(t);
+  });
+
+  testWidgets('a computed burn is shown on the day row', (t) async {
+    await WorkoutRepository(db).add(
+      date: '2026-08-26',
+      name: 'evening run',
+      kind: 'cardio',
+      durationMin: 30,
+      energyKcal: 412,
+    );
+    await pump(t);
+    expect(find.textContaining('412 kcal out'), findsOneWidget);
     await dispose(t);
   });
 }
