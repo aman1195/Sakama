@@ -7,6 +7,9 @@
 // provider call, so cost is bounded by construction.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { resolveUpstream } from "../_shared/gateway.ts";
+import { unfence } from "../_shared/json_content.ts";
+import { servedAsRequested } from "../_shared/model_guard.ts";
 
 const DAILY_CAP = 10; // estimates per user per day — server-side, not client
 const MODEL = "google/gemini-2.5-flash"; // Phase 0 winner; config-swappable
@@ -58,14 +61,23 @@ Deno.serve(async (req) => {
   }
 
   // Provider call via OpenRouter (managed gateway; key is a function secret).
-  const orRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  // During development OpenRouter has no balance, so this routes to ModelBeat
+  // when MODELBEAT_ALL is set. Production intent is unchanged — see
+  // _shared/gateway.ts.
+  const up = resolveUpstream({
+    byok,
+    tier: Deno.env.get("MODELBEAT_TIER_ESTIMATE") || "modelbeat-standard",
+    openRouterModel: MODEL,
+  });
+
+  const orRes = await fetch(up.url, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${byok || Deno.env.get("OPENROUTER_API_KEY")}`,
+      "Authorization": `Bearer ${up.key}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: MODEL,
+      model: up.model,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: dish.trim() },
@@ -86,13 +98,25 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
   }
   const or = await orRes.json();
+
+  // Fail closed if ModelBeat did not serve what was asked. `is_fallback` is an
+  // explicit signal from the gateway; absent routing counts as unverified.
+  if (up.isModelBeat && !servedAsRequested(or?.extra_fields?.routing_info, up.model)) {
+    console.error(
+      `modelbeat UNVERIFIED ROUTING feature=estimate: asked ${up.model}, ` +
+        `got ${JSON.stringify(or?.extra_fields?.routing_info)}`,
+    );
+    if (!byok) await supabase.rpc("refund_ai_usage", { p_feature: "estimate" });
+    return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
+  }
+
   const content = or?.choices?.[0]?.message?.content;
   if (typeof content !== "string") {
     return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
   }
 
   // Pass the model JSON through; the CLIENT validates hard (untrusted input).
-  return new Response(content, {
+  return new Response(unfence(content), {
     headers: { "Content-Type": "application/json" },
   });
 });
