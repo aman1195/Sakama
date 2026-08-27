@@ -97,8 +97,45 @@ export function resolveUpstream({
 /// then quietly serves strangers; an allowlist can only ever serve the people
 /// written into it. CLAUDE.md rule 3 (paid tiers only for real user data) is
 /// therefore enforced by construction rather than by memory.
+/// Everything [resolveVisionChain] needs, as data.
+///
+/// Taken as a parameter rather than read from Deno.env inside, so the tests
+/// that guard this boundary need no ambient process permission. A security
+/// check that can only be verified by granting the test suite --allow-env is
+/// being verified through a side channel; passing the config makes the
+/// function a pure function of its inputs and the assertions exact.
+export interface VisionConfig {
+  geminiFreeKey: string;
+  /// Comma-separated user ids. Empty means NOBODY.
+  freeUserIds: string;
+  modelbeatKey: string;
+  modelbeatAll: boolean;
+  modelbeatTier: string;
+  modelbeatUrl: string;
+  openRouterKey: string;
+}
+
+/// The production binding. The only place vision routing touches the process
+/// environment.
+export function visionConfigFromEnv(): VisionConfig {
+  return {
+    geminiFreeKey: Deno.env.get("GEMINI_FREE_KEY_DEV_ONLY") ?? "",
+    freeUserIds: Deno.env.get("GEMINI_FREE_USER_IDS") ?? "",
+    modelbeatKey: Deno.env.get("MODELBEAT_API_KEY") ?? "",
+    modelbeatAll: Deno.env.get("MODELBEAT_ALL") === "1",
+    modelbeatTier: Deno.env.get("MODELBEAT_TIER_PHOTOSNAP") ||
+      "modelbeat-advanced",
+    modelbeatUrl: MODELBEAT_URL(),
+    openRouterKey: Deno.env.get("OPENROUTER_API_KEY") ?? "",
+  };
+}
+
 export function resolveVisionChain(
-  { byok, userId }: { byok: string; userId: string },
+  { byok, userId, config }: {
+    byok: string;
+    userId: string;
+    config: VisionConfig;
+  },
 ): Upstream[] {
   // A user's own key is theirs alone: never chain past it onto our gateways.
   if (byok) {
@@ -113,11 +150,13 @@ export function resolveVisionChain(
 
   const chain: Upstream[] = [];
 
-  const geminiKey = Deno.env.get("GEMINI_FREE_KEY_DEV_ONLY") ?? "";
-  if (geminiKey.length > 0 && isFreeTierAllowed(userId)) {
+  if (
+    config.geminiFreeKey.length > 0 &&
+    isFreeTierAllowed(userId, config.freeUserIds)
+  ) {
     chain.push({
       url: GEMINI_URL,
-      key: geminiKey,
+      key: config.geminiFreeKey,
       model: GEMINI_MODEL,
       isModelBeat: false,
       isFreeTier: true,
@@ -125,22 +164,20 @@ export function resolveVisionChain(
     });
   }
 
-  const mbKey = Deno.env.get("MODELBEAT_API_KEY") ?? "";
-  if (mbKey.length > 0 && Deno.env.get("MODELBEAT_ALL") === "1") {
+  if (config.modelbeatKey.length > 0 && config.modelbeatAll) {
     chain.push({
-      url: MODELBEAT_URL(),
-      key: mbKey,
-      model: Deno.env.get("MODELBEAT_TIER_PHOTOSNAP") || "modelbeat-advanced",
+      url: config.modelbeatUrl,
+      key: config.modelbeatKey,
+      model: config.modelbeatTier,
       isModelBeat: true,
       label: "modelbeat",
     });
   }
 
-  const orKey = Deno.env.get("OPENROUTER_API_KEY") ?? "";
-  if (orKey.length > 0) {
+  if (config.openRouterKey.length > 0) {
     chain.push({
       url: OPENROUTER_URL,
-      key: orKey,
+      key: config.openRouterKey,
       model: "google/gemini-2.5-flash",
       isModelBeat: false,
       label: "openrouter",
@@ -150,12 +187,11 @@ export function resolveVisionChain(
   return chain;
 }
 
-/// Exact match on a comma-separated allowlist. Unset or empty means nobody,
-/// never everybody: a misconfigured allowlist must reduce access, not grant it.
-export function isFreeTierAllowed(userId: string): boolean {
+/// Exact match on a comma-separated allowlist. Empty means nobody, never
+/// everybody: a misconfigured allowlist must reduce access, not grant it.
+export function isFreeTierAllowed(userId: string, allowlist: string): boolean {
   if (userId.length === 0) return false;
-  const raw = Deno.env.get("GEMINI_FREE_USER_IDS") ?? "";
-  if (raw.trim().length === 0) return false;
-  return raw.split(",").map((s) => s.trim()).filter((s) => s.length > 0)
+  if (allowlist.trim().length === 0) return false;
+  return allowlist.split(",").map((s) => s.trim()).filter((s) => s.length > 0)
     .includes(userId);
 }

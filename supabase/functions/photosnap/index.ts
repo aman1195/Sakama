@@ -9,7 +9,11 @@
 // every field (untrusted model output must never enter a health diary raw).
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { resolveVisionChain, type Upstream } from "../_shared/gateway.ts";
+import {
+  resolveVisionChain,
+  type Upstream,
+  visionConfigFromEnv,
+} from "../_shared/gateway.ts";
 import { unfence } from "../_shared/json_content.ts";
 import { servedAsRequested } from "../_shared/model_guard.ts";
 
@@ -147,7 +151,11 @@ Deno.serve(async (req) => {
   // at 18% on the same 22 Indian meal photos; a rough number beats no number,
   // but only after the good one is unavailable. See _shared/gateway.ts for the
   // free-tier allowlist that gates the first link.
-  const chain = resolveVisionChain({ byok, userId: userData.user.id });
+  const chain = resolveVisionChain({
+    byok,
+    userId: userData.user.id,
+    config: visionConfigFromEnv(),
+  });
   if (chain.length === 0) {
     console.error("photosnap: no vision upstream configured");
     if (!byok) {
