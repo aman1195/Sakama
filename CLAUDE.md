@@ -113,6 +113,14 @@ After a fresh clone: `cp app/.env.example app/.env`, then `just install build` b
   drivers can find them.
 - Nutrition stored canonically **per 100 g**; per-serving derived at read time.
 - Plans are **JSON data, never hardcoded logic** (see `docs/architecture/04-plan-engine.md`).
+- **A new SYNCED table touches four files and one easily-missed line.** Drift table in
+  `database.dart` (+ schema bump + preservation test) · `powersync_schema.dart` ·
+  `supabase/migrations/*.sql` with RLS · `supabase/powersync/sync-streams.yaml`. Inside the
+  migration, the **`alter publication powersync add table`** block is mandatory: the publication is
+  created `for table ...`, never `FOR ALL TABLES`, so membership is opt-in per table. Omit it and
+  uploads still work while downloads have nothing to replicate — the row never reaches a second
+  device and does not survive a reinstall. Copy the `do $$ ... end $$;` block from any existing
+  migration. Deploy order is **migration first, sync rules second**.
 
 ## Working style in this repo
 

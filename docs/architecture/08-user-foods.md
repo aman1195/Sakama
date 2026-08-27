@@ -72,6 +72,12 @@ per-user data worth surviving a lost phone, so this is the **full four-file cont
 PowerSync + Supabase migration with RLS + sync-streams entry, and a forward-only migration with a
 preservation test.
 
+The migration must also add the table to the PowerSync publication. It is one `do $$ ... end $$;`
+block, it is easy to leave out, and leaving it out fails silently in the worst direction: writes
+upload fine, so the feature looks correct on the device that created the row, and the row simply
+never appears anywhere else. The publication is created `for table ...`, not `FOR ALL TABLES`, so
+every synced table opts in individually.
+
 ```
 user_foods
   id             text pk
