@@ -251,6 +251,32 @@ written into it, so rule 3 is enforced by construction instead of by memory.
 `gateway_test.ts` proves the closed cases: unset list, empty id, prefix and
 case mismatches, key-without-allowlist, and BYOK never chaining onward.
 
-**Before real users:** delete both secrets and top up OpenRouter. Gemini via
-OpenRouter is a paid tier, so it carries the accuracy without the data terms,
-at roughly $0.0020 a photo.
+## 5. OpenRouter top-up checklist — DO THESE IN ORDER
+
+Not a suggestion and not a code comment. A comment in `gateway.ts` is exactly
+what gets skipped at the moment of topping up, and two of these items are
+silent failures rather than loud ones.
+
+- [ ] **Confirm `google/gemini-2.5-flash` still resolves on OpenRouter.**
+      Google retired it for new direct API accounts on or before 2026-08-27
+      (404, "no longer available to new users"). OpenRouter may still route it
+      under its own contracts, or may not, and it cannot be checked while the
+      account has no balance. **This is the path real users take.** If it 404s,
+      move both OpenRouter branches in `gateway.ts` to
+      `google/gemini-3.6-flash`.
+- [ ] **Re-run `spikes/photosnap-validation/`** against whichever Gemini
+      version ends up on the paid path. The 9% median calorie error in §1
+      belongs to **2.5-flash**. No figure may be quoted for 3.x until it is
+      measured on the same 22 photos against the same ground truth.
+- [ ] **`supabase secrets unset GEMINI_FREE_KEY_DEV_ONLY`** and
+      **`GEMINI_FREE_USER_IDS`**. Google's unpaid terms permit training and
+      human review; §4 has the quotes.
+- [ ] **`supabase secrets unset MODELBEAT_ALL`** so vision stops falling back
+      to a model measured at roughly double the calorie error.
+- [ ] **Redeploy `photosnap`** and confirm `x-sakama-upstream` on a real
+      request. It must read `openrouter`. This header exists because the
+      Gemini link failed silently once already and the chain fell through
+      without saying so — a correct answer arrived from the wrong model.
+
+Cost for context: roughly $0.0020 a photo, about 18 cents a month for someone
+photographing three meals a day. This is not a budget decision.

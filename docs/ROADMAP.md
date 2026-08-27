@@ -186,6 +186,11 @@ bug in any of them leaks health data. None of them block M3 dogfooding.
 - Vision model — decided by the **Phase 0 spike**.
 - ~~Open Food Facts live vs. bundled~~ SETTLED: live-only (ADR 0014). Indian-dish source: AI estimation + which commercial
   licence (FatSecret vs Bon Happetee). (INDB is closed: unusable — unlicensed + IFCT-derived.)
+- **OpenRouter top-up checklist** — five ordered steps in
+  [model-bakeoff-2026-08.md §5](research/model-bakeoff-2026-08.md). Two of them fail SILENTLY if
+  skipped: the paid path still pins `google/gemini-2.5-flash`, which Google retired for new direct
+  API accounts, and the dev-only Gemini free-tier secrets must come out before any real user's
+  photo is sent to a tier whose terms permit human review.
 - Subscription tooling (RevenueCat vs. native billing) for Sakama Plus.
 - Privacy-respecting analytics (no health PII).
 - Melos (multi-package) — defer until feature count justifies it.
