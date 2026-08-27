@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../app/kit/kit.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -148,28 +150,43 @@ class _LogEntrySheetState extends ConsumerState<LogEntrySheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Edit entry', style: text.titleLarge),
+              Text('Edit entry',
+                  style: text.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800, letterSpacing: -0.8)),
               const SizedBox(height: 4),
               Text(_provenance(widget.entry.loggedVia),
                   style: text.bodySmall),
               const SizedBox(height: 16),
-              SegmentedButton<Meal>(
-                segments: [
+              Wrap(
+                spacing: Sk.sm,
+                runSpacing: Sk.sm,
+                children: [
                   for (final m in Meal.values)
-                    ButtonSegment(value: m, label: Text(m.label)),
+                    SkPill(
+                      label: m.label,
+                      selected: _meal == m,
+                      onTap: () => setState(() => _meal = m),
+                    ),
                 ],
-                selected: {_meal},
-                onSelectionChanged: (s) => setState(() => _meal = s.first),
-                showSelectedIcon: false,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: Sk.lg),
               _field('log-edit-name', _name, 'Food name'),
               _field('log-edit-grams', _grams, 'Grams (optional)',
                   number: true),
               _field('log-edit-kcal', _kcal, 'Calories (kcal)', number: true),
-              _field('log-edit-protein', _protein, 'Protein (g)', number: true),
-              _field('log-edit-carb', _carb, 'Carbs (g)', number: true),
-              _field('log-edit-fat', _fat, 'Fat (g)', number: true),
+              Row(children: [
+                Expanded(
+                    child: _field('log-edit-protein', _protein, 'Protein (g)',
+                        number: true)),
+                const SizedBox(width: Sk.md),
+                Expanded(
+                    child: _field('log-edit-carb', _carb, 'Carbs (g)',
+                        number: true)),
+                const SizedBox(width: Sk.md),
+                Expanded(
+                    child:
+                        _field('log-edit-fat', _fat, 'Fat (g)', number: true)),
+              ]),
               const SizedBox(height: 8),
               Row(
                 children: [

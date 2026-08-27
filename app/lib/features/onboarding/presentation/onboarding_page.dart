@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../../../app/kit/kit.dart';
+import '../../../app/theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/enums.dart';
@@ -58,6 +61,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     final draft = ref.watch(onboardingControllerProvider);
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        scrolledUnderElevation: 0,
         leading: _page > 0
             ? Semantics(
                 identifier: 'onboarding-back',
@@ -66,7 +71,29 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                     onPressed: () => _go(_page - 1)),
               )
             : null,
-        title: LinearProgressIndicator(value: (_page + 1) / (_lastStep + 1)),
+        // A segmented rail instead of a LinearProgressIndicator: a thin
+        // continuous bar in an app bar reads as "loading", not as "you are
+        // three of seven steps in".
+        title: Row(
+          children: [
+            for (var i = 0; i <= _lastStep; i++)
+              Expanded(
+                child: Container(
+                  height: 4,
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  decoration: BoxDecoration(
+                    color: i <= _page
+                        ? SakamaPalette.accent
+                        : Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
       body: GestureDetector(
         behavior: HitTestBehavior.translucent,
@@ -122,22 +149,63 @@ class _Choice<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return ListView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.fromLTRB(Sk.lg, Sk.sm, Sk.lg, Sk.xxl),
       children: [
-        Text(title, style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 16),
+        // The question is the hero of the step. It was headlineSmall competing
+        // with a stack of identical cards; now it is the largest thing here.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(Sk.xs, 0, Sk.xs, Sk.xl),
+          child: Text(title,
+              style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                    fontSize: 32,
+                    height: 1.15,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -1.1,
+                  )),
+        ),
         for (final o in options)
-          Semantics(
-            identifier: '$idPrefix-${(o as Enum).name}',
-            child: Card(
-              color: selected == o
-                  ? Theme.of(context).colorScheme.primaryContainer
-                  : null,
-              child: ListTile(
-                title: Text(labelOf(o)),
-                trailing: selected == o ? const Icon(Icons.check) : null,
-                onTap: () => onSelect(o),
+          Padding(
+            padding: const EdgeInsets.only(bottom: Sk.sm),
+            child: Semantics(
+              identifier: '$idPrefix-${(o as Enum).name}',
+              button: true,
+              child: Material(
+                // Selection is a filled accent surface, not a tick in the
+                // corner — at a glance you can see WHICH one you picked
+                // without reading every row.
+                color: selected == o
+                    ? SakamaPalette.accent
+                    : scheme.onSurface.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(Sk.radiusSm),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => onSelect(o),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: Sk.lg, vertical: 18),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(labelOf(o),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: selected == o
+                                        ? SakamaPalette.onAccent
+                                        : scheme.onSurface,
+                                  )),
+                        ),
+                        if (selected == o)
+                          const Icon(Icons.check_circle,
+                              size: 22, color: SakamaPalette.onAccent),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
