@@ -3,6 +3,7 @@ import '../../home/domain/day_totals.dart';
 import '../../onboarding/domain/nutrition_targets.dart';
 import '../../onboarding/domain/profile_record.dart';
 import '../../plans/domain/plan_day.dart';
+import 'history_summary.dart';
 
 /// Assembles the grounding snapshot Vita needs so every reply references real
 /// data (PRODUCT.md principle 4). Pure + deterministic, so it's fully tested —
@@ -21,6 +22,7 @@ class CoachContext {
     PlanDay? planDay,
     List<String> favouriteFoods = const [],
     List<({String kind, String content})> memories = const [],
+    HistorySummary? history,
   }) {
     final totals = DayTotals.fromLogs(todayLogs);
     final b = StringBuffer();
@@ -89,6 +91,13 @@ class CoachContext {
       for (final m in memories) {
         b.writeln('- (${m.kind}) ${m.content}');
       }
+    }
+
+    // The PAST, so "what did I average this week?" is answerable at all. Placed
+    // after today's numbers: a question about the week still deserves an
+    // answer anchored in where the user is right now.
+    if (history != null && !history.isEmpty) {
+      b.writeln(history.promptLine);
     }
 
     if (todayLogs.isEmpty) {

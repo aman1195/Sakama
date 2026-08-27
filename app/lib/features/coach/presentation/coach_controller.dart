@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -16,6 +17,7 @@ import '../data/tool_executor.dart';
 import '../data/vita_service.dart';
 import '../domain/coach_context.dart';
 import '../domain/coach_message.dart';
+import '../domain/history_summary.dart';
 import '../domain/tool_draft.dart';
 
 /// The Vita conversation, now backed by the device-local chat tables (ADR 0016
@@ -518,6 +520,29 @@ class CoachController extends Notifier<CoachState> {
         .toList();
     final memory = await ref.read(memoryRepositoryProvider.future);
     final facts = await memory.topFor(ref.read(currentUserIdProvider));
+
+    // 28 days of history, so progress questions have something to stand on.
+    // Read once per turn rather than streamed: this is a snapshot for a
+    // prompt, not a live view.
+    HistorySummary? history;
+    try {
+      final logRepo = await ref.read(foodLogRepositoryProvider.future);
+      final from = now.subtract(const Duration(days: historyWindowDays));
+      final past = await logRepo.watchSince(_ymdOf(from)).first;
+      final weights = await (db.select(db.weightLogs)
+            ..where((t) => t.date.isBiggerOrEqualValue(_ymdOf(from))))
+          .get();
+      history = HistorySummary.from(
+        logs: past,
+        windowDays: historyWindowDays,
+        calorieTarget: targets?.calories ?? 0,
+        weights: weights,
+      );
+    } catch (e) {
+      // History is an ENHANCEMENT to the prompt. If it fails, the coach should
+      // still answer about today rather than the turn failing outright.
+      debugPrint('history summary unavailable: $e');
+    }
     return CoachContext.build(
         profile: profile,
         targets: targets,
@@ -527,8 +552,18 @@ class CoachController extends Notifier<CoachState> {
         favouriteFoods: favourites,
         memories: [
           for (final f in facts) (kind: f.kind, content: f.content),
-        ]);
+        ],
+        history: history);
   }
+
+  /// How far back Vita can see. Matches the Diary's window so the two never
+  /// disagree about "this month" in front of the same user.
+  static const historyWindowDays = 28;
+
+  static String _ymdOf(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
 
   /// How many new turns before a distillation pass runs. Batched, never on the
   /// reply path (ADR 0016 decision 5): the reply turn already has two jobs, and
