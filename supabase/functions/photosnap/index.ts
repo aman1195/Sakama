@@ -273,6 +273,18 @@ Deno.serve(async (req) => {
     });
   }
 
+  // Which link answered. Only failures were logged before, so a successful
+  // call said nothing about WHICH model produced the numbers — and the whole
+  // point of the chain is that the first link is roughly twice as accurate as
+  // the second. A routing change you cannot observe is a routing change you
+  // cannot verify.
+  //
+  // SAFE TO LOG: a fixed upstream label and the position it was found at.
+  // No prompt, no image, no user id, no key (OWASP M1, CLAUDE.md rule 3).
+  console.log(
+    `photosnap served by ${up.label} (link ${chain.indexOf(up) + 1}/${chain.length})`,
+  );
+
   const content =
     (or as { choices?: Array<{ message?: { content?: unknown } }> })
       ?.choices?.[0]?.message?.content;
@@ -287,6 +299,12 @@ Deno.serve(async (req) => {
 
   // Pass the model JSON straight through; the CLIENT validates hard.
   return new Response(unfence(content), {
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      // Which provider produced these numbers, readable without dashboard
+      // access. Not a secret — and a user is entitled to know which provider
+      // saw their meal photo. Never the key, never the URL.
+      "x-sakama-upstream": up.label,
+    },
   });
 });
