@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sakama/core/db/database.dart';
@@ -43,6 +44,44 @@ void main() {
     expect(() => repo.add(date: '2026-08-27', name: 'run', kind: 'cardiovascular'),
         throwsA(isA<ArgumentError>()));
     expect(await db.select(db.workouts).get(), isEmpty);
+  });
+
+  test('renaming a row does not wipe its other columns', () async {
+    // The bug this pins: writing Value(durationMin) unconditionally meant an
+    // edit that only changed the name silently NULLed the duration, the burn
+    // and the notes.
+    final id = await repo.add(
+      date: '2026-08-27',
+      name: 'evening run',
+      kind: 'cardio',
+      durationMin: 30,
+      energyKcal: 412,
+      notes: 'felt easy',
+    );
+    await repo.update(id: id, name: 'morning run');
+
+    final row = await db.select(db.workouts).getSingle();
+    expect(row.name, 'morning run');
+    expect(row.durationMin, 30);
+    expect(row.energyKcal, 412);
+    expect(row.notes, 'felt easy');
+  });
+
+  test('clearing a nullable column is still possible, and distinct', () async {
+    final id = await repo.add(
+        date: '2026-08-27', name: 'run', kind: 'cardio', durationMin: 30);
+    // Value(null) means clear; Value.absent() (the default) means leave alone.
+    await repo.update(id: id, durationMin: const Value(null));
+    expect((await db.select(db.workouts).getSingle()).durationMin, isNull);
+  });
+
+  test('update refuses an empty name and an unknown kind', () async {
+    final id = await repo.add(date: '2026-08-27', name: 'run', kind: 'cardio');
+    expect(() => repo.update(id: id, name: '  '), throwsA(isA<ArgumentError>()));
+    expect(() => repo.update(id: id, kind: 'cardiovascular'),
+        throwsA(isA<ArgumentError>()));
+    // The row is untouched by a refused edit.
+    expect((await db.select(db.workouts).getSingle()).name, 'run');
   });
 
   test('editing a Vita-logged row re-marks it manual', () async {

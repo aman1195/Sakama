@@ -44,3 +44,19 @@ create policy "workouts: delete own" on public.workouts
   for delete to authenticated using ((select auth.uid()) = user_id);
 
 create index workouts_user_date_idx on public.workouts (user_id, date desc);
+
+-- PowerSync publication must include the table.
+--
+-- Not optional and not implied by the sync stream: the publication was created
+-- `for table ...`, never FOR ALL TABLES, so membership is opt-in per table.
+-- Without this the upload side works (RLS-gated writes reach Postgres) but the
+-- download side has nothing to replicate, so a workout logged on one phone
+-- never arrives on another or survives a reinstall.
+do $$
+begin
+  if not exists (select 1 from pg_publication where pubname = 'powersync') then
+    create publication powersync for table public.workouts;
+  else
+    alter publication powersync add table public.workouts;
+  end if;
+end $$;

@@ -77,28 +77,46 @@ class WorkoutRepository {
   Future<void> delete(String id) =>
       (_db.delete(_db.workouts)..where((t) => t.id.equals(id))).go();
 
+  /// Edit a row.
+  ///
+  /// The nullable columns take `Value` rather than a bare nullable, because
+  /// `null` has to mean two different things and a plain `int?` cannot say
+  /// which: `Value.absent()` (the default) leaves the column alone, and
+  /// `Value(null)` clears it. Written as `Value(durationMin)` instead, an edit
+  /// that only renames a cardio session would silently wipe its duration, its
+  /// burn and its notes.
+  ///
+  /// The non-nullable columns keep the bare form, where null unambiguously
+  /// means "not editing this".
   Future<void> update({
     required String id,
     String? name,
     String? kind,
-    int? durationMin,
-    double? energyKcal,
+    Value<int?> durationMin = const Value.absent(),
+    Value<double?> energyKcal = const Value.absent(),
+    Value<String?> notes = const Value.absent(),
     List<WorkoutSet>? sets,
-    String? notes,
-  }) =>
-      (_db.update(_db.workouts)..where((t) => t.id.equals(id)))
-          .write(WorkoutsCompanion(
-        name: name == null ? const Value.absent() : Value(name.trim()),
-        kind: kind == null ? const Value.absent() : Value(kind),
-        durationMin: Value(durationMin),
-        energyKcal: Value(energyKcal),
-        sets: sets == null ? const Value.absent() : Value(WorkoutSet.encode(sets)),
-        notes: Value(notes),
-        // A hand-edited row must not still claim Vita logged it, exactly as a
-        // corrected food row is re-marked manual.
-        loggedVia: const Value('manual'),
-        updatedAt: Value(_now),
-      ));
+  }) {
+    if (name != null && name.trim().isEmpty) {
+      throw ArgumentError.value(name, 'name', 'must not be empty');
+    }
+    if (kind != null && !isValidKind(kind)) {
+      throw ArgumentError.value(kind, 'kind', 'must be one of $kinds');
+    }
+    return (_db.update(_db.workouts)..where((t) => t.id.equals(id)))
+        .write(WorkoutsCompanion(
+      name: name == null ? const Value.absent() : Value(name.trim()),
+      kind: kind == null ? const Value.absent() : Value(kind),
+      durationMin: durationMin,
+      energyKcal: energyKcal,
+      sets: sets == null ? const Value.absent() : Value(WorkoutSet.encode(sets)),
+      notes: notes,
+      // A hand-edited row must not still claim Vita logged it, exactly as a
+      // corrected food row is re-marked manual.
+      loggedVia: const Value('manual'),
+      updatedAt: Value(_now),
+    ));
+  }
 
   /// Total burn for a day. Null-safe: workouts with an unknown burn contribute
   /// nothing rather than zero, and the count of those is reported so the UI can

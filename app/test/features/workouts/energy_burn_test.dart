@@ -69,4 +69,45 @@ void main() {
           isNull);
     });
   });
+
+  group('output bounds', () {
+    test('refuses an absurd duration rather than computing off it', () {
+      // WorkoutRepository.add is callable directly, so a manual-entry screen
+      // could hand this a month-long session.
+      expect(
+          EnergyBurn.estimate(
+              activity: 'running', durationMin: 1441, weightKg: 70),
+          isNull);
+      expect(
+          EnergyBurn.estimate(
+              activity: 'running', durationMin: 43200, weightKg: 70),
+          isNull);
+    });
+
+    test('refuses an absurd body weight', () {
+      expect(
+          EnergyBurn.estimate(
+              activity: 'running', durationMin: 30, weightKg: 1001),
+          isNull);
+    });
+
+    test('a genuinely hard endurance day still computes', () {
+      // Four hours of running at 80 kg — an Ironman-shaped day. The cap must
+      // not discard real training.
+      final k = EnergyBurn.estimate(
+          activity: 'running', durationMin: 240, weightKg: 80);
+      expect(k, closeTo(3292, 2));
+    });
+
+    test('a physiologically impossible total is refused', () {
+      // 24 hours of continuous skipping computes to about 31,000 kcal. The
+      // highest expenditure ever recorded for a human day is roughly a third
+      // of that, so this is a bad input wearing the shape of a workout, and
+      // the number would be subtracted from a calorie target.
+      expect(
+          EnergyBurn.estimate(
+              activity: 'skipping', durationMin: 1440, weightKg: 100),
+          isNull);
+    });
+  });
 }

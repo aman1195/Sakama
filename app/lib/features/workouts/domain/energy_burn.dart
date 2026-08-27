@@ -65,19 +65,36 @@ abstract final class EnergyBurn {
     return met;
   }
 
+  /// A day is 1440 minutes; nobody trains for more of them than this.
+  static const _maxDurationMin = 1440;
+
+  /// Ceiling on a single session's computed burn. An elite athlete's hardest
+  /// day does not reach this, so anything above it is a bad input rather than
+  /// a big workout.
+  static const _maxKcal = 10000.0;
+
   /// Estimated kcal, or null when the activity is unknown, the duration is
-  /// missing, or we have no body weight. Null means "we do not know" and must
-  /// stay null all the way to the row — a 0 would read as a measurement.
+  /// missing or absurd, or we have no body weight. Null means "we do not know"
+  /// and must stay null all the way to the row — a 0 would read as a
+  /// measurement.
+  ///
+  /// The OUTPUT is bounded as well as the inputs. The Vita path already bounds
+  /// its arguments, but [WorkoutRepository.add] is callable directly, so a
+  /// manual-entry screen could otherwise hand this a 30,000-minute session and
+  /// get a six-figure burn subtracted from somebody's calorie target.
   static double? estimate({
     required String activity,
     required int? durationMin,
     required double? weightKg,
   }) {
     if (durationMin == null || durationMin <= 0) return null;
+    if (durationMin > _maxDurationMin) return null;
     if (weightKg == null || weightKg <= 0 || !weightKg.isFinite) return null;
+    if (weightKg > 1000) return null;
     final met = metFor(activity);
     if (met == null) return null;
     final kcal = met * 3.5 * weightKg / 200 * durationMin;
-    return kcal.isFinite ? double.parse(kcal.toStringAsFixed(0)) : null;
+    if (!kcal.isFinite || kcal <= 0 || kcal > _maxKcal) return null;
+    return double.parse(kcal.toStringAsFixed(0));
   }
 }
