@@ -6,23 +6,28 @@ product
 
 ## Users
 
-Indian consumers managing their health through food. Three distinct types, all first-class:
+Indian consumers managing their health through food, plus three types the 2.0 vision adds. Six in total, all first-class:
 
 - **Plan followers** — already have a protocol (custom meal plan, fasting window, weekly reset day, detox). They need the app to *enforce and track* it faithfully.
 - **Goal setters** — say "lose 10 kg", "improve liver health", "build muscle". They need the app to *generate* a plan, then track it.
 - **Casual trackers** — just want to log food, see macros, and get gentle nudges. No rigid plan.
+- **Family health managers** — run their own goals plus their family's. They need multiple profiles, granular permissions, and a coach that can answer about anyone they may view.
+- **Self-hosters** — will not put health data on someone else's server. They need Docker or Helm and real sovereignty over their own data.
+- **Developers** — want to point their own LLM client at their data, or build on top. They need documented contracts and an MCP server.
 
-Concretely: a diabetic housewife in Chennai, a gym-going 22-year-old in Delhi, a 45-year-old executive managing fatty liver in Bengaluru. Sessions are short and habitual — log a meal in under ten seconds, glance at the day, occasionally ask the coach a question. Most logging happens *while eating*, one-handed, often on a poor connection.
+Concretely: a diabetic housewife in Chennai, a gym-going 22-year-old in Delhi, a 45-year-old executive managing fatty liver in Bengaluru, a mother in Mumbai running three profiles, an engineer in Berlin with a homelab, a developer building a daily-briefing agent. Sessions are short and habitual — log a meal in under ten seconds, glance at the day, occasionally ask the coach a question. Most logging happens *while eating*, one-handed, often on a poor connection.
 
 ## Product Purpose
 
-Sakama is a free, AI-powered personal health and nutrition OS for India. One place to track calories, macros, micronutrients, water, fasting, weight, workouts, steps, and sleep — logged by photo, voice, text, barcode, or search.
+Sakama is a free, AI-powered personal health and nutrition OS for India, and a self-hostable health platform for everyone else. One place to track calories, macros, micronutrients, water, fasting, weight, workouts, steps, sleep, mood and cycle — logged by photo, voice, text, barcode, search, or chat.
 
 The wedge is the **AI layer**. Modern LLMs are far more capable than the models most health apps run, so a coach that knows your exact plan, today's logs, your streak, and your weekly trend can say something genuinely useful. The difference between "drink more water" and "you have had 1.8 L today and it is 4 PM, you need 1.7 L more before 9 PM, and it is your reset day so electrolytes from coconut water matter more today" is the entire product.
 
 HealthifyMe charges heavily for a human nutritionist. Sakama does it better, instantly, and free.
 
-**Core promise: Free forever. No ads. No data selling. Better AI than HealthifyMe. Built for India.**
+It runs two ways: managed cloud for people who want zero setup, and Docker or Kubernetes for people who want their health data on their own hardware ([ADR 0017](docs/adr/0017-dual-deployment-cloud-and-self-hosted.md)). The sovereignty promise covers the user's health data. It does not extend to our curated Indian reference data, which never ships inside a redistributable image — that distinction is documented rather than discovered.
+
+**Core promise: Free forever. No ads. No data selling. Better AI than HealthifyMe. Built for India. Open to the world.**
 
 Success looks like: a user logs a thali by photo in six seconds, trusts the numbers, and comes back tomorrow without being nagged.
 

@@ -118,6 +118,62 @@ The whole thesis rests on "a VLM estimates an Indian meal's macros usefully." Te
 
 ---
 
+## M8+ — the 2.0 vision (added 2026-08-27)
+
+The milestones above take Sakama to a complete Indian mobile product. The 2.0 vision adds three
+things that do not exist in v1 at all: **the whole-health modules** (mood, cycle, richer sleep),
+**the household** (family sharing), and **the second deployment** (self-hosted, web, MCP).
+
+These are sequenced after M7 deliberately. Each one is a new isolation boundary, and an isolation
+bug in any of them leaks health data. None of them block M3 dogfooding.
+
+## M8 — Whole-health modules
+- **Mood**: daily 1–5 check-in with notes; trend charts; correlation against sleep and nutrition.
+- **Cycle hub**: period, ovulation and symptom logging; phase-aware nutrition guidance; Vita reads
+  the phase.
+- **Body measurements**: custom sites beyond weight; optional progress photos in per-user storage.
+- **Long-term reports**: custom ranges, cross-module correlation, CSV export.
+- **Exit test:** a low-mood + poor-sleep + under-eating day produces a materially different Vita
+  reply from a good one, and the difference is traceable to real rows.
+
+## M9 — Wearables and sensors
+- Ten integrations: Apple Health, Google Health Connect, Google Health API, Fitbit, Garmin (its own
+  microservice), Withings, Polar, Oura, Strava, Hevy.
+- Background sync, OAuth refresh, rate-limit handling, per-provider `sync_logs`.
+- Wearable data (HRV, sleep stages, body battery) enters the Vita context.
+- **Exit test:** a provider returning 401 shows "not syncing, reconnect" and never presents stale
+  data as current. Strava specifically is expected to break without notice; it must degrade, not
+  crash.
+
+## M10 — Family and multi-user
+- Seven granular read permissions; write never granted by default.
+- Invitation, acceptance and revocation flows. Family dashboard. Family-aware Vita.
+- **Gate:** an RLS audit and cross-user integration tests **before** this ships. This is the
+  highest-consequence feature in the product — a permission bug here leaks one person's health data
+  to someone who knows them personally. It stays in beta until the audit passes.
+
+## M11 — Second deployment: self-hosted, web, MCP · [ADR 0017](adr/0017-dual-deployment-cloud-and-self-hosted.md)
+- React web client, functional without the mobile app.
+- Node API server; Docker Compose; Helm chart; shared migration runner so cloud and self-hosted
+  cannot drift.
+- **Shared AI code path.** Budget enforcement, BYOK handling and key redaction live in one module
+  both entry points import. Two copies will drift, and the drift would be in a security control.
+- MCP server (read + write) through the same RLS as every other client.
+- TOTP, Passkey, instance-level MFA.
+- **The moat boundary must be documented before the Docker release, not after** (ADR 0017): curated
+  Indian data reaches self-hosted instances over an authenticated lookup, never seeded into the
+  image, and degrades to USDA + OFF when the user runs air-gapped.
+- **Exit test:** a fresh `docker compose up` reaches a working tracking app in under ten minutes,
+  and a deliberately misconfigured instance fails closed rather than open.
+
+## M12 — Localisation and launch hardening
+- Hindi, Tamil, Telugu, Kannada, Bengali. Weblate for community translation.
+- Accessibility audit (WCAG 2.1 AA). Security audit and penetration test. Load and migration
+  testing. Beta across Indian users and global self-hosters.
+- Store submission.
+
+---
+
 ## Cross-cutting, every milestone
 - **Offline-first**: every feature reads local Drift first, then syncs.
 - **RLS** on every new table; tests for provider overrides + in-memory Drift + the sync loop.
