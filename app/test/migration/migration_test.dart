@@ -10,6 +10,7 @@ import 'generated/schema_v4.dart' as v4;
 import 'generated/schema_v5.dart' as v5;
 import 'generated/schema_v6.dart' as v6;
 import 'generated/schema_v7.dart' as v7;
+import 'generated/schema_v8.dart' as v8;
 
 /// The migration harness required by docs/MOBILE.md and docs/REVIEW.md §6.1:
 /// a bad on-device migration destroys user data irrecoverably, so every schema
@@ -321,13 +322,47 @@ void main() {
     await db.close();
   });
 
-  test('database schema matches the committed v8 snapshot', () async {
+  test('v8 -> v9 adds workouts AND preserves all user data', () async {
+    final schema = await verifier.schemaAt(8);
+    final v8Db = v8.DatabaseAtV8(schema.newConnection());
+    await v8Db.customStatement(
+      "INSERT INTO food_logs (id, date, meal, name, energy_kcal, protein_g, "
+      "carb_g, fat_g, logged_via, created_at, updated_at) "
+      "VALUES ('fl','2026-08-27','lunch','dal',180,9,22,6,'quick_add',1,1)");
+    await v8Db.customStatement(
+      "INSERT INTO weight_logs (id, date, weight_kg, created_at, updated_at) "
+      "VALUES ('wt','2026-08-27',84.0,1,1)");
+    await v8Db.customStatement(
+      "INSERT INTO chat_threads (id, title, created_at, updated_at, "
+      "summarized_up_to) VALUES ('t','Knee injury',11,22,3)");
+    await v8Db.customStatement(
+      "INSERT INTO memory_facts (id, kind, content, confidence, created_at, "
+      "updated_at) VALUES ('mf','constraint','Lactose intolerant',0.9,1,1)");
+    await v8Db.close();
+
+    final db = SakamaDatabase.withExecutor(schema.newConnection());
+    await verifier.migrateAndValidate(db, 9);
+
+    expect((await db.select(db.foodLogs).get()).map((r) => r.id), contains('fl'));
+    expect((await db.select(db.weightLogs).get()).map((r) => r.id), contains('wt'));
+    // The v8 additions specifically — a migration that drops the thing the
+    // PREVIOUS migration added is the easiest one to write by accident.
+    final fact = await db.select(db.memoryFacts).getSingle();
+    expect(fact.content, 'Lactose intolerant');
+    final thread = await db.select(db.chatThreads).getSingle();
+    expect(thread.summarizedUpTo, 3);
+
+    expect(await db.select(db.workouts).get(), isEmpty);
+    await db.close();
+  });
+
+  test('database schema matches the committed v9 snapshot', () async {
     // Creates a fresh db from SakamaDatabase's Dart definitions and diffs it
-    // against drift_schemas/drift_schema_v8.json. Fails if the code drifts
+    // against drift_schemas/drift_schema_v9.json. Fails if the code drifts
     // from the committed snapshot without a new schema version + migration.
-    final connection = await verifier.startAt(8);
+    final connection = await verifier.startAt(9);
     final db = SakamaDatabase.withExecutor(connection);
-    await verifier.migrateAndValidate(db, 8);
+    await verifier.migrateAndValidate(db, 9);
     await db.close();
   });
 

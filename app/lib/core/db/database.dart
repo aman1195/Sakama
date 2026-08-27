@@ -86,6 +86,52 @@ class WeightLogs extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// A workout, and the sets inside it.
+///
+/// ONE TABLE, not two. A strength session's sets could be a child table, but
+/// that would mean a join on every read of a screen that mostly shows totals,
+/// plus a second synced table and a second RLS policy for data that is never
+/// queried independently of its workout. Sets live as JSON on the row; the
+/// aggregate fields the UI and Vita actually read are columns.
+///
+/// SYNCED, so it carries the full four-file contract: Drift + PowerSync +
+/// Supabase migration with RLS + sync-streams entry.
+@DataClassName('WorkoutRow')
+class Workouts extends Table {
+  TextColumn get id => text()();
+  TextColumn get userId => text().nullable()();
+  TextColumn get date => text()(); // yyyy-MM-dd, the user's local day
+
+  /// What was done, as the user says it: "Bench press", "Evening walk".
+  TextColumn get name => text()();
+
+  /// strength | cardio | mobility | sport | other. A closed vocabulary so the
+  /// UI can group and Vita can reason about intensity.
+  TextColumn get kind => text().withDefault(const Constant('strength'))();
+
+  IntColumn get durationMin => integer().nullable()();
+
+  /// Estimated burn. NULLABLE and never invented: an unknown burn must not
+  /// silently become 0 kcal, because that is indistinguishable from "I did
+  /// this and it burned nothing" and it feeds the calorie target.
+  RealColumn get energyKcal => real().nullable()();
+
+  /// Sets as JSON: [{"reps":10,"weight_kg":80}, ...]. Empty for cardio.
+  TextColumn get sets => text().withDefault(const Constant('[]'))();
+
+  TextColumn get notes => text().nullable()();
+
+  /// How it was captured — same provenance vocabulary as food_logs
+  /// (CLAUDE.md rule 7): manual | vita | health_kit | wearable.
+  TextColumn get loggedVia => text().withDefault(const Constant('manual'))();
+
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()(); // LWW
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 /// A user's saved plans (M4, ADR 0007). Plans are DATA: [config] holds the whole
 /// Plan JSON, interpreted by the plan engine. A user may keep several plans but
 /// exactly one is [active] (the repository enforces single-active); the rest are
@@ -310,6 +356,7 @@ class OffFoods extends Table {
 
 @DriftDatabase(
     tables: [FoodLogs, Profiles, WaterLogs, WeightLogs, UserPlans, UserFoods,
+      Workouts,
       ChatThreads, ChatMessages, MemoryFacts, Foods, OffFoods])
 class SakamaDatabase extends _$SakamaDatabase {
   SakamaDatabase()
@@ -328,7 +375,7 @@ class SakamaDatabase extends _$SakamaDatabase {
   final bool managedExternally;
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => managedExternally
@@ -392,6 +439,11 @@ class SakamaDatabase extends _$SakamaDatabase {
             if (from >= 6 && from < 8) {
               await m.addColumn(chatThreads, chatThreads.summary);
               await m.addColumn(chatThreads, chatThreads.summarizedUpTo);
+            }
+            if (from < 9) {
+              // Workouts (PRD 7.1). Additive — no existing row is touched.
+              // Synced, so it also has a Supabase mirror + RLS.
+              await m.createTable(workouts);
             }
           },
         );

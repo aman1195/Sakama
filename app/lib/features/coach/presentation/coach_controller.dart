@@ -456,11 +456,21 @@ class CoachController extends Notifier<CoachState> {
     if (drafts.isEmpty) return;
     _set(state.copyWith(clearDraft: true)); // no double-tap
     try {
+      final weightRepo = await ref.read(weightRepositoryProvider.future);
+      // Body weight for the burn calculation: the most recent weigh-in, else
+      // the onboarding figure. Null if we have neither, which leaves the burn
+      // unknown rather than guessing an average person.
+      final latest = await weightRepo.watchLatest().first;
+      final bodyWeightKg = latest?.weightKg ??
+          ref.read(profileProvider).value?.weightKg;
+
       final executor = ToolExecutor(
         foodLogs: await ref.read(foodLogRepositoryProvider.future),
         water: await ref.read(waterRepositoryProvider.future),
-        weight: await ref.read(weightRepositoryProvider.future),
+        weight: weightRepo,
+        workouts: await ref.read(workoutRepositoryProvider.future),
         userId: ref.read(currentUserIdProvider),
+        bodyWeightKg: bodyWeightKg,
       );
       final now = DateTime.now();
       final ymd = '${now.year.toString().padLeft(4, '0')}-'

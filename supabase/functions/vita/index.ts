@@ -154,6 +154,50 @@ const TOOLS = [
   {
     type: "function",
     function: {
+      name: "log_workout",
+      description:
+        "Propose logging exercise the user says they did. Report only what " +
+        "they stated: sets/reps/weight for lifting, minutes for cardio. " +
+        "NEVER estimate calories burned — the app computes that from their " +
+        "body weight, and a guessed number would change what they eat.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            description: "the exercise, e.g. bench press, evening run",
+          },
+          kind: {
+            type: "string",
+            enum: ["strength", "cardio", "mobility", "sport", "other"],
+          },
+          duration_min: {
+            type: "number",
+            description: "minutes, for cardio/mobility/sport",
+          },
+          sets: {
+            type: "array",
+            description: "one entry per set, for strength work",
+            items: {
+              type: "object",
+              properties: {
+                reps: { type: "number" },
+                weight_kg: {
+                  type: "number",
+                  description: "omit for bodyweight; do not send 0",
+                },
+              },
+              required: ["reps"],
+            },
+          },
+        },
+        required: ["name", "kind"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "log_weight",
       description: "Propose logging the user's stated body weight.",
       parameters: {
