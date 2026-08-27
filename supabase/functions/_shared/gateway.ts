@@ -32,7 +32,22 @@ const GEMINI_URL =
   "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 /// Bare name: Google's OpenAI-compatible shim does not take OpenRouter's
 /// "google/" prefix.
-const GEMINI_MODEL = "gemini-2.5-flash";
+///
+/// NOT 2.5-flash, though that is what the bake-off measured. Google retired it
+/// for new API accounts — it still appears in the model list, and calling it
+/// returns 404 "no longer available to new users", pointing at 3.6-flash.
+/// Verified 2026-08-27 against the live API with our own key.
+///
+/// NOT `gemini-flash-latest` either, which also works. A moving alias can
+/// change the serving model underneath us with no signal, which is precisely
+/// the substitution problem model_guard.ts exists to catch on the other
+/// gateway. Pin the version and take the upgrade deliberately.
+///
+/// ACCURACY IS THEREFORE UNMEASURED on this path. The 9% median calorie error
+/// in the bake-off belongs to 2.5-flash. 3.6-flash is newer and very likely
+/// better, but "likely better" is not a number, and this is a nutrition app.
+/// Re-run spikes/photosnap-validation/ before quoting a figure for it.
+const GEMINI_MODEL = "gemini-3.6-flash";
 
 /// Resolve the upstream for one call.
 ///
@@ -142,6 +157,13 @@ export function resolveVisionChain(
     return [{
       url: OPENROUTER_URL,
       key: byok,
+      // UNVERIFIED SINCE 2026-08-27. Google retired gemini-2.5-flash for new
+      // direct API accounts. OpenRouter may still route it under its own
+      // contracts, or may not — it cannot be checked while the account has no
+      // balance. This is the PAID path real users will take, so confirm it
+      // resolves at top-up time; if it 404s, move to google/gemini-3.6-flash
+      // and re-run the bake-off for a real accuracy figure.
+      // Same unverified-retirement caveat as the BYOK branch above.
       model: "google/gemini-2.5-flash",
       isModelBeat: false,
       label: "openrouter(byok)",

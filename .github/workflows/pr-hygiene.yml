@@ -33,10 +33,22 @@ jobs:
         if: github.actor != 'dependabot[bot]'
         env: {BRANCH: "${{ github.head_ref }}"}
         run: |
-          # <prefix>/<TICKET>-<kebab-desc>. The old pattern accepted
+          # <prefix>/<TICKET>-<kebab-desc>.
+          #
+          # The prefix list is a SUPERSET of the commit types accepted by the
+          # title check above, and must stay that way. It used to be a
+          # different, shorter list, so `fix/`, `build/` and `test/` were
+          # valid commit types and invalid branch names at the same time.
+          # That inconsistency failed three PRs (#90, #122, #136) for a
+          # reason nobody can guess from the error, each costing a branch
+          # recreation and a force-push. A hygiene check that fails on
+          # something the neighbouring check accepts is not enforcing a
+          # convention, it is enforcing a typo.
+          #
+          # The old pattern also accepted
           # `feature/FooBar_NotKebab` while the error text claimed to require
           # kebab-case and a ticket, so the message promised more than the check
           # delivered. Now they agree.
-          echo "$BRANCH" | grep -qE '^(feature|bugfix|hotfix|release|chore|docs|refactor)/SAK-[0-9]+-[a-z0-9-]+$' \
+          echo "$BRANCH" | grep -qE '^(feature|feat|bugfix|fix|hotfix|release|chore|docs|refactor|test|perf|ci|build|style)/SAK-[0-9]+-[a-z0-9-]+$' \
             || { echo "::error::Branch must be <prefix>/SAK-<n>-<kebab-desc>, e.g. feature/SAK-14-photosnap-confirm-sheet. Got: $BRANCH"; exit 1; }
           echo "✅ branch ok"
