@@ -9,7 +9,11 @@
 // every field (untrusted model output must never enter a health diary raw).
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { resolveUpstream } from "../_shared/gateway.ts";
+import {
+  resolveVisionChain,
+  type Upstream,
+  visionConfigFromEnv,
+} from "../_shared/gateway.ts";
 import { unfence } from "../_shared/json_content.ts";
 import { servedAsRequested } from "../_shared/model_guard.ts";
 
@@ -142,27 +146,36 @@ Deno.serve(async (req) => {
     }
   }
 
-  // During development OpenRouter has no balance, so this routes to ModelBeat
-  // when MODELBEAT_ALL is set. Production intent is unchanged — see
-  // _shared/gateway.ts.
-  const up = resolveUpstream({
+  // Try the most accurate upstream first and fall back only on failure.
+  // gemini-2.5-flash measured 9% median calorie error against ModelBeat's best
+  // at 18% on the same 22 Indian meal photos; a rough number beats no number,
+  // but only after the good one is unavailable. See _shared/gateway.ts for the
+  // free-tier allowlist that gates the first link.
+  const chain = resolveVisionChain({
     byok,
-    tier: Deno.env.get("MODELBEAT_TIER_PHOTOSNAP") || "modelbeat-advanced",
-    openRouterModel: MODEL,
+    userId: userData.user.id,
+    config: visionConfigFromEnv(),
   });
+  if (chain.length === 0) {
+    console.error("photosnap: no vision upstream configured");
+    if (!byok) {
+      await supabase.rpc("refund_ai_usage", { p_feature: "photosnap" });
+      if (converse) await supabase.rpc("refund_ai_usage", { p_feature: "vita" });
+    }
+    return new Response(JSON.stringify({ error: "provider_error" }), {
+      status: 502,
+    });
+  }
 
-  const orRes = await fetch(up.url, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${up.key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+  const requestBody = (up: Upstream) =>
+    JSON.stringify({
       model: up.model,
       messages: [
         {
           role: "system",
-          content: converse ? `${CONVERSE_PROMPT}\n\nUSER DATA:\n${ctx}` : SYSTEM_PROMPT,
+          content: converse
+            ? `${CONVERSE_PROMPT}\n\nUSER DATA:\n${ctx}`
+            : SYSTEM_PROMPT,
         },
         {
           role: "user",
@@ -182,52 +195,92 @@ Deno.serve(async (req) => {
       response_format: { type: "json_object" },
       // converse also returns a description + a prose answer on top of items.
       max_tokens: converse ? 1000 : 700,
-    }),
-  });
-  // Upstream failures used to collapse to a bare 502, discarding what the
-  // provider actually said — which turned a two-minute diagnosis into reading
-  // dashboard logs. Log the status and a bounded slice of the body.
-  //
-  // SAFE TO LOG: this is OpenRouter's ERROR RESPONSE, never the request. The
-  // image, the prompt, the user context and the API key are not in it, so no
-  // health data and no secret reaches the log (OWASP M1, CLAUDE.md rule 3).
-  if (!orRes.ok) {
-    const detail = await orRes.text().catch(() => "");
+    });
+
+  let up: Upstream | null = null;
+  let or: unknown = null;
+  let lastStatus = 0;
+  let lastDetail = "";
+
+  for (const candidate of chain) {
+    const res = await fetch(candidate.url, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${candidate.key}`,
+        "Content-Type": "application/json",
+      },
+      body: requestBody(candidate),
+    }).catch((e) => {
+      // A transport failure is a failure of THIS link, not of the request.
+      console.error(`${candidate.label} transport error :: ${e}`);
+      return null;
+    });
+
+    if (res === null) continue;
+
+    if (!res.ok) {
+      // SAFE TO LOG: this is the provider's ERROR RESPONSE, never our request.
+      // The image, the prompt, the user context and the API key are not in it,
+      // so no health data and no secret reaches the log (OWASP M1, rule 3).
+      lastStatus = res.status;
+      lastDetail = await res.text().catch(() => "");
+      console.error(
+        `${candidate.label} ${res.status} mode=${converse ? "converse" : "analyze"} ` +
+          `image_b64_len=${image.length} byok=${byok ? "yes" : "no"} :: ` +
+          lastDetail.slice(0, 500),
+      );
+      continue;
+    }
+
+    const parsed = await res.json().catch(() => null);
+
+    // Fail this LINK, not the whole request, when ModelBeat did not serve what
+    // was asked — the next upstream may well be able to.
+    if (
+      candidate.isModelBeat &&
+      !servedAsRequested(
+        (parsed as { extra_fields?: { routing_info?: unknown } })
+          ?.extra_fields?.routing_info,
+        candidate.model,
+      )
+    ) {
+      console.error(
+        `modelbeat UNVERIFIED ROUTING feature=photosnap: asked ${candidate.model}`,
+      );
+      continue;
+    }
+
+    up = candidate;
+    or = parsed;
+    break;
+  }
+
+  if (up === null) {
     console.error(
-      `openrouter ${orRes.status} mode=${converse ? "converse" : "analyze"} ` +
-        `image_b64_len=${image.length} byok=${byok ? "yes" : "no"} :: ` +
-        detail.slice(0, 500),
+      `photosnap: every upstream failed (tried ${
+        chain.map((c) => c.label).join(", ")
+      }), last status ${lastStatus}`,
     );
-    // REFUND: the provider rejected the request, so no tokens were billed and
-    // the user should not lose a daily estimate for our outage. Only this
-    // branch refunds — a 2xx we failed to parse WAS charged upstream (see the
-    // 0009 migration). Best-effort: a failed refund must not turn a provider
-    // error into a 500, so the response below is unconditional.
+    // REFUND: no upstream billed us for a usable answer, so the user should not
+    // lose a daily estimate for our outage. Best-effort: a failed refund must
+    // not turn a provider error into a 500.
     if (!byok) {
       await supabase.rpc("refund_ai_usage", { p_feature: "photosnap" });
       if (converse) await supabase.rpc("refund_ai_usage", { p_feature: "vita" });
     }
-    return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
-  }
-  const or = await orRes.json();
-
-  // Fail closed if ModelBeat did not serve what was asked. `is_fallback` is an
-  // explicit signal from the gateway; absent routing counts as unverified.
-  if (up.isModelBeat && !servedAsRequested(or?.extra_fields?.routing_info, up.model)) {
-    console.error(
-      `modelbeat UNVERIFIED ROUTING feature=photosnap: asked ${up.model}, ` +
-        `got ${JSON.stringify(or?.extra_fields?.routing_info)}`,
-    );
-    if (!byok) await supabase.rpc("refund_ai_usage", { p_feature: "photosnap" });
-    return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
+    return new Response(JSON.stringify({ error: "provider_error" }), {
+      status: 502,
+    });
   }
 
-  const content = or?.choices?.[0]?.message?.content;
+  const content =
+    (or as { choices?: Array<{ message?: { content?: unknown } }> })
+      ?.choices?.[0]?.message?.content;
   if (typeof content !== "string") {
     // A 200 with no usable content — a different failure from a rejected
     // request, and previously indistinguishable from one.
     console.error(
-      `openrouter 200 but no content :: ${JSON.stringify(or).slice(0, 500)}`,
+      `${up.label} 200 but no content :: ${JSON.stringify(or).slice(0, 500)}`,
     );
     return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
   }
