@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../app/kit/kit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/app_providers.dart';
@@ -20,13 +22,17 @@ class DataSourcesPage extends ConsumerWidget {
     return Semantics(
       identifier: 'data-sources-page',
       child: Scaffold(
-        appBar: AppBar(title: const Text('Data sources & licences')),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          scrolledUnderElevation: 0,
+        ),
         body: async.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Center(child: Text('Could not load sources: $e')),
           data: (sources) => ListView(
             padding: const EdgeInsets.all(16),
             children: [
+            SkTitle('Data sources & licences'),
               Text(
                 'Nutrition data in Sakama comes from the sources below. Each '
                 'food row records where it came from, under what licence, and '

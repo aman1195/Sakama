@@ -6,8 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sakama/core/db/database.dart';
 import 'package:sakama/core/providers/app_providers.dart';
 import 'package:sakama/features/home/presentation/home_page.dart';
-import 'package:sakama/features/home/presentation/widgets/calorie_budget_ring.dart';
-import 'package:sakama/features/home/presentation/widgets/macro_bars.dart';
+import 'package:sakama/features/home/presentation/widgets/today_hero.dart';
 import 'package:sakama/features/onboarding/domain/enums.dart';
 import 'package:sakama/features/onboarding/domain/profile_record.dart';
 
@@ -18,7 +17,7 @@ void main() {
         '${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}';
   }
 
-  testWidgets('dashboard renders the ring, macro bars, and 4 meal slots',
+  testWidgets('dashboard renders the hero, macro bars, and 4 meal slots',
       (tester) async {
     // Tall surface so all four meal cards lay out (ListView builds sliver
     // children lazily — off-screen cards otherwise aren't in the tree).
@@ -46,13 +45,13 @@ void main() {
     ));
     // Pump until the dashboard resolves (db future -> stream -> build).
     for (var i = 0;
-        i < 40 && tester.widgetList(find.byType(CalorieBudgetRing)).isEmpty;
+        i < 40 && tester.widgetList(find.byType(TodayHero)).isEmpty;
         i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
 
-    expect(find.byType(CalorieBudgetRing), findsOneWidget);
-    expect(find.byType(MacroBars), findsOneWidget);
+    expect(find.byType(TodayHero), findsOneWidget);
+    expect(find.byType(MacroRow), findsOneWidget);
     // All four meal slots render (Breakfast/Lunch/Dinner/Snack labels).
     for (final label in ['Breakfast', 'Lunch', 'Dinner', 'Snack']) {
       expect(find.text(label), findsOneWidget);
@@ -60,7 +59,7 @@ void main() {
     // The seeded lunch entry shows in its slot.
     expect(find.text('dal tadka'), findsOneWidget);
     // The ring reflects the seeded 180 kcal against the maintain target.
-    expect(find.textContaining('180 of'), findsOneWidget);
+    expect(find.textContaining('180 eaten'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(milliseconds: 50));

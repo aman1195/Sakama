@@ -117,6 +117,63 @@ void main() {
     });
   });
 
+  group('every bright surface WE paint has a legible on-colour', () {
+    // Shipped and caught on device, not here: the nav's selected icon
+    // defaulted to onSecondaryContainer — a pale mint — on our lime
+    // indicator. Measured contrast 1.10. Invisible.
+    //
+    // The lesson generalises past the nav. Choosing a surface colour means
+    // owing it an on-colour: anything Material paints for itself reaches for
+    // a scheme pairing that knows nothing about our accent. So every surface
+    // we override is checked here.
+
+    ({Color fg, Color bg, String what}) navSelected(Brightness b) {
+      final t = sakamaTheme(b);
+      final nav = t.navigationBarTheme;
+      final icon = nav.iconTheme!.resolve({WidgetState.selected})!;
+      return (
+        fg: icon.color!,
+        bg: nav.indicatorColor!,
+        what: 'nav selected icon ($b)'
+      );
+    }
+
+    ({Color fg, Color bg, String what}) navLabel(Brightness b) {
+      final t = sakamaTheme(b);
+      final nav = t.navigationBarTheme;
+      final style = nav.labelTextStyle!.resolve({WidgetState.selected})!;
+      return (
+        fg: style.color!,
+        bg: nav.backgroundColor!,
+        what: 'nav selected label ($b)'
+      );
+    }
+
+    ({Color fg, Color bg, String what}) filledButton(Brightness b) {
+      final s = sakamaTheme(b).colorScheme;
+      return (fg: s.onPrimary, bg: s.primary, what: 'filled button ($b)');
+    }
+
+    test('all of them clear WCAG AA', () {
+      for (final b in Brightness.values) {
+        for (final c in [navSelected(b), navLabel(b), filledButton(b)]) {
+          expect(_contrast(c.fg, c.bg), greaterThanOrEqualTo(4.5),
+              reason: '${c.what} is unreadable');
+        }
+      }
+    });
+
+    test('the accent has a declared ink, and white is not it', () {
+      // The specific mistake: assuming a bright brand colour behaves like a
+      // dark one and takes white text.
+      expect(_contrast(SakamaPalette.onAccent, SakamaPalette.accent),
+          greaterThanOrEqualTo(4.5));
+      expect(_contrast(Colors.white, SakamaPalette.accent), lessThan(4.5),
+          reason: 'if this ever passes, the accent stopped being bright and '
+              'the on-colour should be revisited');
+    });
+  });
+
   test('the bundled font is applied, not fetched at runtime', () {
     // Offline-first (rule 1): typography must not depend on a network call.
     for (final b in Brightness.values) {

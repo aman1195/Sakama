@@ -6,7 +6,14 @@ install:
     cd app && flutter pub get
 
 # Run code generation (freezed, riverpod, drift)
+# `clean` first is LOAD-BEARING, not tidiness. build_runner caches the contents
+# of .env, and --delete-conflicting-outputs does NOT clear that cache — so
+# editing .env and rebuilding can silently keep the OLD values in env.g.dart.
+# That shipped a phone build compiled against https://YOUR-PROJECT.supabase.co
+# for days: sync never reached the server and Vita reported a network error,
+# looking like three unrelated bugs. See test/core/env_not_placeholder_test.dart.
 build:
+    cd app && dart run build_runner clean
     cd app && dart run build_runner build --delete-conflicting-outputs
 
 # Format

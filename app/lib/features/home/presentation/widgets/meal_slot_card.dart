@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/kit/kit.dart';
 import '../../../../core/db/database.dart';
 import '../../domain/day_totals.dart';
 import '../log_entry_sheet.dart';
@@ -14,6 +15,12 @@ import '../log_entry_sheet.dart';
 /// empty slot is visibly quieter than a filled one. A day with three meals
 /// logged and one empty should look different at arm's length — that is the
 /// entire job of a list like this.
+/// One meal slot inside the Meals card: a chip-anchored row per meal, with
+/// its entries nested under it.
+///
+/// No longer its own Card — five stacked cards read as five unrelated things.
+/// It is a row in a single grouped surface now, which is how the reference
+/// apps present a transaction list.
 class MealSlotCard extends StatelessWidget {
   const MealSlotCard({
     super.key,
@@ -39,79 +46,59 @@ class MealSlotCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     final filled = entries.isNotEmpty;
+
     return Semantics(
       identifier: 'meal-${meal.key}',
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Column(
-            children: [
-              ListTile(
-                leading: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    // Filled once the meal has something in it; a faint tint
-                    // while empty. Presence is legible before any text is read.
-                    color: filled
-                        ? scheme.primaryContainer
-                        : scheme.onSurface.withValues(alpha: 0.06),
-                  ),
-                  child: Icon(_icons[meal],
-                      size: 21,
-                      color: filled
-                          ? scheme.onPrimaryContainer
-                          : scheme.onSurface.withValues(alpha: 0.45)),
-                ),
-                title: Text(meal.label,
-                    style: text.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        // An empty slot recedes rather than shouting for
-                        // attention — it is an invitation, not a failure.
-                        color: filled
-                            ? null
-                            : scheme.onSurface.withValues(alpha: 0.65))),
-                subtitle: Text(
-                  entries.isEmpty
-                      ? 'Nothing yet'
-                      : '${kcal.round()} kcal · ${entries.length} '
-                          '${entries.length == 1 ? 'item' : 'items'}',
-                  style: text.bodySmall
-                      ?.copyWith(color: scheme.onSurfaceVariant),
-                ),
-                trailing: Semantics(
-                  identifier: 'meal-${meal.key}-add',
-                  child: IconButton.filledTonal(
-                    icon: const Icon(Icons.add, size: 20),
-                    visualDensity: VisualDensity.compact,
-                    onPressed: onAdd,
+      child: Column(
+        children: [
+          SkRow(
+            icon: _icons[meal]!,
+            title: meal.label,
+            subtitle: filled
+                ? '${kcal.round()} kcal · ${entries.length} '
+                    '${entries.length == 1 ? "item" : "items"}'
+                : 'Nothing yet',
+            // An empty slot recedes: untinted chip, so a filled day is legible
+            // at arm's length.
+            tint: filled ? null : scheme.onSurface.withValues(alpha: 0.06),
+            trailing: Semantics(
+              identifier: 'meal-${meal.key}-add',
+              button: true,
+              child: IconButton.filledTonal(
+                icon: const Icon(Icons.add, size: 20),
+                visualDensity: VisualDensity.compact,
+                onPressed: onAdd,
+              ),
+            ),
+          ),
+          for (final e in entries)
+            Semantics(
+              identifier: 'log-entry-${e.id}',
+              button: true,
+              child: InkWell(
+                onTap: () => LogEntrySheet.show(context, e),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(70, 4, Sk.lg, 10),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(e.name,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.bodyMedium),
+                      ),
+                      Text('${e.energyKcal.round()} kcal',
+                          style: text.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                            fontFeatures: const [
+                              FontFeature.tabularFigures()
+                            ],
+                          )),
+                    ],
                   ),
                 ),
               ),
-              for (final e in entries)
-                Semantics(
-                  identifier: 'log-entry-${e.id}',
-                  button: true,
-                  child: ListTile(
-                    dense: true,
-                    visualDensity: VisualDensity.compact,
-                    contentPadding: const EdgeInsets.only(left: 74, right: 20),
-                    title: Text(e.name, overflow: TextOverflow.ellipsis),
-                    trailing: Text('${e.energyKcal.round()} kcal',
-                        // Tabular figures so a column of calories aligns on
-                        // the decimal rather than shimmying per row.
-                        style: text.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                            fontFeatures: const [FontFeature.tabularFigures()])),
-                    // A logged row was write-only until now: no macros, no fix,
-                    // no delete. Tap opens the entry.
-                    onTap: () => LogEntrySheet.show(context, e),
-                  ),
-                ),
-            ],
-          ),
-        ),
+            ),
+        ],
       ),
     );
   }

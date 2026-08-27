@@ -12,7 +12,9 @@
 // server-side only (rule 3).
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { servedModelVerified } from "../_shared/model_guard.ts";
+import { resolveUpstream } from "../_shared/gateway.ts";
+import { unfence } from "../_shared/json_content.ts";
+import { servedAsRequested } from "../_shared/model_guard.ts";
 
 const DAILY_CAP = 30;   // coach turns/user/day — text is cheap, conversation matters
 
@@ -33,20 +35,21 @@ const EXTRACT_CAP = 12;
 // Configurable per feature ON PURPOSE: ModelBeat is a beta endpoint, so an
 // outage there must degrade extraction alone, never the whole app. Unset the
 // secret and this falls back to OpenRouter with no deploy.
-const MODELBEAT_URL = "https://api.beta.modelbeat.ai/v1/chat/completions";
+const MODELBEAT_URL = Deno.env.get("MODELBEAT_URL") ||
+  "https://api.staging.modelbeat.ai/v1/chat/completions";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-// deepseek-v3.2, chosen on evidence (2026-08-11, five-turn transcript fixture):
-// all of qwen3-32b, glm-4.7-flash and deepseek-v3.2 extracted the same three
-// correct facts and all correctly REFUSED to remember "I had dal chawal for
-// lunch today" (a diary entry, not a memory) — the hardest instruction in the
-// prompt. Two things separated them:
-//   - qwen3-32b and glm-4.7-flash wrap output in ```json fences DESPITE
-//     response_format: json_object; deepseek does not.
-//   - glm-4.7-flash reports confidence 1.0 for everything, which is useless
-//     for a ranking that sorts on confidence.
-// kimi-k2-thinking returned null content entirely (a reasoning model) and is
-// unusable here without extra handling.
-const EXTRACT_MODEL = Deno.env.get("MODELBEAT_EXTRACT_MODEL") || "deepseek-v3.2";
+// TIERS, NOT MODEL NAMES. ModelBeat no longer accepts a named model — asking
+// for "deepseek-v3.2" is rejected outright with "use 'auto' or a tier name" —
+// and its routing docs state that the identity of the serving model is
+// deliberately not published. So the bake-off's per-model evidence
+// (docs/research/model-bakeoff-2026-08.md §3) no longer maps onto anything we
+// can request; what we choose now is a quality tier and let it route.
+//
+// "standard" for extraction: the task is structured JSON from a short
+// transcript, which the bake-off showed mid-tier models handle correctly
+// including the hardest instruction (refusing to remember a diary entry).
+const EXTRACT_MODEL =
+  Deno.env.get("MODELBEAT_EXTRACT_MODEL") || "modelbeat-advanced";
 
 /// Distil a transcript into durable facts. Deliberately NOT the coach persona:
 /// this call has one job, and mixing it with conversation degrades both on a
@@ -245,15 +248,21 @@ Deno.serve(async (req) => {
     ? `${PERSONA}\n\n--- The user's data right now ---\n${context.slice(0, 4000)}`
     : PERSONA;
 
-  // BYOK is always the user's own OpenRouter key, so it pins the OpenRouter
-  // path regardless of mode — we must never spend a user's key on a gateway
-  // they did not choose.
-  const mbKey = Deno.env.get("MODELBEAT_API_KEY");
-  const useModelBeat = extractMode && !byok && !!mbKey;
-  const endpoint = useModelBeat ? MODELBEAT_URL : OPENROUTER_URL;
-  const upstreamKey = byok ||
-    (useModelBeat ? mbKey : Deno.env.get("OPENROUTER_API_KEY"));
-  const upstreamModel = useModelBeat ? EXTRACT_MODEL : MODEL;
+  // Extraction ALWAYS prefers ModelBeat (its own recorded decision); chat
+  // follows MODELBEAT_ALL, which is set during development because OpenRouter
+  // has no balance. BYOK pins OpenRouter either way.
+  const up = resolveUpstream({
+    byok,
+    tier: extractMode
+        ? EXTRACT_MODEL
+        : (Deno.env.get("MODELBEAT_TIER_VITA") || "modelbeat-standard"),
+    openRouterModel: MODEL,
+    force: extractMode,
+  });
+  const endpoint = up.url;
+  const upstreamKey = up.key;
+  const upstreamModel = up.model;
+  const useModelBeat = up.isModelBeat;
 
   const orRes = await fetch(endpoint, {
     method: "POST",
@@ -294,21 +303,21 @@ Deno.serve(async (req) => {
   // data, and the first symptom would be worse memories months later.
   //
   // A 502 here costs one skipped extraction, which is invisible by design.
-  // ABSENT COUNTS AS UNVERIFIED. The first version of this check only fired
-  // when resolved_model_used was a present string, so a missing or renamed
-  // field skipped it entirely — a block labelled "fail closed" that failed
-  // OPEN, which is worse than no check because it reads as protection. If
-  // ModelBeat ever drops the field, the swap this exists to catch returns
-  // silently. On health data the safe default is to refuse what we cannot
-  // confirm (review of #107).
+  // FAIL CLOSED IF THE GATEWAY DID NOT SERVE WHAT WE ASKED.
+  //
+  // Rewritten for the current API: `resolved_model_used` is gone, and
+  // `routing_info.is_fallback` states outright what the old check tried to
+  // infer from a substring. Absent or unrecognised routing still counts as
+  // unverified — a health-data path refuses what it cannot confirm.
   if (useModelBeat) {
-    const served = or?.extra_fields?.resolved_model_used;
-    if (!servedModelVerified(served, EXTRACT_MODEL)) {
+    const routing = or?.extra_fields?.routing_info;
+    if (!servedAsRequested(routing, upstreamModel)) {
       console.error(
-        `modelbeat UNVERIFIED MODEL: pinned ${EXTRACT_MODEL}, ` +
-          `resolved_model_used=${JSON.stringify(served)}`,
+        `modelbeat UNVERIFIED ROUTING: asked ${EXTRACT_MODEL}, got ` +
+          JSON.stringify(routing),
       );
-      await supabase.rpc("refund_ai_usage", { p_feature: "memory" });
+      await supabase.rpc("refund_ai_usage",
+        { p_feature: extractMode ? "memory" : "vita" });
       return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
     }
   }
@@ -323,7 +332,7 @@ Deno.serve(async (req) => {
     if (reply.trim().length === 0) {
       return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
     }
-    return new Response(reply, {
+    return new Response(unfence(reply), {
       headers: { "Content-Type": "application/json" },
     });
   }

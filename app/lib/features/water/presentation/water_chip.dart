@@ -39,10 +39,14 @@ class WaterChip extends ConsumerWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Row(children: [
-                            Icon(Icons.water_drop_outlined),
-                            SizedBox(width: 8),
-                            Text('Water'),
+                          Row(children: [
+                            const Icon(Icons.water_drop_outlined),
+                            const SizedBox(width: 8),
+                            Text('Water',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w600)),
                           ]),
                           Text('$ml / $targetMl ml'),
                         ],

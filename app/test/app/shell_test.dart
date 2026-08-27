@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sakama/app/app.dart';
 import 'package:sakama/core/db/database.dart';
 import 'package:sakama/core/providers/app_providers.dart';
-import 'package:sakama/features/home/presentation/widgets/calorie_budget_ring.dart';
+import 'package:sakama/features/home/presentation/widgets/today_hero.dart';
 import 'package:sakama/features/onboarding/domain/enums.dart';
 import 'package:sakama/features/onboarding/domain/profile_record.dart';
 
@@ -35,11 +35,11 @@ void main() {
     // of a CircularProgressIndicator — because the ring IS a
     // CircularProgressIndicator, so "no spinner" would never hold.
     for (var i = 0;
-        i < 40 && tester.widgetList(find.byType(CalorieBudgetRing)).isEmpty;
+        i < 40 && tester.widgetList(find.byType(TodayHero)).isEmpty;
         i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
-    expect(find.byType(CalorieBudgetRing), findsOneWidget,
+    expect(find.byType(TodayHero), findsOneWidget,
         reason: 'Home dashboard should have resolved past loading');
 
     for (final id in ['nav-home', 'nav-diary', 'nav-capture', 'nav-coach', 'nav-me']) {

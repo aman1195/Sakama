@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../app/kit/kit.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/app_providers.dart';
@@ -21,10 +23,14 @@ class AiPrivacyPage extends ConsumerWidget {
     return Semantics(
       identifier: 'ai-privacy-page',
       child: Scaffold(
-        appBar: AppBar(title: const Text('AI & privacy')),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          scrolledUnderElevation: 0,
+        ),
         body: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            SkTitle('AI & privacy'),
             Card(
               child: Semantics(
                 identifier: 'ai-enabled-toggle',

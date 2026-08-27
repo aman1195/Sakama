@@ -9,6 +9,9 @@
 // every field (untrusted model output must never enter a health diary raw).
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { resolveUpstream } from "../_shared/gateway.ts";
+import { unfence } from "../_shared/json_content.ts";
+import { servedAsRequested } from "../_shared/model_guard.ts";
 
 const DAILY_CAP = 8;          // photos/user/day — vision is pricier than text
 const VITA_CAP = 30;          // a converse photo also costs one coach exchange
@@ -139,14 +142,23 @@ Deno.serve(async (req) => {
     }
   }
 
-  const orRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  // During development OpenRouter has no balance, so this routes to ModelBeat
+  // when MODELBEAT_ALL is set. Production intent is unchanged — see
+  // _shared/gateway.ts.
+  const up = resolveUpstream({
+    byok,
+    tier: Deno.env.get("MODELBEAT_TIER_PHOTOSNAP") || "modelbeat-advanced",
+    openRouterModel: MODEL,
+  });
+
+  const orRes = await fetch(up.url, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${byok || Deno.env.get("OPENROUTER_API_KEY")}`,
+      "Authorization": `Bearer ${up.key}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: MODEL,
+      model: up.model,
       messages: [
         {
           role: "system",
@@ -198,6 +210,18 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
   }
   const or = await orRes.json();
+
+  // Fail closed if ModelBeat did not serve what was asked. `is_fallback` is an
+  // explicit signal from the gateway; absent routing counts as unverified.
+  if (up.isModelBeat && !servedAsRequested(or?.extra_fields?.routing_info, up.model)) {
+    console.error(
+      `modelbeat UNVERIFIED ROUTING feature=photosnap: asked ${up.model}, ` +
+        `got ${JSON.stringify(or?.extra_fields?.routing_info)}`,
+    );
+    if (!byok) await supabase.rpc("refund_ai_usage", { p_feature: "photosnap" });
+    return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
+  }
+
   const content = or?.choices?.[0]?.message?.content;
   if (typeof content !== "string") {
     // A 200 with no usable content — a different failure from a rejected
@@ -209,7 +233,7 @@ Deno.serve(async (req) => {
   }
 
   // Pass the model JSON straight through; the CLIENT validates hard.
-  return new Response(content, {
+  return new Response(unfence(content), {
     headers: { "Content-Type": "application/json" },
   });
 });

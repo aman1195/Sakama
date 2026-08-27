@@ -22,7 +22,19 @@ import 'theme.dart';
 ///  - **Contrast is enforced on every state** (`statusOn`), because a coloured
 ///    surface that cannot carry its own text is worse than no colour at all.
 enum TrackStatus {
-  /// Nothing logged yet, or no target set — genuinely neutral, not "good".
+  /// Nothing logged yet, or no target set.
+  ///
+  /// Renders in the BRAND colour, same as [onTrack]. That is deliberate and it
+  /// took a device to see why: making this grey meant the first screen anyone
+  /// opens — an empty day — had no colour in it at all, and the whole
+  /// treatment was invisible until the user had already logged something.
+  ///
+  /// A brand-coloured card is chrome, not congratulation. The reference apps
+  /// work exactly this way: the card is the brand colour in the normal case
+  /// and changes only when something needs attention. So the guardrail this
+  /// replaces ("empty must not look like on-track") was solving the wrong
+  /// problem — the risk is praising someone for not eating, and a card that
+  /// says "1,750 kcal left" praises nothing.
   neutral,
 
   /// Within target.
@@ -33,6 +45,11 @@ enum TrackStatus {
 
   /// Past target.
   over,
+
+  /// The user turned status colouring off (Me -> Colour my day). Not a state
+  /// of the data — a state of their preference — which is why it is separate
+  /// from [neutral] rather than reusing it.
+  muted,
 }
 
 /// Classify progress against a target.
@@ -53,9 +70,10 @@ extension TrackStatusColors on TrackStatus {
   /// The surface fill. Saturated on purpose — this is the fintech treatment,
   /// where the card itself carries the state.
   Color surface(Brightness b) => switch (this) {
-        TrackStatus.neutral =>
+        TrackStatus.muted =>
           b == Brightness.light ? Colors.white : SakamaPalette.surfaceDark,
-        TrackStatus.onTrack => SakamaPalette.accent,
+        // Brand colour for both: a normal day looks like the app.
+        TrackStatus.neutral || TrackStatus.onTrack => SakamaPalette.accent,
         TrackStatus.nearing => const Color(0xFFF5C451),
         TrackStatus.over => const Color(0xFFFD8A5F),
       };
@@ -63,10 +81,10 @@ extension TrackStatusColors on TrackStatus {
   /// Text and icons ON that surface. Every status resolves to a colour that
   /// clears WCAG AA against its own fill — asserted in theme_test.
   Color on(Brightness b) => switch (this) {
-        TrackStatus.neutral =>
-          b == Brightness.light ? const Color(0xFF101010) : Colors.white,
+        TrackStatus.muted =>
+          b == Brightness.light ? SakamaPalette.inkDark : Colors.white,
         // The bright fills are all light, so they take ink, not white.
-        _ => const Color(0xFF101010),
+        _ => SakamaPalette.onAccent,
       };
 }
 

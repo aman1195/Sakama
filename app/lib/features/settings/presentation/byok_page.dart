@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../app/kit/kit.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -62,10 +64,14 @@ class _ByokPageState extends ConsumerState<ByokPage> {
     return Semantics(
       identifier: 'byok-page',
       child: Scaffold(
-        appBar: AppBar(title: const Text('Your own AI key')),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          scrolledUnderElevation: 0,
+        ),
         body: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            SkTitle('Your own AI key'),
             Text(
               'Sakama\'s AI (photo, estimates, coach) is free with a daily '
               'limit. Add your own OpenRouter key and it becomes unlimited — '

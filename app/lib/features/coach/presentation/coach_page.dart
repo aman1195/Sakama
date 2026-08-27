@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../../../app/kit/kit.dart';
+import '../../../app/theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/database.dart';
@@ -258,40 +261,78 @@ class _CoachPageState extends ConsumerState<CoachPage> {
   }
 }
 
-class _Intro extends StatelessWidget {
+/// The empty Coach screen.
+///
+/// A centred icon and two paragraphs left the screen almost blank and gave a
+/// first-time user nothing to tap. It now leads with a bright hero — the
+/// reference grammar — and offers the three questions people actually ask, as
+/// pills that start the conversation.
+class _Intro extends ConsumerWidget {
   const _Intro();
+
+  static const _starters = [
+    'What should I eat tonight?',
+    "How's my protein today?",
+    'Is dal chawal enough for dinner?',
+  ];
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final text = Theme.of(context).textTheme;
-    final scheme = Theme.of(context).colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.eco_outlined, size: 44, color: scheme.primary),
-            const SizedBox(height: 12),
-            Text(
-              'Hi, I'
-              "'"
-              'm Vita',
-              style: text.titleLarge,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Your coach. I can see today'
-              "'"
-              's logs and targets — ask me '
-              '"what should I eat tonight?" or "how'
-              "'"
-              's my protein?"',
-              textAlign: TextAlign.center,
-              style: text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-          ],
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(Sk.lg, 0, Sk.lg, Sk.lg),
+      children: [
+        SkHero(
+          identifier: 'coach-intro',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.auto_awesome, size: 28, color: SakamaPalette.onAccent),
+              const SizedBox(height: Sk.md),
+              Text('Ask Vita',
+                  style: text.displaySmall?.copyWith(
+                      color: SakamaPalette.onAccent,
+                      fontSize: 40,
+                      height: 1.05,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -1.6)),
+              const SizedBox(height: Sk.sm),
+              Text(
+                'Your coach can see today\'s logs, your targets and your plan '
+                '— so the answer is about your day, not a generic tip.',
+                style: text.bodyMedium
+                    ?.copyWith(color: SakamaPalette.onAccent.withValues(alpha: 0.75)),
+              ),
+            ],
+          ),
         ),
-      ),
+        const SkSection('Try asking'),
+        for (final q in _starters)
+          Padding(
+            padding: const EdgeInsets.only(bottom: Sk.sm),
+            child: SkCard(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: Sk.lg, vertical: Sk.md),
+              // MUST gate on consent like every other send path. The
+              // redesign added this tile calling send() directly, which would
+              // have shipped the grounding snapshot — profile and health
+              // CONDITIONS — without the consent #60/#62 exist to require.
+              // A new entry point to an existing action inherits its gates.
+              onTap: () async {
+                if (!await ensureAiConsent(context, ref)) return;
+                await ref.read(coachControllerProvider.notifier).send(q);
+              },
+              child: Row(
+                children: [
+                  Expanded(child: Text(q, style: text.bodyLarge)),
+                  Icon(Icons.north_east,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

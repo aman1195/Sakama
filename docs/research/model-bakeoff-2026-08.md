@@ -115,6 +115,48 @@ fixtures is the number that decides whether Vita chat moves anywhere, and it run
 OpenRouter balance is topped up. The rule-3 gate below applies to chat exactly as it does to
 extraction — chat turns are the same sensitive text.
 
+## 4c. The API changed under us (2026-08-27)
+
+Everything in §1 and §3 was measured against `api.beta.modelbeat.ai` and **no
+longer maps onto what you can request.** The beta host stopped resolving; the
+current endpoint is `api.staging.modelbeat.ai`, and it is a different contract:
+
+| Then (beta) | Now (staging) |
+|---|---|
+| Request a named model (`deepseek-v3.2`) | **Named models are rejected** — "use 'auto' or a tier name" |
+| `resolved_model_used` names the serving model | **Not published** — the routing docs say model identity is deliberately not part of the API |
+| Silent fallback inferred from a substring | `routing_info.is_fallback` states it explicitly |
+
+**Consequence for this document.** The per-model tables above are now history
+rather than guidance: you cannot ask for `kimi-k2.5` or `deepseek-v3.2`. What
+you choose is `auto` or a capability floor — `modelbeat-fast` / `-standard` /
+`-advanced`. Sakama uses **standard** for chat and estimation, **advanced** for
+extraction, plan generation and vision, and never `fast`.
+
+**Two things measured on the new endpoint, both of which cost a bug each.**
+
+1. **A tier is a hint, not a contract.** Asking `modelbeat-fast` returns
+   `level: "standard"` with `is_fallback: false` — the router picks the
+   cheapest model that clears the request's gates, so the tier is a floor.
+   The first version of the guard enforced tier equality and **502'd every
+   call**. It now trusts only `is_fallback`, and still fails closed when the
+   routing block is absent.
+
+2. **The fence bug was wider than memory.** Models behind the router wrap JSON
+   in ```` ```json ```` fences despite `response_format: json_object` — the
+   same failure §3 found on qwen3-32b and glm-4.7-flash. `estimate-food`,
+   `generate-plan` and `photosnap` all pass model content straight to clients
+   that call `jsonDecode`, so each would have failed silently. De-fencing is
+   now shared (`_shared/json_content.ts`) rather than per-client.
+
+**Development posture, and its expiry.** `MODELBEAT_ALL=1` routes *every* AI
+feature — vision included — to ModelBeat, because OpenRouter has no balance
+during development. **This is temporary and must not become the default:** §1
+measured ModelBeat vision at roughly double `gemini-2.5-flash`'s calorie error
+on 22 Indian meal photos, and that finding still stands even though the
+specific models are no longer nameable. Unset the flag and every feature
+returns to OpenRouter with no code change.
+
 ## 5. RULE-3 GATE — must be cleared before `MODELBEAT_API_KEY` is set in production
 
 Raised by the re-review of #107, and it is the right call. **Extraction forwards the conversation
