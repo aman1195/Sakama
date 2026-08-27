@@ -47,6 +47,34 @@ Three tiers: **Flutter client** (offline-first), **Supabase** (data + auth + Edg
 metering), **managed AI gateway**. Detail on the AI tier is in
 [architecture/02-ai-layer.md](architecture/02-ai-layer.md).
 
+## 1b. Deployment topology (2.0) · [ADR 0017](adr/0017-dual-deployment-cloud-and-self-hosted.md)
+
+The diagram above is the managed-cloud path. From M11 there is a second one, sharing the same
+data model and the same RLS policies.
+
+| | Managed cloud | Self-hosted |
+|---|---|---|
+| Postgres | Supabase | Postgres 15 in Compose/Helm |
+| Auth | Supabase Auth + OIDC | Same schema, OIDC-first |
+| AI entry point | Edge Function (Deno) | Node endpoint, **same contract** |
+| Sync | PowerSync | PowerSync (self-hosted) |
+| Clients | Flutter, React web, MCP | Flutter, React web, MCP |
+
+Three rules keep the two from becoming two products:
+
+1. **One migration runner.** A schema change lands in both or neither. The four-file sync contract
+   (Drift table, `powersync_schema.dart`, Supabase migration with RLS, `sync-streams.yaml`) gains a
+   fifth file for the self-hosted server, and a test asserts the set stays aligned.
+2. **One AI module.** Budget enforcement, BYOK decryption and key redaction are imported by both
+   entry points, never reimplemented. Two copies drift, and a drift here is a security incident
+   rather than an inconsistency. CLAUDE.md rule 3 binds identically in both: no provider key ever
+   reaches a client.
+3. **One authorisation boundary.** RLS is it. The MCP server, the web client and the mobile client
+   are all just clients. None of them is a bypass, and none gets a service-role key.
+
+Self-hosted deployments run RLS in an environment we do not operate and cannot audit. A
+misconfigured instance must fail closed. That is a test, not a hope.
+
 ## 2. Client architecture (Flutter)
 
 **Confirmed stack (versions to re-pin at setup):**
