@@ -38,3 +38,13 @@ licences:
 
 # Full CI pass
 ci: install build format analyze test test-migrations licences
+
+# Prove RLS holds against the LIVE project (CLAUDE.md rule 2).
+#
+# Reads app/.env for the URL and anon key; the two credentials are yours to
+# supply. Safe to run against production: it reads, and its only write is one
+# that must fail.
+#
+#   just verify-rls  (with SAKAMA_TEST_EMAIL / SAKAMA_TEST_PASSWORD exported)
+verify-rls:
+    bash supabase/verify-rls.sh
