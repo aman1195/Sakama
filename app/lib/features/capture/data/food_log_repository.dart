@@ -92,6 +92,17 @@ class FoodLogRepository {
   /// Correct an entry in place. An edited row records `manual` provenance: it
   /// is no longer the AI estimate / corpus match / remembered portion it
   /// started as, and the diary must not claim otherwise (rule 7).
+  /// Edit an entry.
+  ///
+  /// [date] moves it to another day. Logging dinner just after midnight puts it
+  /// on tomorrow, and remembering yesterday's lunch this morning puts it on
+  /// today; without this the only repair was delete and re-add, which threw
+  /// away the entry and its provenance to fix a one-character mistake.
+  ///
+  /// [servingLabel] and [servingQty] record how the portion was EXPRESSED.
+  /// Grams stay the truth. They are written as a pair or not at all: a label
+  /// with no quantity is not a portion, and the server CHECK rejects the
+  /// half-written row at sync time, which is a failure the user never sees.
   Future<void> update({
     required String id,
     required String meal,
@@ -101,9 +112,26 @@ class FoodLogRepository {
     required double carbG,
     required double fatG,
     double? grams,
+    String? date,
+    String? servingLabel,
+    double? servingQty,
   }) async {
+    if (date != null && !_isYmd(date)) {
+      throw ArgumentError.value(date, 'date', 'must be yyyy-MM-dd');
+    }
+    final label = servingLabel?.trim();
+    final hasLabel = label != null && label.isNotEmpty;
+    final hasQty = servingQty != null;
+    if (hasLabel != hasQty) {
+      throw ArgumentError('servingLabel and servingQty must be set together');
+    }
+    if (hasQty && (!servingQty.isFinite || servingQty <= 0 || servingQty > 100)) {
+      throw ArgumentError.value(servingQty, 'servingQty', 'must be 0 < q <= 100');
+    }
+
     await (_db.update(_db.foodLogs)..where((t) => t.id.equals(id))).write(
       FoodLogsCompanion(
+        date: date == null ? const Value.absent() : Value(date),
         meal: Value(meal),
         name: Value(name),
         energyKcal: Value(energyKcal),
@@ -111,11 +139,26 @@ class FoodLogRepository {
         carbG: Value(carbG),
         fatG: Value(fatG),
         grams: Value(grams),
+        servingLabel: Value(hasLabel ? label : null),
+        servingQty: Value(hasQty ? servingQty : null),
         loggedVia: const Value('manual'),
         updatedAt: Value(DateTime.now().millisecondsSinceEpoch), // LWW
       ),
     );
   }
+
+  /// yyyy-MM-dd, and a real date. A string like '2026-13-45' passes a regex and
+  /// would sort into the diary between December and nothing.
+  static bool _isYmd(String s) {
+    if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(s)) return false;
+    final d = DateTime.tryParse(s);
+    return d != null && s == _fmt(d);
+  }
+
+  static String _fmt(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
 
   Future<void> delete(String id) async =>
       (_db.delete(_db.foodLogs)..where((t) => t.id.equals(id))).go();

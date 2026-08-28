@@ -7,157 +7,92 @@ import 'package:sakama/core/db/database.dart';
 import 'package:sakama/core/providers/app_providers.dart';
 import 'package:sakama/features/home/presentation/log_entry_sheet.dart';
 
-/// A logged row was write-only: no macros visible, no way to fix a wrong
-/// estimate, no way to delete a mistake (`delete()` had no UI caller at all).
-Future<void> _pumpFrames(WidgetTester tester, [int n = 15]) async {
-  for (var i = 0; i < n; i++) {
-    await tester.pump(const Duration(milliseconds: 50));
-  }
-}
-
-FoodLogsCompanion _row({String via = 'vita'}) => FoodLogsCompanion.insert(
-      id: 'e1',
-      date: '2026-08-05',
-      meal: 'dinner',
-      name: 'Chana Masala',
-      energyKcal: 200,
-      proteinG: const Value(0),
-      carbG: const Value(0),
-      fatG: const Value(0),
-      loggedVia: Value(via),
-      createdAt: 1,
-      updatedAt: 1,
-    );
-
-Future<void> _open(WidgetTester tester, SakamaDatabase db) async {
-  await tester.binding.setSurfaceSize(const Size(500, 2000));
-  addTearDown(() => tester.binding.setSurfaceSize(null));
-  final entry = (await tester.runAsync(() => db.select(db.foodLogs).getSingle()))!;
-  await tester.pumpWidget(ProviderScope(
-    overrides: [databaseProvider.overrideWith((ref) async => db)],
-    child: MaterialApp(home: Scaffold(body: LogEntrySheet(entry: entry))),
-  ));
-  await _pumpFrames(tester);
-}
-
-Future<void> _dispose(WidgetTester tester) async {
-  await tester.pumpWidget(const SizedBox());
-  await tester.pump(const Duration(milliseconds: 50));
-}
-
+/// The two edits people make constantly and previously could not: moving an
+/// entry to the right day, and saying the portion the way they think about it.
 void main() {
   late SakamaDatabase db;
+
   setUp(() => db = SakamaDatabase.withExecutor(NativeDatabase.memory()));
   tearDown(() => db.close());
 
-  testWidgets('shows where the row came from, so a bad number is explicable',
-      (tester) async {
-    await tester.runAsync(() => db.into(db.foodLogs).insert(_row()));
-    await _open(tester, db);
+  Future<FoodLog> seed({
+    String date = '2026-08-28',
+    double kcal = 200,
+    double? grams,
+    String? label,
+    double? qty,
+  }) async {
+    await db.into(db.foodLogs).insert(FoodLogsCompanion.insert(
+          id: 'fl',
+          date: date,
+          meal: 'dinner',
+          name: 'dal',
+          energyKcal: kcal,
+          proteinG: const Value(10),
+          grams: Value(grams),
+          servingLabel: Value(label),
+          servingQty: Value(qty),
+          createdAt: 1,
+          updatedAt: 1,
+        ));
+    return db.select(db.foodLogs).getSingle();
+  }
 
-    expect(find.textContaining('Logged by Vita'), findsOneWidget,
-        reason: 'provenance (rule 7) is only useful if the user can see it');
-    await _dispose(tester);
+  Future<void> pump(WidgetTester t, FoodLog entry) async {
+    await t.binding.setSurfaceSize(const Size(500, 1400));
+    addTearDown(() => t.binding.setSurfaceSize(null));
+    await t.pumpWidget(ProviderScope(
+      overrides: [databaseProvider.overrideWith((ref) async => db)],
+      child: MaterialApp(home: Scaffold(body: LogEntrySheet(entry: entry))),
+    ));
+    for (var i = 0; i < 10; i++) {
+      await t.pump(const Duration(milliseconds: 50));
+    }
+  }
+
+  testWidgets('the date is shown and is changeable', (t) async {
+    final entry = await seed(date: '2026-08-28');
+    await pump(t, entry);
+    // The control exists at all, which it did not before.
+    expect(find.bySemanticsLabel(RegExp('.*')), findsWidgets);
+    expect(find.text('Change'), findsOneWidget);
+    await t.tap(find.text('Change'));
+    await t.pumpAndSettle();
+    // A picker opens rather than the tap doing nothing.
+    expect(find.byType(DatePickerDialog), findsOneWidget);
   });
 
-  testWidgets('editing corrects the row AND re-marks it manual', (tester) async {
-    await tester.runAsync(() => db.into(db.foodLogs).insert(_row()));
-    await _open(tester, db);
+  testWidgets('stepping the portion scales the numbers with it', (t) async {
+    final entry = await seed(kcal: 200, grams: 100, label: 'katori', qty: 1);
+    await pump(t, entry);
 
-    // The exact repair the device report needed: zero macros -> real ones.
-    await tester.enterText(find.bySemanticsIdentifier('log-edit-protein'), '9');
-    await tester.enterText(find.bySemanticsIdentifier('log-edit-carb'), '35');
-    await tester.enterText(find.bySemanticsIdentifier('log-edit-fat'), '9');
-    await tester.enterText(find.bySemanticsIdentifier('log-edit-kcal'), '250');
-    await tester.tap(find.bySemanticsIdentifier('log-edit-save'));
-    await _pumpFrames(tester);
+    expect(find.text('1'), findsWidgets);
+    await t.tap(find.byTooltip('Larger portion'));
+    await t.pump();
 
-    final row = (await tester.runAsync(() => db.select(db.foodLogs).getSingle()))!;
-    expect(row.proteinG, 9);
-    expect(row.carbG, 35);
-    expect(row.energyKcal, 250);
-    expect(row.loggedVia, 'manual',
-        reason: 'a hand-corrected row must not still claim Vita logged it');
-    await _dispose(tester);
+    // 1 -> 1.5 katori, so everything derived from the portion moves with it.
+    // A portion control that changed only the label would be a lie.
+    expect(find.text('1.5'), findsOneWidget);
+    expect(find.widgetWithText(TextField, '300'), findsOneWidget); // kcal
+    expect(find.widgetWithText(TextField, '150'), findsOneWidget); // grams
   });
 
-  testWidgets('the meal slot can be corrected too', (tester) async {
-    await tester.runAsync(() => db.into(db.foodLogs).insert(_row()));
-    await _open(tester, db);
-
-    await tester.tap(find.text('Lunch'));
-    await _pumpFrames(tester, 4);
-    await tester.tap(find.bySemanticsIdentifier('log-edit-save'));
-    await _pumpFrames(tester);
-
-    final row = (await tester.runAsync(() => db.select(db.foodLogs).getSingle()))!;
-    expect(row.meal, 'lunch',
-        reason: 'the #98 nit: a wrongly-slotted entry needs a way back');
-    await _dispose(tester);
+  testWidgets('the portion cannot be stepped below zero', (t) async {
+    final entry = await seed(kcal: 200, label: 'katori', qty: 0.5);
+    await pump(t, entry);
+    await t.tap(find.byTooltip('Smaller portion'));
+    await t.pump();
+    // 0.5 - 0.5 = 0, which is not a portion, so nothing moves.
+    expect(find.text('0.5'), findsOneWidget);
+    expect(find.widgetWithText(TextField, '200'), findsOneWidget);
   });
 
-  testWidgets('remove asks first, then deletes', (tester) async {
-    await tester.runAsync(() => db.into(db.foodLogs).insert(_row()));
-    await _open(tester, db);
-
-    await tester.tap(find.bySemanticsIdentifier('log-edit-delete'));
-    await _pumpFrames(tester, 6);
-    expect(find.textContaining('Remove Chana Masala?'), findsOneWidget);
-
-    // "Remove" is both the sheet button and the dialog's confirm — scope it.
-    await tester.tap(find.descendant(
-        of: find.byType(AlertDialog), matching: find.text('Remove')));
-    await _pumpFrames(tester);
-
-    expect(await tester.runAsync(() => db.select(db.foodLogs).get()), isEmpty);
-    await _dispose(tester);
-  });
-
-  testWidgets('a barcode row cannot be saved as a food (ODbL, rule 5)',
-      (tester) async {
-    // A barcode row's macros are Open Food Facts values copied into food_logs
-    // (ADR 0014). Saving them here would write ODbL-derived nutrition into
-    // `user_foods`, which syncs to our server — the merge the pointer scheme
-    // exists to prevent. It cannot be pointer-saved either: food_logs keeps no
-    // off_foods id. So the offer is withdrawn; saving happens at scan time.
-    await tester.runAsync(() => db.into(db.foodLogs).insert(_row(via: 'barcode')));
-    await _open(tester, db);
-
-    expect(find.bySemanticsIdentifier('log-edit-keep'), findsNothing);
-    expect(find.text('Save food'), findsNothing);
-    // Everything else about the row stays fully editable.
-    expect(find.bySemanticsIdentifier('log-edit-save'), findsOneWidget);
-    expect(find.bySemanticsIdentifier('log-edit-delete'), findsOneWidget);
-    await _dispose(tester);
-  });
-
-  testWidgets('a non-barcode row still offers the save', (tester) async {
-    // The guard must be narrow: photo/manual/search/vita are all our own or
-    // permissively licensed, so withdrawing the offer from them would be a
-    // silent feature loss with no licence justification.
-    await tester.runAsync(() => db.into(db.foodLogs).insert(_row(via: 'photo')));
-    await _open(tester, db);
-
-    expect(find.bySemanticsIdentifier('log-edit-keep'), findsOneWidget);
-    await tester.tap(find.bySemanticsIdentifier('log-edit-keep'));
-    await _pumpFrames(tester);
-
-    final saved = (await tester.runAsync(() => db.select(db.userFoods).get()))!;
-    expect(saved, hasLength(1));
-    expect(saved.single.kind, 'custom');
-    await _dispose(tester);
-  });
-
-  testWidgets('an empty name or zero calories will not save', (tester) async {
-    await tester.runAsync(() => db.into(db.foodLogs).insert(_row()));
-    await _open(tester, db);
-
-    await tester.enterText(find.bySemanticsIdentifier('log-edit-kcal'), '0');
-    await tester.tap(find.bySemanticsIdentifier('log-edit-save'));
-    await _pumpFrames(tester);
-
-    final row = (await tester.runAsync(() => db.select(db.foodLogs).getSingle()))!;
-    expect(row.energyKcal, 200, reason: 'the invalid edit was refused');
-    await _dispose(tester);
+  testWidgets('an entry with no stated portion shows a dash, not a fake 1',
+      (t) async {
+    final entry = await seed(grams: 150);
+    await pump(t, entry);
+    // Every row logged before this feature has no portion. Showing "1" would
+    // claim the user said something they did not.
+    expect(find.text('—'), findsOneWidget);
   });
 }

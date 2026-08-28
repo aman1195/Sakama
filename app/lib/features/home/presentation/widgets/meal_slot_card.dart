@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../app/kit/kit.dart';
 import '../../../../core/db/database.dart';
+import '../../../capture/domain/portion.dart';
 import '../../domain/day_totals.dart';
 import '../log_entry_sheet.dart';
 
@@ -86,6 +87,17 @@ class MealSlotCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: text.bodyMedium),
                       ),
+                      if (portionLabel(e) != null) ...[
+                        Text(portionLabel(e)!,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant)),
+                        const SizedBox(width: Sk.sm),
+                      ],
                       Text('${e.energyKcal.round()} kcal',
                           style: text.bodySmall?.copyWith(
                             color: scheme.onSurfaceVariant,

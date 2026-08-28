@@ -13,6 +13,8 @@ const powersyncSchema = Schema([
     Column.text('meal'),
     Column.text('name'),
     Column.real('grams'),
+    Column.text('serving_label'), // how the portion was expressed;
+    Column.real('serving_qty'),   // grams above remain the truth
     Column.real('energy_kcal'),
     Column.real('protein_g'),
     Column.real('carb_g'),

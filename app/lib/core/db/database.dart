@@ -19,6 +19,19 @@ class FoodLogs extends Table {
   TextColumn get meal => text()(); // breakfast | lunch | dinner | snack
   TextColumn get name => text()();
   RealColumn get grams => real().nullable()();
+
+  /// What the user actually said, alongside the grams we derived from it.
+  ///
+  /// GRAMS REMAIN THE TRUTH — nutrition is canonically per 100 g and every
+  /// total is computed from `grams`. These two only record how the portion was
+  /// EXPRESSED, so the diary can say "1.5 katori" instead of "150 g" and an
+  /// edit can step the portion the way the user thinks about it.
+  ///
+  /// Both null for an entry given in grams, or logged before this existed. A
+  /// label without a quantity, or the reverse, is meaningless and the UI
+  /// writes them together or not at all.
+  TextColumn get servingLabel => text().nullable()(); // "katori", "roti"
+  RealColumn get servingQty => real().nullable()(); // 1.5
   RealColumn get energyKcal => real()();
   RealColumn get proteinG => real().withDefault(const Constant(0))();
   RealColumn get carbG => real().withDefault(const Constant(0))();
@@ -375,7 +388,7 @@ class SakamaDatabase extends _$SakamaDatabase {
   final bool managedExternally;
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => managedExternally
@@ -444,6 +457,32 @@ class SakamaDatabase extends _$SakamaDatabase {
               // Workouts (PRD 7.1). Additive — no existing row is touched.
               // Synced, so it also has a Supabase mirror + RLS.
               await m.createTable(workouts);
+            }
+            // GATED ON `to`, unlike every step above it, and that difference
+            // is load-bearing rather than stylistic.
+            //
+            // This callback ignores `to` and runs every block whose `from`
+            // matches, so migrating a v1 device to v2 in a test would also run
+            // this one. The steps above get away with it because they CREATE
+            // TABLES and the schema verifier tolerates an unexpected table.
+            // It does not tolerate an unexpected COLUMN on a table it knows:
+            // without `to >= 10` the v1 -> v2 test fails with "food_logs
+            // columns additional: serving_label, serving_qty".
+            //
+            // Any future column addition needs the same gate. Table creations
+            // do not, which is why this reads inconsistently.
+            //
+            // No `from >=` guard, unlike the chat_threads step above. That one
+            // exists because createTable() emits the CURRENT definition, so a
+            // table BUILT by a migration step already has later columns.
+            // food_logs is never built by a step — it comes from createAll()
+            // at install — so every upgrading device has the old shape.
+            if (from < 10 && to >= 10) {
+              // How the portion was EXPRESSED. Grams stay the truth; these
+              // only let the diary say "1.5 katori" and let an edit step the
+              // portion the way the user thinks about it.
+              await m.addColumn(foodLogs, foodLogs.servingLabel);
+              await m.addColumn(foodLogs, foodLogs.servingQty);
             }
           },
         );
