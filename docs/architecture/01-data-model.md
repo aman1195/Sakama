@@ -122,6 +122,36 @@ custom_meals:    user_id, name, items jsonb (list of {food_id, grams}), computed
 food_favorites:  user_id, food_id, last_used_at
 ```
 
+## Proving it, not just declaring it
+
+`supabase/verify-rls.sh` runs the policies below against a **live project**, over
+PostgREST, with an anon key and a real user JWT — the same path the app takes. A
+policy that reads correctly in SQL and is not enforced fails there and nowhere else.
+
+```
+SAKAMA_TEST_EMAIL=… SAKAMA_TEST_PASSWORD=… just verify-rls
+```
+
+It checks four things: anonymous callers get no rows from any user table; an
+authenticated caller reads only rows they own; a caller **cannot insert a row
+owned by somebody else** (the common bypass, where SELECT is gated correctly and
+INSERT's `WITH CHECK` is left open); and, with a second account configured, that
+neither user can see the other's data.
+
+Two deliberate properties:
+
+- **An empty table reports VOID, not PASS.** A table with no rows cannot
+  demonstrate isolation, and counting it as a pass is how a suite goes green
+  against a database containing nothing — precisely the state a fresh CI project
+  is in.
+- **The cross-user check is the strongest one and is off by default**, because
+  one account cannot prove two are isolated. Set `SAKAMA_TEST2_*` to enable it.
+
+Run it after any migration that adds a user table or touches a policy. The
+workouts table shipped on 2026-08-27 with four policies that could not be
+verified at all at the time: `supabase db execute` does not exist in CLI 2.39.2,
+and reading a service-role key to check by hand is the wrong instinct.
+
 ## RLS pattern (applied to every user table)
 ```sql
 alter table food_logs enable row level security;
