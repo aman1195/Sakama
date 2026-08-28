@@ -23,6 +23,8 @@ class TodayHero extends StatelessWidget {
     required this.eaten,
     required this.actions,
     this.macros,
+    this.burned,
+    this.burnedUnknown = 0,
   });
 
   final TrackStatus status;
@@ -31,8 +33,33 @@ class TodayHero extends StatelessWidget {
   final List<Widget> actions;
   final Widget? macros;
 
+  /// Calories burned today, or null when nothing was computed.
+  ///
+  /// SHOWN BESIDE "eaten", NEVER SUBTRACTED FROM THE TARGET. Netting it would
+  /// move the day's budget by a number derived from a MET formula and a
+  /// weigh-in, silently, and the user would eat the difference. They can see it
+  /// and decide what it is worth.
+  final double? burned;
+
+  /// Workouts today whose burn could not be computed — an unrecognised
+  /// activity, or no duration. Counted out loud so the burn figure does not
+  /// read as the whole day's effort.
+  final int burnedUnknown;
+
+  String _activityLine() {
+    final parts = <String>['${eaten.round()} eaten'];
+    // Only when we actually computed one. A "0 burned" on a rest day is fine;
+    // a "0 burned" on a day with three logged lifts is a lie by rounding.
+    if (burned != null && burned! > 0) parts.add('${burned!.round()} burned');
+    if (burnedUnknown > 0) {
+      parts.add('$burnedUnknown without an estimate');
+    }
+    return parts.join(' · ');
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Deliberately NOT `target - eaten + burned`. See [burned].
     final remaining = target - eaten;
     final over = remaining < 0;
     final progress = target <= 0 ? 0.0 : (eaten / target).clamp(0.0, 1.0);
@@ -101,7 +128,7 @@ class TodayHero extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          Text('${eaten.round()} eaten',
+          Text(_activityLine(),
               style: text.bodySmall
                   ?.copyWith(color: ink.withValues(alpha: 0.7))),
           if (actions.isNotEmpty) ...[
