@@ -186,6 +186,9 @@ bug in any of them leaks health data. None of them block M3 dogfooding.
 - Vision model — decided by the **Phase 0 spike**.
 - ~~Open Food Facts live vs. bundled~~ SETTLED: live-only (ADR 0014). Indian-dish source: AI estimation + which commercial
   licence (FatSecret vs Bon Happetee). (INDB is closed: unusable — unlicensed + IFCT-derived.)
+- **Competitor gap backlog** — eight ranked items in
+  [competitor-teardown-2026-08.md §4](research/competitor-teardown-2026-08.md). The first four are
+  small and block on nothing: entry date, serving multiplier, confidence badge, burn on Home.
 - **OpenRouter top-up checklist** — five ordered steps in
   [model-bakeoff-2026-08.md §5](research/model-bakeoff-2026-08.md). Two of them fail SILENTLY if
   skipped: the paid path still pins `google/gemini-2.5-flash`, which Google retired for new direct
