@@ -51,8 +51,12 @@ from, because a katori has no intuitive gram value to an Indian user either.
 ### 2.3 Confidence is computed and then thrown away
 
 Every one of their food rows carries a green shield. Rule 7 makes us store `source`,
-`licence` and `confidence` on every food row, and `confidence` appears in **zero** food
-UI — verified by grep across `lib/features/*/presentation/`.
+`licence` and `confidence` on every food row, and `confidence` appears in **zero
+food-item UI** — verified by grep across `lib/features/*/presentation/`.
+
+A bare grep for `confidence` does return one hit, in `coach_controller.dart`. That is the
+memory-fact confidence from ADR 0016 phase 4, a different field on a different table. No
+food-feature presentation file references it at all.
 
 We do the hard, legally-motivated part and skip the part the user sees. It matters more
 for us: our Indian dishes come from AI estimation, so "verified" versus "estimated" is a
