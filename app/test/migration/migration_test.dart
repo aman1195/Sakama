@@ -11,6 +11,7 @@ import 'generated/schema_v5.dart' as v5;
 import 'generated/schema_v6.dart' as v6;
 import 'generated/schema_v7.dart' as v7;
 import 'generated/schema_v8.dart' as v8;
+import 'generated/schema_v9.dart' as v9;
 
 /// The migration harness required by docs/MOBILE.md and docs/REVIEW.md §6.1:
 /// a bad on-device migration destroys user data irrecoverably, so every schema
@@ -356,13 +357,49 @@ void main() {
     await db.close();
   });
 
-  test('database schema matches the committed v9 snapshot', () async {
+  test('v9 -> v10 adds serving columns AND preserves all user data', () async {
+    final schema = await verifier.schemaAt(9);
+    final v9Db = v9.DatabaseAtV9(schema.newConnection());
+    await v9Db.customStatement(
+      "INSERT INTO food_logs (id, date, meal, name, grams, energy_kcal, "
+      "protein_g, carb_g, fat_g, logged_via, created_at, updated_at) "
+      "VALUES ('fl','2026-08-28','lunch','dal',150,180,9,22,6,'search',1,1)");
+    await v9Db.customStatement(
+      "INSERT INTO workouts (id, date, name, kind, sets, logged_via, "
+      "created_at, updated_at) "
+      "VALUES ('w','2026-08-28','bench','strength','[]','vita',1,1)");
+    await v9Db.customStatement(
+      "INSERT INTO weight_logs (id, date, weight_kg, created_at, updated_at) "
+      "VALUES ('wt','2026-08-28',84.0,1,1)");
+    await v9Db.close();
+
+    final db = SakamaDatabase.withExecutor(schema.newConnection());
+    await verifier.migrateAndValidate(db, 10);
+
+    // The pre-existing row survives WITH ITS VALUES, and its new columns are
+    // null rather than defaulted — an old entry has no stated portion, and a
+    // fabricated one would claim the user said something they did not.
+    final log = await db.select(db.foodLogs).getSingle();
+    expect(log.id, 'fl');
+    expect(log.grams, 150);
+    expect(log.energyKcal, 180);
+    expect(log.servingLabel, isNull);
+    expect(log.servingQty, isNull);
+
+    // v9's own addition specifically — a migration that drops what the
+    // previous one added is the easiest to write by accident.
+    expect((await db.select(db.workouts).getSingle()).name, 'bench');
+    expect((await db.select(db.weightLogs).getSingle()).weightKg, 84.0);
+    await db.close();
+  });
+
+  test('database schema matches the committed v10 snapshot', () async {
     // Creates a fresh db from SakamaDatabase's Dart definitions and diffs it
-    // against drift_schemas/drift_schema_v9.json. Fails if the code drifts
+    // against drift_schemas/drift_schema_v10.json. Fails if the code drifts
     // from the committed snapshot without a new schema version + migration.
-    final connection = await verifier.startAt(9);
+    final connection = await verifier.startAt(10);
     final db = SakamaDatabase.withExecutor(connection);
-    await verifier.migrateAndValidate(db, 9);
+    await verifier.migrateAndValidate(db, 10);
     await db.close();
   });
 
