@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../app/kit/kit.dart';
 import '../../../../core/db/database.dart';
+import '../../../capture/domain/entry_confidence.dart';
 import '../../../capture/domain/portion.dart';
 import '../../domain/day_totals.dart';
 import '../log_entry_sheet.dart';
@@ -83,9 +84,15 @@ class MealSlotCard extends StatelessWidget {
                   child: Row(
                     children: [
                       Expanded(
-                        child: Text(e.name,
-                            overflow: TextOverflow.ellipsis,
-                            style: text.bodyMedium),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(e.name,
+                                overflow: TextOverflow.ellipsis,
+                                style: text.bodyMedium),
+                            ConfidenceBadge(e.loggedVia),
+                          ],
+                        ),
                       ),
                       if (portionLabel(e) != null) ...[
                         Text(portionLabel(e)!,

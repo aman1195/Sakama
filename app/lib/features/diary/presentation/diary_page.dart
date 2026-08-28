@@ -9,6 +9,7 @@ import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/current_date_provider.dart';
 import '../../home/domain/day_totals.dart';
 import '../../home/presentation/home_page.dart' show targetsProvider;
+import '../../capture/domain/entry_confidence.dart';
 import '../../capture/domain/portion.dart';
 import '../../home/presentation/log_entry_sheet.dart';
 import '../../workouts/data/workout_repository.dart';
@@ -286,12 +287,18 @@ class _DayRow extends StatelessWidget {
                 child: Row(
                   children: [
                     Expanded(
-                        child: Text(
+                        child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
                             portionLabel(e) == null
                                 ? e.name
                                 : '${e.name} · ${portionLabel(e)}',
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodyMedium)),
+                            style: Theme.of(context).textTheme.bodyMedium),
+                        ConfidenceBadge(e.loggedVia),
+                      ],
+                    )),
                     Text('${e.energyKcal.round()} kcal',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color:

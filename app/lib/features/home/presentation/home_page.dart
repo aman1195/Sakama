@@ -12,6 +12,7 @@ import '../../onboarding/domain/nutrition_targets.dart';
 import '../../onboarding/domain/target_calculator.dart';
 import '../../plans/application/plan_providers.dart';
 import '../../water/presentation/water_chip.dart';
+import '../../workouts/data/workout_repository.dart';
 import '../domain/day_totals.dart';
 import 'widgets/meal_slot_card.dart';
 
@@ -44,6 +45,17 @@ final todayLogsProvider = StreamProvider<List<FoodLog>>((ref) async* {
   yield* db.watchDay(ymd);
 });
 
+/// Today's workouts, for the burn figure on the hero. Device-local read like
+/// everything else on this screen.
+final todayWorkoutsProvider = StreamProvider<List<WorkoutRow>>((ref) async* {
+  final date = ref.watch(currentDateProvider);
+  final ymd = '${date.year.toString().padLeft(4, '0')}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
+  final repo = await ref.watch(workoutRepositoryProvider.future);
+  yield* repo.watchDay(ymd);
+});
+
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
 
@@ -52,6 +64,10 @@ class HomePage extends ConsumerWidget {
     final targets = ref.watch(targetsProvider);
     final logsAsync = ref.watch(todayLogsProvider);
     final date = ref.watch(currentDateProvider);
+    // Burn never blocks the screen: an unresolved workouts query means no burn
+    // line, not a spinner over the day's calories.
+    final burn = WorkoutRepository.dayBurn(
+        ref.watch(todayWorkoutsProvider).value ?? const []);
 
     return Semantics(
       identifier: 'home-page',
@@ -88,6 +104,8 @@ class HomePage extends ConsumerWidget {
                         : TrackStatus.muted,
                     target: targets?.calories ?? 0,
                     eaten: totals.calories,
+                    burned: burn.kcal > 0 ? burn.kcal : null,
+                    burnedUnknown: burn.unknown,
                     actions: [
                       SkCircleAction(
                           identifier: 'hero-snap',
