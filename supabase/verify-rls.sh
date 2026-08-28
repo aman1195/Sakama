@@ -327,7 +327,22 @@ echo
 
 if [ -n "$JWT2" ]; then
   echo "4. cross-user isolation"
-  for t in food_logs weight_logs workouts; do
+  for t in "${TABLES[@]}"; do
+    # Only meaningful if the FIRST user actually has rows in this table. If
+    # they have none, "the second user cannot see them" is true of nothing —
+    # the same vacuous green an empty table gives in check 2, and reporting it
+    # as a pass would overstate what two accounts proved.
+    mine="$(printf '%s' "$(rows "$t?select=user_id&limit=200" "$JWT")" |
+      python3 -c 'import sys,json
+try:
+    print(len(json.load(sys.stdin)))
+except Exception:
+    print(0)')"
+    if [ "$mine" = "0" ]; then
+      skip "$t: first user has no rows — nothing for the second to not-see"
+      continue
+    fi
+
     body="$(rows "$t?select=user_id&limit=200" "$JWT2")"
     seen="$(printf '%s' "$body" | python3 -c 'import sys,json
 try:
@@ -336,10 +351,12 @@ except Exception:
     print("PARSE"); raise SystemExit
 other=sys.argv[1]
 print(sum(1 for r in rows if r.get("user_id")==other))' "$USER_ID")"
-    if [ "$seen" = "0" ]; then
-      ok "$t: second user cannot see the first user's rows"
+    if [ "$seen" = "PARSE" ]; then
+      bad "$t: second user's response was not JSON"
+    elif [ "$seen" = "0" ]; then
+      ok "$t: second user sees none of the first user's $mine rows"
     else
-      bad "$t: SECOND USER SEES $seen OF THE FIRST USER'S ROWS"
+      bad "$t: SECOND USER SEES $seen OF THE FIRST USER'S $mine ROWS"
     fi
   done
   echo
