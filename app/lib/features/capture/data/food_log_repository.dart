@@ -100,9 +100,15 @@ class FoodLogRepository {
   /// away the entry and its provenance to fix a one-character mistake.
   ///
   /// [servingLabel] and [servingQty] record how the portion was EXPRESSED.
-  /// Grams stay the truth. They are written as a pair or not at all: a label
-  /// with no quantity is not a portion, and the server CHECK rejects the
-  /// half-written row at sync time, which is a failure the user never sees.
+  /// Grams stay the truth.
+  ///
+  /// The nullable columns take `Value`, not a bare nullable, because `null`
+  /// has to mean two different things: `Value.absent()` (the default) leaves
+  /// the column alone, `Value(null)` clears it. Written as `Value(grams)` they
+  /// were full-replace, so a caller passing only `date` — a "move to
+  /// yesterday" swipe, say — would silently blank the grams and the portion.
+  /// No such caller exists yet, which is exactly why it was worth fixing now.
+  /// Same latent bug as `WorkoutRepository.update` (#130 review).
   Future<void> update({
     required String id,
     required String meal,
@@ -111,22 +117,31 @@ class FoodLogRepository {
     required double proteinG,
     required double carbG,
     required double fatG,
-    double? grams,
+    Value<double?> grams = const Value.absent(),
     String? date,
-    String? servingLabel,
-    double? servingQty,
+    Value<String?> servingLabel = const Value.absent(),
+    Value<double?> servingQty = const Value.absent(),
   }) async {
     if (date != null && !_isYmd(date)) {
       throw ArgumentError.value(date, 'date', 'must be yyyy-MM-dd');
     }
-    final label = servingLabel?.trim();
-    final hasLabel = label != null && label.isNotEmpty;
-    final hasQty = servingQty != null;
-    if (hasLabel != hasQty) {
+    // Both present, both absent, or both explicitly cleared. Editing one
+    // without the other would leave the row half-written, and the server CHECK
+    // rejects that at sync time — a failure the user never sees.
+    if (servingLabel.present != servingQty.present) {
       throw ArgumentError('servingLabel and servingQty must be set together');
     }
-    if (hasQty && (!servingQty.isFinite || servingQty <= 0 || servingQty > 100)) {
-      throw ArgumentError.value(servingQty, 'servingQty', 'must be 0 < q <= 100');
+    final label = servingLabel.present ? servingLabel.value?.trim() : null;
+    final qty = servingQty.present ? servingQty.value : null;
+    if (servingLabel.present) {
+      final hasLabel = label != null && label.isNotEmpty;
+      final hasQty = qty != null;
+      if (hasLabel != hasQty) {
+        throw ArgumentError('servingLabel and servingQty must be set together');
+      }
+      if (hasQty && (!qty.isFinite || qty <= 0 || qty > 100)) {
+        throw ArgumentError.value(qty, 'servingQty', 'must be 0 < q <= 100');
+      }
     }
 
     await (_db.update(_db.foodLogs)..where((t) => t.id.equals(id))).write(
@@ -138,9 +153,11 @@ class FoodLogRepository {
         proteinG: Value(proteinG),
         carbG: Value(carbG),
         fatG: Value(fatG),
-        grams: Value(grams),
-        servingLabel: Value(hasLabel ? label : null),
-        servingQty: Value(hasQty ? servingQty : null),
+        grams: grams,
+        servingLabel: servingLabel.present
+            ? Value(label != null && label.isNotEmpty ? label : null)
+            : const Value.absent(),
+        servingQty: servingQty,
         loggedVia: const Value('manual'),
         updatedAt: Value(DateTime.now().millisecondsSinceEpoch), // LWW
       ),
