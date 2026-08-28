@@ -72,9 +72,70 @@ if [ "$missing" -ne 0 ]; then
   exit 2
 fi
 
-# Every table whose rows belong to one user. Keep in step with the Drift schema:
-# a synced table missing from this list is a table nobody proves is private.
-TABLES=(food_logs profiles water_logs weight_logs user_plans user_foods workouts)
+# DERIVED from the migrations, never hand-maintained.
+#
+# A hardcoded list is the failure this tool exists to prevent, one level up: a
+# new user table that somebody forgets to add is silently never RLS-verified,
+# and RLS is the boundary you least want a quiet hole in. The first version of
+# this script listed seven tables by hand and was already missing `ai_usage`,
+# which holds per-user AI spend.
+#
+# RLS-ENABLED IS NOT THE SAME AS USER-OWNED, and conflating them produces false
+# alarms. `app_config` has RLS on and a deliberate `using (true)` public-read
+# policy with no user_id at all — anon reading it is correct. A table counts as
+# user-owned only if one of its policies references auth.uid().
+#
+# Two shapes appear in the migrations: a direct `alter table public.X enable row
+# level security`, and a `foreach t in array['a','b']` loop driving
+# `format('%I', t)`. Both are read here rather than rewriting the migrations to
+# suit a grep.
+DERIVED="$(python3 - "$ROOT/supabase/migrations" <<'PYEOF'
+import os, re, sys
+d = sys.argv[1]
+sql = "\n".join(
+    open(os.path.join(d, f)).read()
+    for f in sorted(os.listdir(d)) if f.endswith(".sql")
+)
+
+rls = set(re.findall(
+    r"alter\s+table\s+public\.([a-z_]+)\s+enable\s+row\s+level\s+security", sql))
+for block in re.findall(r"do \$\$(.*?)end \$\$;", sql, re.S):
+    if "enable row level security" not in block:
+        continue
+    for arr in re.findall(r"array\[([^\]]*)\]", block):
+        rls.update(re.findall(r"'([a-z_]+)'", arr))
+
+# A policy naming the table AND auth.uid() means the rows belong to someone.
+owned = set()
+for m in re.finditer(r"create policy[^;]*?on public\.([a-z_]+)[^;]*?;", sql, re.S):
+    if "auth.uid()" in m.group(0):
+        owned.add(m.group(1))
+# The loop form builds policies with format('%I'), so the table name is not
+# beside auth.uid(). Credit every table the block drives.
+for block in re.findall(r"do \$\$(.*?)end \$\$;", sql, re.S):
+    if "create policy" not in block or "auth.uid()" not in block:
+        continue
+    for arr in re.findall(r"array\[([^\]]*)\]", block):
+        owned.update(re.findall(r"'([a-z_]+)'", arr))
+
+print(" ".join(sorted(rls & owned)))
+print(" ".join(sorted(rls - owned)))
+PYEOF
+)"
+read -r -a TABLES <<<"$(printf '%s' "$DERIVED" | sed -n 1p)"
+read -r -a PUBLIC_TABLES <<<"$(printf '%s' "$DERIVED" | sed -n 2p)"
+
+if [ "${#TABLES[@]}" -eq 0 ]; then
+  echo "derived no user-owned tables from the migrations" >&2
+  echo "that is itself a failure — either the parser broke or nothing has RLS" >&2
+  exit 2
+fi
+echo "user-owned tables (${#TABLES[@]}): ${TABLES[*]}"
+# Named, not silently dropped. A table that lands here by mistake — a policy
+# written `using (true)` when it meant auth.uid() — is a data leak, and the only
+# way anyone notices is seeing it on this line.
+[ "${#PUBLIC_TABLES[@]}" -gt 0 ] &&
+  echo "deliberately public (${#PUBLIC_TABLES[@]}): ${PUBLIC_TABLES[*]} — verify each is meant to be"
 
 PASS=0; FAIL=0; SKIP=0
 
@@ -151,14 +212,14 @@ fi
 
 echo "1. anonymous callers"
 for t in "${TABLES[@]}"; do
-  code="$(status GET "$t?select=id&limit=1" "")"
+  code="$(status GET "$t?select=*&limit=1" "")"
   # 200 with an empty array is still a FAIL in spirit but not in fact: RLS
   # returning zero rows to anon is the correct PostgREST behaviour when a
   # SELECT policy exists and matches nothing. What must never happen is data.
   if [ "$code" = "401" ] || [ "$code" = "403" ]; then
     ok "$t denied to anon ($code)"
   elif [ "$code" = "200" ]; then
-    body="$(curl -sS "$URL/rest/v1/$t?select=id&limit=1" -H "apikey: $ANON" 2>/dev/null)"
+    body="$(curl -sS "$URL/rest/v1/$t?select=*&limit=1" -H "apikey: $ANON" 2>/dev/null)"
     if [ "$body" = "[]" ]; then
       ok "$t returns no rows to anon"
     else
@@ -210,21 +271,56 @@ echo
 # never ate and a target computed from it.
 
 echo "3. writing another user's row"
-FORGED_ID="rls-probe-$(date +%s)"
-FOREIGN_UID="00000000-0000-4000-8000-000000000000"
-payload="{\"id\":\"$FORGED_ID\",\"user_id\":\"$FOREIGN_UID\",\"date\":\"2026-01-01\",\"meal\":\"lunch\",\"name\":\"rls probe\",\"energy_kcal\":1,\"created_at\":1,\"updated_at\":1}"
-code="$(status POST "food_logs" "$JWT" "$payload")"
 
-if [ "$code" = "401" ] || [ "$code" = "403" ]; then
-  ok "food_logs insert with a foreign user_id refused ($code)"
-elif [ "$code" = "201" ] || [ "$code" = "200" ]; then
-  bad "food_logs ACCEPTED A ROW OWNED BY ANOTHER USER — WITH CHECK is not enforcing"
-  # Do not leave the probe behind. It is a real row in a real table.
-  del="$(status DELETE "food_logs?id=eq.$FORGED_ID" "$JWT")"
-  echo "        (cleanup delete returned $del; verify manually if not 204)"
-else
-  bad "food_logs foreign insert returned $code — expected a refusal"
-fi
+# A minimal row per table, satisfying NOT NULL so the only thing that can
+# refuse it is the policy. `%U` is substituted with a user id that is not ours.
+#
+# WHY EVERY TABLE. The first version probed food_logs alone, which left an open
+# WITH CHECK on any of the other seven invisible — and this is the check most
+# worth having, so covering one eighth of the surface was the wrong place to
+# economise.
+probe_payload() {
+  local t="$1" id="$2" other="$3"
+  case "$t" in
+    food_logs)   echo "{\"id\":\"$id\",\"user_id\":\"$other\",\"date\":\"2026-01-01\",\"meal\":\"lunch\",\"name\":\"rls probe\",\"energy_kcal\":1,\"created_at\":1,\"updated_at\":1}" ;;
+    water_logs)  echo "{\"id\":\"$id\",\"user_id\":\"$other\",\"date\":\"2026-01-01\",\"amount_ml\":1,\"created_at\":1,\"updated_at\":1}" ;;
+    weight_logs) echo "{\"id\":\"$id\",\"user_id\":\"$other\",\"date\":\"2026-01-01\",\"weight_kg\":70,\"created_at\":1,\"updated_at\":1}" ;;
+    workouts)    echo "{\"id\":\"$id\",\"user_id\":\"$other\",\"date\":\"2026-01-01\",\"name\":\"rls probe\",\"kind\":\"other\",\"created_at\":1,\"updated_at\":1}" ;;
+    user_plans)  echo "{\"id\":\"$id\",\"user_id\":\"$other\",\"name\":\"rls probe\",\"config\":\"{}\",\"created_at\":1,\"updated_at\":1}" ;;
+    user_foods)  echo "{\"id\":\"$id\",\"user_id\":\"$other\",\"name\":\"rls probe\",\"kind\":\"custom\",\"created_at\":1,\"updated_at\":1}" ;;
+    ai_usage)    echo "{\"user_id\":\"$other\",\"day\":\"2026-01-01\",\"feature\":\"rls-probe\",\"count\":0}" ;;
+    profiles)    echo "{\"id\":\"$id\",\"user_id\":\"$other\",\"dob\":\"1990-01-01\",\"weight_kg\":70,\"height_cm\":170,\"sex\":\"other\",\"activity\":\"moderate\",\"goal\":\"maintain\",\"created_at\":1,\"updated_at\":1}" ;;
+    *) echo "" ;;
+  esac
+}
+
+FOREIGN_UID="00000000-0000-4000-8000-000000000000"
+for t in "${TABLES[@]}"; do
+  probe_id="rls-probe-$t-$(date +%s)"
+  payload="$(probe_payload "$t" "$probe_id" "$FOREIGN_UID")"
+  if [ -z "$payload" ]; then
+    skip "$t: no probe payload defined — write boundary UNTESTED"
+    continue
+  fi
+
+  code="$(status POST "$t" "$JWT" "$payload")"
+  case "$code" in
+    401|403)
+      ok "$t: insert with a foreign user_id refused ($code)" ;;
+    200|201)
+      bad "$t ACCEPTED A ROW OWNED BY ANOTHER USER — WITH CHECK is not enforcing"
+      # Never leave the probe behind. It is a real row in a real table.
+      del="$(status DELETE "$t?id=eq.$probe_id" "$JWT")"
+      echo "        (cleanup delete returned $del — verify by hand if not 204)" ;;
+    400|409|422)
+      # The payload was rejected before any policy ran, so this proves nothing
+      # about RLS. Calling it a pass would be the same vacuous green as an
+      # empty table.
+      skip "$t: probe rejected as malformed ($code) — write boundary UNPROVEN" ;;
+    *)
+      bad "$t: foreign insert returned $code — expected a refusal" ;;
+  esac
+done
 echo
 
 # --- 4. cross-user isolation (needs a second account) -----------------------
