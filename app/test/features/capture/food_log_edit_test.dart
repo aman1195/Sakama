@@ -38,10 +38,10 @@ void main() {
         proteinG: 9,
         carbG: 22,
         fatG: 6,
-        grams: grams,
+        grams: Value(grams),
         date: date,
-        servingLabel: label,
-        servingQty: qty,
+        servingLabel: Value(label),
+        servingQty: Value(qty),
       );
 
   group('moving an entry to another day', () {
@@ -176,6 +176,69 @@ void main() {
       expect(portionLabel(await row()), isNull);
       await db.delete(db.foodLogs).go();
       expect(portionLabel(await row(grams: 0)), isNull);
+    });
+  });
+
+  group('partial updates leave untouched columns alone', () {
+    test('passing only the date does not blank grams or the portion', () async {
+      // The bug this pins. `Value(grams)` was full-replace, so a future
+      // "move to yesterday" swipe passing only a date would have silently
+      // erased the portion and the weight. Same latent bug as
+      // WorkoutRepository.update (#130 review).
+      await db.into(db.foodLogs).insert(FoodLogsCompanion.insert(
+            id: 'p', date: '2026-08-29', meal: 'dinner', name: 'dal',
+            energyKcal: 180, grams: const Value(225),
+            servingLabel: const Value('katori'), servingQty: const Value(1.5),
+            createdAt: 1, updatedAt: 1,
+          ));
+
+      await repo.update(
+        id: 'p', meal: 'dinner', name: 'dal', energyKcal: 180,
+        proteinG: 9, carbG: 22, fatG: 6,
+        date: '2026-08-28', // the ONLY thing being changed
+      );
+
+      final row = await db.select(db.foodLogs).getSingle();
+      expect(row.date, '2026-08-28');
+      expect(row.grams, 225, reason: 'weight must survive a date-only edit');
+      expect(row.servingLabel, 'katori');
+      expect(row.servingQty, 1.5);
+    });
+
+    test('an explicit Value(null) still clears', () async {
+      await db.into(db.foodLogs).insert(FoodLogsCompanion.insert(
+            id: 'c', date: '2026-08-28', meal: 'lunch', name: 'roti',
+            energyKcal: 100, grams: const Value(80),
+            servingLabel: const Value('roti'), servingQty: const Value(2),
+            createdAt: 1, updatedAt: 1,
+          ));
+      await repo.update(
+        id: 'c', meal: 'lunch', name: 'roti', energyKcal: 100,
+        proteinG: 0, carbG: 0, fatG: 0,
+        grams: const Value(null),
+        servingLabel: const Value(null),
+        servingQty: const Value(null),
+      );
+      final row = await db.select(db.foodLogs).getSingle();
+      expect(row.grams, isNull);
+      expect(row.servingLabel, isNull);
+      expect(row.servingQty, isNull);
+    });
+
+    test('clearing one half of the pair without the other is refused', () async {
+      await db.into(db.foodLogs).insert(FoodLogsCompanion.insert(
+            id: 'h', date: '2026-08-28', meal: 'lunch', name: 'roti',
+            energyKcal: 100, servingLabel: const Value('roti'),
+            servingQty: const Value(2), createdAt: 1, updatedAt: 1,
+          ));
+      expect(
+          () => repo.update(
+                id: 'h', meal: 'lunch', name: 'roti', energyKcal: 100,
+                proteinG: 0, carbG: 0, fatG: 0,
+                servingLabel: const Value(null), // qty left absent
+              ),
+          throwsA(isA<ArgumentError>()));
+      expect((await db.select(db.foodLogs).getSingle()).servingQty, 2);
     });
   });
 }

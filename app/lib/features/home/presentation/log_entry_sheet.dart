@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 
 import '../../../app/kit/kit.dart';
@@ -135,15 +136,17 @@ class _LogEntrySheetState extends ConsumerState<LogEntrySheet> {
     await repo.update(
       id: widget.entry.id,
       date: _ymd(_date),
-      servingLabel: hasServing ? label : null,
-      servingQty: hasServing ? _qty : null,
+      // The sheet edits every field, so it always writes both explicitly:
+      // Value(x) to set, Value(null) to clear. Never absent.
+      servingLabel: Value(hasServing ? label : null),
+      servingQty: Value(hasServing ? _qty : null),
       meal: _meal.key,
       name: _name.text.trim(),
       energyKcal: kcal,
       proteinG: double.tryParse(_protein.text.trim()) ?? 0,
       carbG: double.tryParse(_carb.text.trim()) ?? 0,
       fatG: double.tryParse(_fat.text.trim()) ?? 0,
-      grams: double.tryParse(_grams.text.trim()),
+      grams: Value(double.tryParse(_grams.text.trim())),
     );
     if (mounted) Navigator.of(context).pop();
   }
