@@ -63,6 +63,17 @@ const powersyncSchema = Schema([
     Column.integer('created_at'),
     Column.integer('updated_at'),
   ]),
+  // A meal holds user_foods IDS and portions, never nutrition — the licence
+  // containment in docs/architecture/08 §3, inherited structurally.
+  Table('meals', [
+    Column.text('user_id'),
+    Column.text('name'),
+    Column.text('items'), // JSON: [{user_food_id, serving_qty}]
+    Column.text('default_meal'),
+    Column.integer('use_count'),
+    Column.integer('created_at'),
+    Column.integer('updated_at'),
+  ]),
   Table('workouts', [
     Column.text('user_id'),
     Column.text('date'),
