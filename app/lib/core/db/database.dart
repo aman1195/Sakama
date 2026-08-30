@@ -109,6 +109,44 @@ class WeightLogs extends Table {
 ///
 /// SYNCED, so it carries the full four-file contract: Drift + PowerSync +
 /// Supabase migration with RLS + sync-streams entry.
+/// A named group of saved foods, logged in one tap — "my usual breakfast".
+///
+/// LICENCE-CRITICAL, and the reason items are ids rather than values.
+///
+/// A meal is a REUSABLE DEFINITION, not a historical record, which puts it in
+/// the same category as `user_foods` and under the stricter standard in
+/// docs/architecture/08 §3: it must never copy nutrition it did not author.
+/// Storing macros here would rebuild, across all users, an OFF-derived branded
+/// food table on our infrastructure — the explicit non-goal of ADR 0014.
+///
+/// So a meal holds `user_foods` ids and portions, nothing else. The
+/// pointer-versus-custom split is already solved one table over, and following
+/// it means no ODbL value can reach this table by construction rather than by
+/// anyone remembering the rule.
+@DataClassName('MealRow')
+class Meals extends Table {
+  TextColumn get id => text()();
+  TextColumn get userId => text().nullable()();
+  TextColumn get name => text()(); // "my usual breakfast"
+
+  /// JSON: [{"user_food_id": "...", "serving_qty": 1.5}, ...].
+  ///
+  /// Items are JSON on the row, not a child table, for the same reason workout
+  /// sets are: an item has no identity of its own and is never queried
+  /// independently of its meal.
+  TextColumn get items => text().withDefault(const Constant('[]'))();
+
+  /// Which slot it usually fills, so logging can default sensibly. Nullable:
+  /// plenty of meals are eaten at any hour.
+  TextColumn get defaultMeal => text().nullable()();
+  IntColumn get useCount => integer().withDefault(const Constant(0))();
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 @DataClassName('WorkoutRow')
 class Workouts extends Table {
   TextColumn get id => text()();
@@ -368,7 +406,7 @@ class OffFoods extends Table {
 }
 
 @DriftDatabase(
-    tables: [FoodLogs, Profiles, WaterLogs, WeightLogs, UserPlans, UserFoods,
+    tables: [FoodLogs, Profiles, WaterLogs, WeightLogs, UserPlans, UserFoods, Meals,
       Workouts,
       ChatThreads, ChatMessages, MemoryFacts, Foods, OffFoods])
 class SakamaDatabase extends _$SakamaDatabase {
@@ -388,7 +426,7 @@ class SakamaDatabase extends _$SakamaDatabase {
   final bool managedExternally;
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => managedExternally
@@ -483,6 +521,11 @@ class SakamaDatabase extends _$SakamaDatabase {
               // portion the way the user thinks about it.
               await m.addColumn(foodLogs, foodLogs.servingLabel);
               await m.addColumn(foodLogs, foodLogs.servingQty);
+            }
+            if (from < 11) {
+              // Meals (teardown item 5). Additive — no existing row is touched.
+              // Synced, so it also has a Supabase mirror + RLS + publication.
+              await m.createTable(meals);
             }
           },
         );

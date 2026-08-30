@@ -186,6 +186,15 @@ bug in any of them leaks health data. None of them block M3 dogfooding.
 - Vision model — decided by the **Phase 0 spike**.
 - ~~Open Food Facts live vs. bundled~~ SETTLED: live-only (ADR 0014). Indian-dish source: AI estimation + which commercial
   licence (FatSecret vs Bon Happetee). (INDB is closed: unusable — unlicensed + IFCT-derived.)
+- **One-tap meal logging is a LICENCE-SENSITIVE review, not a UI formality.** The meals table
+  (#144) holds `user_foods` ids and portions and no nutrition, which is what keeps it out of ADR
+  0014's stricter category. The follow-up that logs a meal resolves nutrition from `user_foods` into
+  `food_logs`, and that write is permitted — a food_logs row is a historical record behind RLS. The
+  containment holds **only if that path writes to `food_logs` and nowhere else.** Caching resolved
+  nutrition back onto the meal row to avoid a join would look like a sensible optimisation in a diff
+  and would turn `meals` into the OFF-derived branded-food catalogue the design exists to prevent.
+  If Vita can log a meal, it also needs propose-confirm, since one tool call would write several
+  diary rows.
 - **Competitor gap backlog** — eight ranked items in
   [competitor-teardown-2026-08.md §4](research/competitor-teardown-2026-08.md). The first four are
   small and block on nothing: entry date, serving multiplier, confidence badge, burn on Home.
