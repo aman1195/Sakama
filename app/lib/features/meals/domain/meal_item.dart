@@ -44,6 +44,19 @@ class MealItem {
   static String encode(List<MealItem> items) =>
       jsonEncode(items.map((i) => i.toJson()).toList());
 
+  /// The single quantity rule, used on BOTH the write and the read path.
+  ///
+  /// It lived only in [decode] once, so [MealRepository.create] happily wrote a
+  /// `serving_qty: 0` item that synced and then vanished on read — a stored
+  /// meal that resolves to nothing, which is worse than a refusal because
+  /// nobody is told. A validity rule enforced on one side of a round trip is
+  /// not a rule, it is a filter.
+  static bool isValidQty(double q) => q.isFinite && q > 0 && q <= 100;
+
+  /// True when this item can survive a round trip. An item that cannot must
+  /// never be written.
+  bool get isValid => userFoodId.trim().isNotEmpty && isValidQty(servingQty);
+
   static double? _qty(Object? v) {
     final d = switch (v) {
       num n => n.toDouble(),
@@ -52,7 +65,7 @@ class MealItem {
     };
     // Non-finite must die at coercion: every comparison against NaN is false,
     // so it would pass both bounds and become a portion multiplier.
-    if (d == null || !d.isFinite || d <= 0 || d > 100) return null;
+    if (d == null || !isValidQty(d)) return null;
     return d;
   }
 }

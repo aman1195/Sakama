@@ -122,4 +122,49 @@ void main() {
     final items = MealItem.decode((await db.select(db.meals).getSingle()).items);
     expect(items, hasLength(2), reason: 'the meal is unchanged by the deletion');
   });
+
+  group('create refuses what decode would silently drop', () {
+    test('a zero or absurd quantity is refused at write time', () async {
+      // The bug this pins. Validating only items.isEmpty let a qty-0 item
+      // through: written, synced, then dropped on read, leaving a stored meal
+      // that resolves to nothing. A rule enforced on one side of a round trip
+      // is a filter, not a rule.
+      for (final bad in [0.0, -1.0, 101.0, double.nan, double.infinity]) {
+        expect(
+            () => repo.create(
+                name: 'x', items: [MealItem(userFoodId: 'uf', servingQty: bad)]),
+            throwsA(isA<ArgumentError>()),
+            reason: 'qty $bad must not be stored');
+      }
+      expect(await db.select(db.meals).get(), isEmpty);
+    });
+
+    test('a blank food id is refused', () async {
+      expect(
+          () => repo.create(
+              name: 'x', items: [const MealItem(userFoodId: '  ')]),
+          throwsA(isA<ArgumentError>()));
+    });
+
+    test('one bad item refuses the whole meal, it is not filtered out',
+        () async {
+      // Silently dropping the bad one would save a meal missing a food the
+      // user chose, which is the same silent wrongness one level up.
+      expect(
+          () => repo.create(name: 'x', items: [
+                roti,
+                const MealItem(userFoodId: 'uf', servingQty: 0),
+              ]),
+          throwsA(isA<ArgumentError>()));
+      expect(await db.select(db.meals).get(), isEmpty);
+    });
+
+    test('whatever create accepts, decode returns intact', () async {
+      // The round-trip property the split rule broke: nothing writable is
+      // unreadable.
+      await repo.create(name: 'ok', items: [roti, dal]);
+      final row = await db.select(db.meals).getSingle();
+      expect(MealItem.decode(row.items), hasLength(2));
+    });
+  });
 }

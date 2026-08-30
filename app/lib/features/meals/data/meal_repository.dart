@@ -41,6 +41,18 @@ class MealRepository {
     if (items.isEmpty) {
       throw ArgumentError.value(items, 'items', 'a meal needs at least one food');
     }
+    // Every item must be able to survive the round trip. Validating only the
+    // LIST LENGTH let a `serving_qty: 0` item through: it was written, it
+    // synced, and it silently vanished on read, leaving a saved meal that
+    // resolves to nothing. Refusing here is the difference between an error
+    // the user sees and a meal that quietly does not work.
+    final bad = items.where((i) => !i.isValid).toList();
+    if (bad.isNotEmpty) {
+      throw ArgumentError.value(
+          bad.map((i) => '${i.userFoodId}×${i.servingQty}').join(', '),
+          'items',
+          'every item needs a non-blank food id and 0 < qty <= 100');
+    }
     if (defaultMeal != null && !meals.contains(defaultMeal)) {
       throw ArgumentError.value(defaultMeal, 'defaultMeal', 'unknown meal slot');
     }
