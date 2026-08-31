@@ -8,7 +8,6 @@ import '../../../core/db/database.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/current_date_provider.dart';
 import '../../home/domain/day_totals.dart';
-import '../../home/presentation/home_page.dart' show targetsProvider;
 import '../../onboarding/data/target_history_repository.dart';
 import '../../capture/domain/entry_confidence.dart';
 import '../../capture/domain/portion.dart';
@@ -61,14 +60,15 @@ class DiaryPage extends ConsumerWidget {
     // that were on target under the old number turned "over" retroactively.
     // The logs never changed; only the ruler did.
     //
-    // The fallback to today's targets is TRANSITIONAL, not the steady state:
-    // it covers the frames before the timeline stream has loaded (and the
-    // first launch after upgrading, before the seed row lands). Once history
-    // exists it is never consulted.
+    // AND A DAY WITH NO RECORDED TARGET IS SCORED AGAINST NOTHING — 0 here
+    // means "unknown", which renders as "—" and is left out of the on-target
+    // count. Falling back to today's number would be the original bug wearing
+    // the fix's clothes: it looks like an answer and is one only by accident.
+    // Coverage is the recorder's job (it backfills to the oldest logged day),
+    // so in practice this is a frame, not a state.
     final history = ref.watch(targetHistoryProvider).value ?? const [];
-    final fallback = ref.watch(targetsProvider)?.calories ?? 0;
     int targetFor(String ymd) =>
-        TargetHistoryRepository.resolve(history, ymd)?.calories ?? fallback;
+        TargetHistoryRepository.resolve(history, ymd)?.calories ?? 0;
 
     return Semantics(
       identifier: 'diary-page',

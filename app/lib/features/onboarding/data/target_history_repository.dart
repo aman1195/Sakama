@@ -28,19 +28,25 @@ class TargetHistoryRepository {
   /// Every row, oldest first. The whole table, deliberately: resolving a day
   /// needs the row in force AT that day, which may predate any window the
   /// caller has in view, and the table holds one row per change — not per day.
-  Stream<List<TargetHistoryRow>> watchAll() =>
-      (_db.select(_db.targetHistory)
-            ..orderBy([(t) => OrderingTerm.asc(t.date)]))
-          .watch();
+  ///
+  /// Ordered by `date` then `updated_at` so the sequence is TOTAL. Date alone
+  /// leaves same-date rows in whatever order SQLite returns, and a second
+  /// device can legitimately deliver a row for a date this one already has —
+  /// which would make two screens reading the same table disagree.
+  Stream<List<TargetHistoryRow>> watchAll() => _ordered().watch();
 
-  Future<List<TargetHistoryRow>> all() =>
-      (_db.select(_db.targetHistory)
-            ..orderBy([(t) => OrderingTerm.asc(t.date)]))
-          .get();
+  Future<List<TargetHistoryRow>> all() => _ordered().get();
+
+  SimpleSelectStatement<$TargetHistoryTable, TargetHistoryRow> _ordered() =>
+      _db.select(_db.targetHistory)
+        ..orderBy([
+          (t) => OrderingTerm.asc(t.date),
+          (t) => OrderingTerm.asc(t.updatedAt),
+        ]);
 
   /// The oldest day with food logged, or null when nothing has been logged.
-  /// The seed row is dated here so it covers exactly the history a diary can
-  /// show, and not a day more.
+  /// History has to reach back at least this far or the diary is scoring days
+  /// it has no ruler for.
   Future<String?> earliestLoggedDate() async {
     final min = _db.foodLogs.date.min();
     final row =
@@ -54,11 +60,20 @@ class TargetHistoryRepository {
   /// NULL IS A REAL ANSWER and callers must render it as "no target", not as
   /// zero and not as today's number. Both of those are the lie this table was
   /// built to stop. [rows] may be in any order.
+  ///
+  /// Ties on `date` are broken by `updatedAt`, so two rows for one day — which
+  /// the server's unique index forbids but a mid-sync device can briefly hold —
+  /// still resolve to one deterministic answer everywhere.
   static TargetHistoryRow? rowFor(List<TargetHistoryRow> rows, String date) {
     TargetHistoryRow? best;
     for (final r in rows) {
       if (r.date.compareTo(date) > 0) continue; // not yet in force
-      if (best == null || r.date.compareTo(best.date) > 0) best = r;
+      if (best == null) {
+        best = r;
+        continue;
+      }
+      final byDate = r.date.compareTo(best.date);
+      if (byDate > 0 || (byDate == 0 && r.updatedAt > best.updatedAt)) best = r;
     }
     return best;
   }
@@ -81,18 +96,22 @@ class TargetHistoryRepository {
   /// says exactly the same thing.
   ///
   /// The no-op case is the common one — the app opens, nothing changed — so
-  /// this is a read and no write on a normal day. Returns true when a row was
+  /// this reads and does not write on a normal day. Returns true when a row was
   /// actually written.
   ///
-  /// Same-day changes UPDATE that day's row rather than adding a second one:
-  /// the server's unique (user_id, date) index says a date has one answer, and
-  /// a user who edits their goal twice before lunch lived under the last one.
+  /// TRANSACTIONAL read-modify-write, for the reason ProfileRepository.save is:
+  /// the recorder fires from three listeners, and a date rollover that also
+  /// changes the plan's day type fires two of them in the same turn. Without
+  /// the transaction both passes see no row for today and both INSERT, leaving
+  /// one date holding two answers — after which the diary and Vita can resolve
+  /// the same day differently, and the server's unique (user_id, date) index
+  /// rejects the loser as a poison op that is dropped and never retried.
   Future<bool> recordIfChanged({
     required String date,
     required NutritionTargets targets,
     String source = 'computed',
     String? userId,
-  }) async {
+  }) {
     if (!sources.contains(source)) {
       throw ArgumentError.value(source, 'source', 'must be one of $sources');
     }
@@ -103,30 +122,75 @@ class TargetHistoryRepository {
           targets.calories, 'targets.calories', 'must be positive');
     }
 
-    final rows = await all();
-    final inForce = rowFor(rows, date);
-    if (inForce != null && _sameTargets(inForce, targets)) return false;
+    return _db.transaction(() async {
+      final rows = await all();
+      final inForce = rowFor(rows, date);
+      if (inForce != null && _sameTargets(inForce, targets)) return false;
 
-    final at = _now;
-    final existingToday =
-        rows.where((r) => r.date == date).cast<TargetHistoryRow?>().firstOrNull;
+      // Same-day changes UPDATE that day's row rather than adding a second one:
+      // the server says a date has one answer, and a user who edits their goal
+      // twice before lunch lived under the last one.
+      final existingToday = rows.where((r) => r.date == date).toList();
+      if (existingToday.isNotEmpty) {
+        await (_db.update(_db.targetHistory)
+              ..where((t) => t.id.equals(existingToday.last.id)))
+            .write(_companionFor(targets, source));
+        return true;
+      }
 
-    if (existingToday != null) {
-      await (_db.update(_db.targetHistory)
-            ..where((t) => t.id.equals(existingToday.id)))
-          .write(TargetHistoryCompanion(
-        calories: Value(targets.calories),
-        proteinG: Value(targets.proteinG),
-        carbG: Value(targets.carbG),
-        fatG: Value(targets.fatG),
-        fiberG: Value(targets.fiberG),
-        waterMl: Value(targets.waterMl),
-        source: Value(source),
-        updatedAt: Value(at),
-      ));
+      await _insert(date: date, targets: targets, source: source, userId: userId);
       return true;
-    }
+    });
+  }
 
+  /// Make sure recorded history reaches back to [earliestLogged], writing one
+  /// `seed` row if it does not.
+  ///
+  /// COVERAGE IS RE-CHECKED, not done once. The obvious version — seed only
+  /// when the table is empty — locks itself out on a fresh install of an
+  /// existing account: the recorder's first pass runs before PowerSync has
+  /// delivered the food logs, writes today's row, and then no seed can ever
+  /// land. Sixty days of real history would arrive with no ruler behind them,
+  /// and the same account on the older phone would score them differently.
+  ///
+  /// The seed is an honest approximation and is labelled as one. It asserts
+  /// the profile's computed targets applied from [earliestLogged] — true for
+  /// everyone who never changed their profile, and the best available answer
+  /// for the rest. It records the only number we have rather than inventing
+  /// one. Deliberately COMPUTED targets, never a plan overlay: a plan active
+  /// today says nothing about last month.
+  ///
+  /// Only ever inserts BEFORE the oldest recorded row, so it can never
+  /// overwrite something really recorded.
+  Future<bool> backfillIfUncovered({
+    required String earliestLogged,
+    required NutritionTargets targets,
+    String? userId,
+  }) {
+    if (targets.calories <= 0) {
+      throw ArgumentError.value(
+          targets.calories, 'targets.calories', 'must be positive');
+    }
+    return _db.transaction(() async {
+      final rows = await all();
+      if (rows.isNotEmpty &&
+          rows.first.date.compareTo(earliestLogged) <= 0) {
+        return false; // history already reaches back far enough
+      }
+      await _insert(
+          date: earliestLogged, targets: targets, source: 'seed', userId: userId);
+      return true;
+    });
+  }
+
+  Future<void> _insert({
+    required String date,
+    required NutritionTargets targets,
+    required String source,
+    String? userId,
+  }) async {
+    // Read the clock ONCE: created_at and updated_at describe the same event.
+    final at = _now;
     await _db.into(_db.targetHistory).insert(TargetHistoryCompanion.insert(
           id: uuid.v4(),
           userId: Value(userId),
@@ -141,30 +205,19 @@ class TargetHistoryRepository {
           createdAt: at,
           updatedAt: at,
         ));
-    return true;
   }
 
-  /// The one row that covers everything logged before this table existed.
-  ///
-  /// An honest approximation, and labelled as one. It asserts that the
-  /// profile's computed targets applied from [date] — true for the many users
-  /// who never changed their profile, and the best available answer for the
-  /// rest. It records the only number we have rather than inventing one, tagged
-  /// `seed` so the source is auditable, and every real change after it is
-  /// recorded exactly. Deliberately COMPUTED targets, never a plan overlay: a
-  /// plan active today says nothing about last month.
-  ///
-  /// No-ops once any row exists, so it runs at most once per device.
-  Future<bool> seedIfEmpty({
-    required String date,
-    required NutritionTargets targets,
-    String? userId,
-  }) async {
-    final existing = await all();
-    if (existing.isNotEmpty) return false;
-    return recordIfChanged(
-        date: date, targets: targets, source: 'seed', userId: userId);
-  }
+  TargetHistoryCompanion _companionFor(NutritionTargets t, String source) =>
+      TargetHistoryCompanion(
+        calories: Value(t.calories),
+        proteinG: Value(t.proteinG),
+        carbG: Value(t.carbG),
+        fatG: Value(t.fatG),
+        fiberG: Value(t.fiberG),
+        waterMl: Value(t.waterMl),
+        source: Value(source),
+        updatedAt: Value(_now),
+      );
 
   static bool _sameTargets(TargetHistoryRow row, NutritionTargets t) =>
       row.calories == t.calories &&
@@ -173,8 +226,4 @@ class TargetHistoryRepository {
       row.fatG == t.fatG &&
       row.fiberG == t.fiberG &&
       row.waterMl == t.waterMl;
-}
-
-extension _FirstOrNull<E> on Iterable<E?> {
-  E? get firstOrNull => isEmpty ? null : first;
 }

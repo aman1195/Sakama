@@ -126,7 +126,7 @@ void main() {
       final earliest = await repo.earliestLoggedDate();
       expect(earliest, '2026-08-05');
 
-      await repo.seedIfEmpty(date: earliest!, targets: t2400);
+      await repo.backfillIfUncovered(earliestLogged: earliest!, targets: t2400);
       final rows = await repo.all();
       expect(rows.single.source, 'seed');
       // The day that was previously scored against today's number now has its
@@ -134,18 +134,100 @@ void main() {
       expect(TargetHistoryRepository.resolve(rows, '2026-08-05')?.calories, 2400);
     });
 
-    test('never overwrites real history', () async {
-      await repo.recordIfChanged(date: '2026-08-20', targets: t1900);
-      expect(await repo.seedIfEmpty(date: '2026-08-01', targets: t2400), isFalse);
+    test('still backfills when today is already recorded — logs arrive later',
+        () async {
+      // THE FRESH-INSTALL TRAP. A new phone on an existing account records
+      // today at first frame, and only THEN does PowerSync deliver 60 days of
+      // logs. A seed that only fires on an empty table is locked out forever,
+      // and all that real history resolves to nothing.
+      await repo.recordIfChanged(date: '2026-08-31', targets: t1900);
+      expect(
+          await repo.backfillIfUncovered(
+              earliestLogged: '2026-07-02', targets: t2400),
+          isTrue);
+
+      final rows = await repo.all();
+      expect(rows.length, 2);
+      expect(TargetHistoryRepository.resolve(rows, '2026-07-02')?.calories, 2400);
+      // And the row that was already there still governs its own day.
+      expect(TargetHistoryRepository.resolve(rows, '2026-08-31')?.calories, 1900);
+    });
+
+    test('no-ops when history already reaches back far enough', () async {
+      await repo.recordIfChanged(date: '2026-08-01', targets: t2400);
+      expect(
+          await repo.backfillIfUncovered(
+              earliestLogged: '2026-08-05', targets: t1900),
+          isFalse);
       expect((await repo.all()).length, 1);
-      // And the pre-history day stays unscorable rather than being back-filled
-      // with a number nobody recorded.
-      expect(TargetHistoryRepository.resolve(await repo.all(), '2026-08-01'),
-          isNull);
+    });
+
+    test('never overwrites a real row at the same date', () async {
+      await repo.recordIfChanged(date: '2026-08-01', targets: t1900);
+      await repo.backfillIfUncovered(earliestLogged: '2026-08-01', targets: t2400);
+      final rows = await repo.all();
+      expect(rows.single.calories, 1900,
+          reason: 'the recorded answer wins over the approximation');
+      expect(rows.single.source, 'computed');
     });
 
     test('earliestLoggedDate is null when nothing has been logged', () async {
       expect(await repo.earliestLoggedDate(), isNull);
+    });
+  });
+
+  group('concurrency', () {
+    test('two passes for one date leave ONE row, not two answers', () async {
+      // The recorder fires from three listeners, and a midnight rollover that
+      // also flips a plan's day type fires two of them in the same turn.
+      // Without a transaction both passes see no row for today and both
+      // INSERT — after which the diary and Vita can resolve the same day
+      // differently, and the server drops the loser as a duplicate.
+      await Future.wait([
+        repo.recordIfChanged(date: '2026-08-31', targets: t1900),
+        repo.recordIfChanged(date: '2026-08-31', targets: t1900),
+      ]);
+      expect((await repo.all()).length, 1);
+    });
+
+    test('a burst of differing targets still leaves one row for the day',
+        () async {
+      await Future.wait([
+        repo.recordIfChanged(date: '2026-08-31', targets: t1900),
+        repo.recordIfChanged(date: '2026-08-31', targets: t2400),
+        repo.recordIfChanged(date: '2026-08-31', targets: t1900),
+      ]);
+      final rows = await repo.all();
+      expect(rows.length, 1, reason: 'a date has exactly one answer');
+      // Whichever won, resolution is unambiguous — that is the property that
+      // matters, not which of two simultaneous writes landed last.
+      expect(TargetHistoryRepository.resolve(rows, '2026-08-31'), isNotNull);
+    });
+
+    test('resolution is deterministic even if two rows share a date', () async {
+      // Defence in depth: the server's unique index forbids this, but a device
+      // mid-sync can hold it briefly. Ties break on updatedAt, so every reader
+      // picks the same row.
+      await repo.recordIfChanged(date: '2026-08-01', targets: t2400);
+      final one = (await repo.all()).single;
+      await db.into(db.targetHistory).insert(TargetHistoryCompanion.insert(
+            id: 'duplicate',
+            date: one.date,
+            calories: 1200,
+            proteinG: 100,
+            carbG: 100,
+            fatG: 40,
+            fiberG: 25,
+            waterMl: 2000,
+            createdAt: one.createdAt + 10,
+            updatedAt: one.updatedAt + 10, // newer wins
+          ));
+      final rows = await repo.all();
+      expect(TargetHistoryRepository.resolve(rows, '2026-08-02')?.calories, 1200);
+      expect(TargetHistoryRepository.resolve(rows.reversed.toList(), '2026-08-02')
+          ?.calories,
+          1200,
+          reason: 'and it does not depend on the order rows arrive in');
     });
   });
 }

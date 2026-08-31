@@ -63,12 +63,21 @@ shows, so the two never disagree [BUILT]).
 
 ## 2. Adopted now — the 2.0 backend work items
 
-**A1 — Date-versioned targets [NOW, first].** New synced table `target_history(user_id,
-effective_date, calories, protein, carbs, fat, source)` written whenever targets change
-(profile edit, plan activation/deactivation, manual override). Diary, Trends, and the insight
-engine join each day to its effective target. Rides the four-file sync contract (Drift + bump +
-preservation test · powersync_schema · SQL + RLS + `alter publication powersync add table` ·
-sync-streams.yaml; migration first, sync rules second).
+**A1 — Date-versioned targets [NOW, first]. SHIPPED in #147.** Synced table
+`target_history(id, user_id, date, calories, protein_g, carb_g, fat_g, fiber_g, water_ml,
+source, created_at, updated_at)`, written whenever the resolved targets change (profile edit,
+plan activation/deactivation, day-type rollover). Diary, Trends, and Vita's grounding summary
+resolve each day to the row in force on it; a day with no row is **unscorable and renders "—"**,
+never zero and never today's number. `source` is `computed | plan | seed`. Rode the four-file
+sync contract (Drift + bump to v12 + preservation test · powersync_schema · SQL + RLS +
+`alter publication powersync add table` · sync-streams.yaml; migration first, sync rules
+second).
+
+Two defects the review caught, worth remembering because both are shapes that recur: a
+non-transactional read-modify-write let one date hold two conflicting answers (the fix is the
+precedent in `ProfileRepository.save`), and a seed gated on "table is empty" locked itself out
+on a fresh install whose logs arrive by sync afterwards — coverage must be **re-checked**, not
+done once.
 
 **A2 — Safety floors [NOW].** Target computation and plan generation enforce: minimum 1,200
 kcal (female) / 1,500 (male) / max(floor, BMR × 0.8); weekly-rate warnings past ±1 kg/week;

@@ -71,16 +71,19 @@ class HistorySummary {
       );
     }
 
-    final totals = byDay.values.map(DayTotals.fromLogs).toList();
+    final byDayTotals = {
+      for (final day in byDay.entries) day.key: DayTotals.fromLogs(day.value)
+    };
+    final totals = byDayTotals.values.toList();
     final kcal = totals.map((t) => t.calories).toList();
     final protein = totals.map((t) => t.proteinG).toList();
     // Each day against its own target. A day with no known target is skipped
     // rather than counted as a miss: unscorable is not failure.
     var onTarget = 0;
-    for (final day in byDay.entries) {
+    for (final day in byDayTotals.entries) {
       final target = targetFor(day.key);
       if (target <= 0) continue;
-      final c = DayTotals.fromLogs(day.value).calories;
+      final c = day.value.calories;
       if (c >= target * 0.85 && c <= target * 1.05) onTarget++;
     }
 

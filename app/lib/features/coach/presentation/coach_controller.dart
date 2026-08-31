@@ -551,9 +551,12 @@ class CoachController extends Notifier<CoachState> {
       history = HistorySummary.from(
         logs: past,
         windowDays: historyWindowDays,
+        // 0 = no target recorded for that day, which HistorySummary skips
+        // rather than scores. Vita must not be handed today's goal as though
+        // it applied last month — that is the sentence this fix exists to
+        // stop it saying.
         targetFor: (ymd) =>
-            TargetHistoryRepository.resolve(timeline, ymd)?.calories ??
-            (targets?.calories ?? 0),
+            TargetHistoryRepository.resolve(timeline, ymd)?.calories ?? 0,
         weights: weights,
       );
     } catch (e) {
