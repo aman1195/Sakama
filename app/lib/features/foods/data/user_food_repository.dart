@@ -170,6 +170,16 @@ class UserFoodRepository {
   Future<List<ResolvedUserFood>> resolveAll(List<UserFoodRow> rows) async =>
       [for (final r in rows) await resolve(r)];
 
+  /// One saved food by id, or null when it has been removed.
+  ///
+  /// Meals hold user_foods IDS (docs/architecture/08 §3), so meal logging
+  /// looks rows up at log time rather than carrying values of its own. A null
+  /// here is a normal state — the user deleted a saved food a meal still
+  /// references — and the caller degrades, it does not crash.
+  Future<UserFoodRow?> byId(String id) =>
+      (_db.select(_db.userFoods)..where((t) => t.id.equals(id)))
+          .getSingleOrNull();
+
   /// Record a use, so most-used ordering reflects reality.
   Future<void> markUsed(String id) async {
     await _db.customUpdate(

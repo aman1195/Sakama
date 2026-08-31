@@ -104,6 +104,12 @@ final mealRepositoryProvider = FutureProvider<MealRepository>((ref) async {
   return MealRepository(db);
 });
 
+/// Saved meals for the current signer, most-used first.
+final savedMealsProvider = StreamProvider<List<MealRow>>((ref) async* {
+  final repo = await ref.watch(mealRepositoryProvider.future);
+  yield* repo.watchAll(userId: ref.watch(currentUserIdProvider));
+});
+
 final workoutRepositoryProvider =
     FutureProvider<WorkoutRepository>((ref) async {
   final db = await ref.watch(databaseProvider.future);

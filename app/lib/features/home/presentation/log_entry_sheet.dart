@@ -402,6 +402,8 @@ class _LogEntrySheetState extends ConsumerState<LogEntrySheet> {
         'search' => 'Matched from the food database',
         'recent' => 'Repeated from a previous entry',
         'barcode' => 'Scanned barcode',
+        'saved' => 'From your saved foods',
+        'meal' => 'Logged from a saved meal',
         'ai_estimate' => 'AI estimate',
         _ => 'Entered by hand',
       };
