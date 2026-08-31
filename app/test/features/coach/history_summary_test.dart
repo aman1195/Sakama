@@ -27,13 +27,36 @@ WeightLog _w(String date, double kg) => WeightLog(
     );
 
 void main() {
+  test('each day is scored against the target in force THAT day', () {
+    // The regression: both days were on target when they were lived — 2,400
+    // under the old goal, 1,900 under the new one. Scoring both with today's
+    // number would report one of them as a miss and hand Vita a sentence the
+    // diary would contradict.
+    final s = HistorySummary.from(
+      logs: [_log('2026-08-01', 2400), _log('2026-08-25', 1900)],
+      windowDays: 28,
+      targetFor: (ymd) => ymd.compareTo('2026-08-20') < 0 ? 2400 : 1900,
+    );
+    expect(s.daysOnTarget, 2);
+  });
+
+  test('a day with no known target is unscorable, not a miss', () {
+    final s = HistorySummary.from(
+      logs: [_log('2026-08-01', 2000), _log('2026-08-02', 2000)],
+      windowDays: 7,
+      targetFor: (ymd) => ymd == '2026-08-02' ? 2000 : 0,
+    );
+    expect(s.daysOnTarget, 1);
+    expect(s.daysLogged, 2, reason: 'both days were still logged');
+  });
+
   test('averages over DAYS LOGGED, not over the window', () {
     // The trap: dividing by the window reports someone who logged two good
     // days out of seven as eating 500 kcal a day — wrong, and alarming.
     final s = HistorySummary.from(
       logs: [_log('2026-08-01', 2000), _log('2026-08-02', 1800)],
       windowDays: 7,
-      calorieTarget: 2000,
+      targetFor: (_) => 2000,
     );
     expect(s.avgCalories, 1900);
     expect(s.daysLogged, 2,
@@ -48,7 +71,7 @@ void main() {
         _log('2026-08-01', 700, id: 'b'),
       ],
       windowDays: 7,
-      calorieTarget: 2000,
+      targetFor: (_) => 2000,
     );
     expect(s.daysLogged, 1);
     expect(s.avgCalories, 1200);
@@ -61,7 +84,7 @@ void main() {
       final s = HistorySummary.from(
         logs: [_log('2026-08-01', 900)],
         windowDays: 7,
-        calorieTarget: 2000,
+        targetFor: (_) => 2000,
       );
       expect(s.daysOnTarget, 0);
     });
@@ -70,7 +93,7 @@ void main() {
       final s = HistorySummary.from(
         logs: [_log('2026-08-01', 1950)],
         windowDays: 7,
-        calorieTarget: 2000,
+        targetFor: (_) => 2000,
       );
       expect(s.daysOnTarget, 1);
     });
@@ -79,7 +102,7 @@ void main() {
       final s = HistorySummary.from(
         logs: [_log('2026-08-01', 1950)],
         windowDays: 7,
-        calorieTarget: 0,
+        targetFor: (_) => 0,
       );
       expect(s.daysOnTarget, 0);
     });
@@ -92,7 +115,7 @@ void main() {
       final s = HistorySummary.from(
         logs: [_log('2026-08-01', 2000)],
         windowDays: 28,
-        calorieTarget: 2000,
+        targetFor: (_) => 2000,
         weights: [_w('2026-08-01', 84)],
       );
       expect(s.weightChangeKg, isNull);
@@ -103,7 +126,7 @@ void main() {
       final s = HistorySummary.from(
         logs: [_log('2026-08-01', 2000)],
         windowDays: 28,
-        calorieTarget: 2000,
+        targetFor: (_) => 2000,
         weights: [_w('2026-08-20', 82.5), _w('2026-08-01', 84.0)],
       );
       expect(s.weightChangeKg, closeTo(-1.5, 0.001));
@@ -115,7 +138,7 @@ void main() {
       final asc = HistorySummary.from(
           logs: [_log('2026-08-01', 2000)],
           windowDays: 28,
-          calorieTarget: 2000,
+          targetFor: (_) => 2000,
           weights: [_w('2026-08-01', 84), _w('2026-08-20', 82.5)]);
       expect(asc.weightChangeKg, closeTo(-1.5, 0.001));
     });
@@ -123,7 +146,7 @@ void main() {
 
   test('an empty window says so rather than reporting zeros', () {
     final s = HistorySummary.from(
-        logs: const [], windowDays: 28, calorieTarget: 2000);
+        logs: const [], windowDays: 28, targetFor: (_) => 2000);
     expect(s.isEmpty, isTrue);
     expect(s.promptLine, contains('No history logged'));
     expect(s.promptLine, isNot(contains('0 kcal')),
@@ -135,7 +158,7 @@ void main() {
     final s = HistorySummary.from(
       logs: [_log('2026-08-01', 2000), _log('2026-08-02', 2100, protein: 90)],
       windowDays: 28,
-      calorieTarget: 2000,
+      targetFor: (_) => 2000,
     );
     expect(s.promptLine, contains('logged on 2 of them'));
     expect(s.promptLine, contains('2050 kcal'));

@@ -99,6 +99,49 @@ class WeightLogs extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// What the targets actually WERE on a given date.
+///
+/// Without this, history lies. The diary judged every one of its 28 days
+/// against TODAY's targets, so changing a goal silently re-scored weeks the
+/// user had already lived: a day that was on target under a 2,400 kcal goal
+/// became "over" the moment the goal moved to 1,900. The rows a user cannot
+/// change (their logs) were being scored by a number that moves.
+///
+/// A row means "from [date] onward these were the targets, until a later row
+/// supersedes it" — CHANGES, not one row per day, so a year of stable goals
+/// costs one row rather than 365. Resolution for a date D is the newest row
+/// whose date is <= D; see TargetHistoryRepository.
+///
+/// `source` says WHY they were these ('computed' from the profile, 'plan' when
+/// a plan day type overlaid them, 'seed' for the one row written at install to
+/// cover days logged before this table existed). It is provenance, in the same
+/// spirit as rule 7 for food rows: a number the user is judged against should
+/// say where it came from.
+///
+/// SYNCED — a second device must score history the same way this one does.
+@DataClassName('TargetHistoryRow')
+class TargetHistory extends Table {
+  TextColumn get id => text()();
+  TextColumn get userId => text().nullable()();
+
+  /// yyyy-MM-dd. The day these targets came into force.
+  TextColumn get date => text()();
+  IntColumn get calories => integer()();
+  IntColumn get proteinG => integer()();
+  IntColumn get carbG => integer()();
+  IntColumn get fatG => integer()();
+  IntColumn get fiberG => integer()();
+  IntColumn get waterMl => integer()();
+
+  /// computed | plan | seed
+  TextColumn get source => text().withDefault(const Constant('computed'))();
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()(); // LWW
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 /// A workout, and the sets inside it.
 ///
 /// ONE TABLE, not two. A strength session's sets could be a child table, but
@@ -407,7 +450,7 @@ class OffFoods extends Table {
 
 @DriftDatabase(
     tables: [FoodLogs, Profiles, WaterLogs, WeightLogs, UserPlans, UserFoods, Meals,
-      Workouts,
+      Workouts, TargetHistory,
       ChatThreads, ChatMessages, MemoryFacts, Foods, OffFoods])
 class SakamaDatabase extends _$SakamaDatabase {
   SakamaDatabase()
@@ -426,7 +469,7 @@ class SakamaDatabase extends _$SakamaDatabase {
   final bool managedExternally;
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => managedExternally
@@ -526,6 +569,13 @@ class SakamaDatabase extends _$SakamaDatabase {
               // Meals (teardown item 5). Additive — no existing row is touched.
               // Synced, so it also has a Supabase mirror + RLS + publication.
               await m.createTable(meals);
+            }
+            if (from < 12) {
+              // What the targets WERE, per date (A1). Additive — no existing
+              // row is touched. Empty until the recorder's first pass, and a
+              // day with no row is scored against nothing rather than against
+              // today's target.
+              await m.createTable(targetHistory);
             }
           },
         );

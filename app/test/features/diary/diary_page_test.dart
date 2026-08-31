@@ -6,6 +6,10 @@ import 'package:sakama/core/db/database.dart';
 import 'package:sakama/core/providers/app_providers.dart';
 import 'package:sakama/core/providers/current_date_provider.dart';
 import 'package:sakama/features/diary/presentation/diary_page.dart';
+import 'package:sakama/features/onboarding/data/target_history_repository.dart';
+import 'package:sakama/features/onboarding/domain/enums.dart';
+import 'package:sakama/features/onboarding/domain/nutrition_targets.dart';
+import 'package:sakama/features/onboarding/domain/profile_record.dart';
 import 'package:sakama/features/workouts/data/workout_repository.dart';
 import 'package:sakama/features/workouts/domain/workout_set.dart';
 
@@ -20,6 +24,17 @@ class _FixedDate extends CurrentDateNotifier {
   @override
   DateTime build() => _d;
 }
+
+final _onboarded = ProfileRecord(
+    dob: DateTime(1994, 1, 1),
+    weightKg: 70,
+    heightCm: 175,
+    sex: Sex.male,
+    activity: ActivityLevel.moderate,
+    goal: Goal.maintain,
+    diet: DietPreference.veg,
+    cuisine: CuisinePreference.both,
+    onboardingComplete: true);
 
 void main() {
   late SakamaDatabase db;
@@ -39,13 +54,20 @@ void main() {
             updatedAt: 1,
           ));
 
-  Future<void> pump(WidgetTester t) async {
+  /// [profile] matters for exactly one thing: with a profile, targetsProvider
+  /// yields a real number, so a call site that falls back to "today's target"
+  /// for an unknown day produces a VISIBLE wrong answer. Without one it
+  /// produces 0 and the bug hides. Tests of the unscorable path are worthless
+  /// unless they pass a profile.
+  Future<void> pump(WidgetTester t, {ProfileRecord? profile}) async {
     await t.binding.setSurfaceSize(const Size(500, 2000));
     addTearDown(() => t.binding.setSurfaceSize(null));
     await t.pumpWidget(ProviderScope(
       overrides: [
         databaseProvider.overrideWith((ref) async => db),
         currentDateProvider.overrideWith(() => _FixedDate(today)),
+        if (profile != null)
+          profileProvider.overrideWith((ref) => Stream.value(profile)),
       ],
       child: const MaterialApp(home: DiaryPage()),
     ));
@@ -157,6 +179,53 @@ void main() {
     );
     await pump(t);
     expect(find.textContaining('412 kcal out'), findsOneWidget);
+    await dispose(t);
+  });
+
+  /// A day is scored by the target that was in force THAT day. These pin the
+  /// wiring, not the arithmetic: the domain rule has its own tests, and the
+  /// bug that shipped twice was a call site quietly answering an unknown day
+  /// with today's number.
+  Future<void> recordTarget(String date, int calories) =>
+      TargetHistoryRepository(db).recordIfChanged(
+        date: date,
+        targets: NutritionTargets(
+            calories: calories, proteinG: 100, carbG: 200, fatG: 60,
+            fiberG: 30, waterMl: 2500),
+      );
+
+  testWidgets('with no recorded target a day is unscorable, not scored at 0',
+      (t) async {
+    await t.runAsync(() => log('2026-08-26', 'dal', 300));
+    // WITH a profile, so today's computed target exists and could be borrowed.
+    await pump(t, profile: _onboarded);
+
+    // "—", not a count: nothing recorded a target for this day, and inventing
+    // one (today's, or zero) is the bug this table exists to stop.
+    expect(find.text('—'), findsOneWidget);
+    // The day row reads "300 kcal", never "300 kcal of <something>".
+    expect(find.textContaining('kcal of'), findsNothing,
+        reason: 'no target may appear on the day row either');
+    await dispose(t);
+  });
+
+  testWidgets('each day is scored against the target in force that day',
+      (t) async {
+    await t.runAsync(() async {
+      // 2,400 until the 25th, then a cut to 1,900.
+      await recordTarget('2026-08-01', 2400);
+      await recordTarget('2026-08-25', 1900);
+      await log('2026-08-20', 'old day', 2400); // on target under the old goal
+      await log('2026-08-26', 'new day', 1900); // on target under the new one
+    });
+    await pump(t);
+
+    // BOTH days count. Scored against today's 1,900 the older day would read
+    // as over, and the user would watch a week they had already lived change
+    // its verdict because they changed a goal.
+    expect(find.text('2'), findsWidgets);
+    expect(find.textContaining('of 2400'), findsOneWidget);
+    expect(find.textContaining('of 1900'), findsOneWidget);
     await dispose(t);
   });
 }

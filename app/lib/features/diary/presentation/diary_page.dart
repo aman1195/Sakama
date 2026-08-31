@@ -8,7 +8,7 @@ import '../../../core/db/database.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/current_date_provider.dart';
 import '../../home/domain/day_totals.dart';
-import '../../home/presentation/home_page.dart' show targetsProvider;
+import '../../onboarding/data/target_history_repository.dart';
 import '../../capture/domain/entry_confidence.dart';
 import '../../capture/domain/portion.dart';
 import '../../home/presentation/log_entry_sheet.dart';
@@ -51,8 +51,24 @@ class DiaryPage extends ConsumerWidget {
     // Workouts share the day rows rather than getting their own screen: a day
     // is one thing that happened, not two parallel logs.
     final workouts = ref.watch(_diaryWorkoutsProvider).value ?? const [];
-    final targets = ref.watch(targetsProvider);
     final today = ref.watch(currentDateProvider);
+
+    // EACH DAY IS SCORED AGAINST THE TARGET THAT WAS IN FORCE THAT DAY.
+    //
+    // It used to be scored against today's, which meant changing a goal
+    // silently rewrote the verdict on weeks the user had already lived: days
+    // that were on target under the old number turned "over" retroactively.
+    // The logs never changed; only the ruler did.
+    //
+    // AND A DAY WITH NO RECORDED TARGET IS SCORED AGAINST NOTHING — 0 here
+    // means "unknown", which renders as "—" and is left out of the on-target
+    // count. Falling back to today's number would be the original bug wearing
+    // the fix's clothes: it looks like an answer and is one only by accident.
+    // Coverage is the recorder's job (it backfills to the oldest logged day),
+    // so in practice this is a frame, not a state.
+    final history = ref.watch(targetHistoryProvider).value ?? const [];
+    int targetFor(String ymd) =>
+        TargetHistoryRepository.resolve(history, ymd)?.calories ?? 0;
 
     return Semantics(
       identifier: 'diary-page',
@@ -97,7 +113,7 @@ class DiaryPage extends ConsumerWidget {
                     _Summary(
                       days: byDay.keys.toList(),
                       byDay: byDay,
-                      target: targets?.calories ?? 0,
+                      targetFor: targetFor,
                     ),
                     const SkSection('Every day'),
                     SkCard(
@@ -109,7 +125,7 @@ class DiaryPage extends ConsumerWidget {
                               ymd: d,
                               entries: byDay[d] ?? const [],
                               workouts: workoutsByDay[d] ?? const [],
-                              target: targets?.calories ?? 0,
+                              target: targetFor(d),
                               isToday: d == _ymd(today),
                             ),
                         ],
@@ -129,13 +145,16 @@ class DiaryPage extends ConsumerWidget {
 /// The window at a glance — the thing a per-day list cannot tell you.
 class _Summary extends StatelessWidget {
   const _Summary(
-      {required this.days, required this.byDay, required this.target});
+      {required this.days, required this.byDay, required this.targetFor});
 
   /// FOOD days only. A workout-only day must not enter this as a 0 kcal
   /// entry: it would drag the average down and count as a day logged.
   final List<String> days;
   final Map<String, List<FoodLog>> byDay;
-  final int target;
+
+  /// The target that was in force on a given day — not today's. See the note
+  /// in [DiaryPage.build].
+  final int Function(String ymd) targetFor;
 
   @override
   Widget build(BuildContext context) {
@@ -148,9 +167,18 @@ class _Summary extends StatelessWidget {
     // "On target" counts days within the band, not days under it. Under-eating
     // is not success, and a tracker that scores it as such teaches the wrong
     // thing.
-    final onTarget = target <= 0
-        ? 0
-        : totals.where((t) => t >= target * 0.85 && t <= target * 1.05).length;
+    //
+    // Each day is measured against ITS OWN target, so a week under an old goal
+    // keeps the verdict it earned at the time.
+    var scored = 0;
+    var onTarget = 0;
+    for (final d in days) {
+      final t = targetFor(d);
+      if (t <= 0) continue; // no target known for that day: unscorable, not a miss
+      scored++;
+      final kcal = DayTotals.fromLogs(byDay[d] ?? const []).calories;
+      if (kcal >= t * 0.85 && kcal <= t * 1.05) onTarget++;
+    }
 
     return SkHero(
       identifier: 'diary-summary',
@@ -175,7 +203,7 @@ class _Summary extends StatelessWidget {
               ),
               Expanded(
                 child: SkStat(
-                    value: target <= 0 ? '—' : '$onTarget',
+                    value: scored == 0 ? '—' : '$onTarget',
                     label: 'ON TARGET',
                     sub: 'days in range',
                     color: SakamaPalette.onAccent),

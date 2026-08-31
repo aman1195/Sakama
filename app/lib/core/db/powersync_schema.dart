@@ -74,6 +74,21 @@ const powersyncSchema = Schema([
     Column.integer('created_at'),
     Column.integer('updated_at'),
   ]),
+  // What the targets were on a date (A1). Synced because a second device must
+  // score the same history the same way.
+  Table('target_history', [
+    Column.text('user_id'),
+    Column.text('date'),
+    Column.integer('calories'),
+    Column.integer('protein_g'),
+    Column.integer('carb_g'),
+    Column.integer('fat_g'),
+    Column.integer('fiber_g'),
+    Column.integer('water_ml'),
+    Column.text('source'), // computed | plan | seed
+    Column.integer('created_at'),
+    Column.integer('updated_at'),
+  ]),
   Table('workouts', [
     Column.text('user_id'),
     Column.text('date'),
