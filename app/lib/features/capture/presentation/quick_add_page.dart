@@ -9,6 +9,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/db/database.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../meals/data/meal_log_service.dart';
+import '../../meals/presentation/meal_builder_sheet.dart';
 import '../../foods/data/ai_estimator.dart';
 import '../../foods/data/user_food_repository.dart';
 import '../../foods/domain/food.dart';
@@ -261,6 +263,65 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
         SnackBar(content: Text('Saved "${food.name}" to your foods.')));
   }
 
+  /// Saved meals: the whole group in one tap, into the currently selected
+  /// slot. The chip row above is the contract — what is selected is where it
+  /// lands, no hidden default.
+  Widget _mealsStrip() {
+    final meals = ref.watch(savedMealsProvider).value ?? const [];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SkSection('Meals'),
+        Wrap(
+          spacing: Sk.sm,
+          runSpacing: Sk.sm,
+          children: [
+            for (final m in meals)
+              SkPill(
+                identifier: 'qa-meal-${m.id}',
+                icon: Icons.lunch_dining,
+                label: m.name,
+                onTap: () => _logMeal(m),
+              ),
+            SkPill(
+              identifier: 'qa-meal-new',
+              icon: Icons.add,
+              label: 'New meal',
+              onTap: () => MealBuilderSheet.show(context),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _logMeal(MealRow m) async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      final service = MealLogService(
+        meals: await ref.read(mealRepositoryProvider.future),
+        userFoods: await ref.read(userFoodRepositoryProvider.future),
+        foodLogs: await ref.read(foodLogRepositoryProvider.future),
+      );
+      final r = await service.log(m,
+          date: _today(),
+          mealSlot: _meal.key,
+          userId: ref.read(currentUserIdProvider));
+      if (!mounted) return;
+      // Say what actually happened. "Logged breakfast" when one of its three
+      // foods was skipped leaves the user certain they ate what they did not.
+      final msg = r.logged == 0
+          ? 'Nothing logged — the foods in "${m.name}" could not be resolved.'
+          : 'Logged ${m.name}: ${r.logged} '
+              '${r.logged == 1 ? "food" : "foods"}, ~${r.kcal.round()} kcal'
+              '${r.skipped > 0 ? " · ${r.skipped} skipped" : ""}';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   /// Foods you chose to keep — including ones that fell out of the recency
   /// window, and ones that exist in no corpus at all.
   Widget _favouritesStrip() {
@@ -453,6 +514,7 @@ class _QuickAddPageState extends ConsumerState<QuickAddPage> {
                 if (_results.isNotEmpty) _resultsList(),
                 // Strips get HEADINGS now. Unlabelled floating pills were the
                 // worst thing on this screen — no way to know what they were.
+                if (!searching && _results.isEmpty) _mealsStrip(),
                 if (!searching && _results.isEmpty) _favouritesStrip(),
                 if (!searching && _results.isEmpty && _recents.isNotEmpty)
                   _recentsStrip(),
