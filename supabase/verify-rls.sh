@@ -288,6 +288,7 @@ probe_payload() {
     workouts)    echo "{\"id\":\"$id\",\"user_id\":\"$other\",\"date\":\"2026-01-01\",\"name\":\"rls probe\",\"kind\":\"other\",\"created_at\":1,\"updated_at\":1}" ;;
     user_plans)  echo "{\"id\":\"$id\",\"user_id\":\"$other\",\"name\":\"rls probe\",\"config\":\"{}\",\"created_at\":1,\"updated_at\":1}" ;;
     user_foods)  echo "{\"id\":\"$id\",\"user_id\":\"$other\",\"name\":\"rls probe\",\"kind\":\"custom\",\"created_at\":1,\"updated_at\":1}" ;;
+    meals)       echo "{\"id\":\"$id\",\"user_id\":\"$other\",\"name\":\"rls probe\",\"items\":\"[]\",\"created_at\":1,\"updated_at\":1}" ;;
     ai_usage)    echo "{\"user_id\":\"$other\",\"day\":\"2026-01-01\",\"feature\":\"rls-probe\",\"count\":0}" ;;
     profiles)    echo "{\"id\":\"$id\",\"user_id\":\"$other\",\"dob\":\"1990-01-01\",\"weight_kg\":70,\"height_cm\":170,\"sex\":\"other\",\"activity\":\"moderate\",\"goal\":\"maintain\",\"created_at\":1,\"updated_at\":1}" ;;
     *) echo "" ;;
