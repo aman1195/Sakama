@@ -43,3 +43,7 @@ streams:
   user_meals:
     auto_subscribe: true
     query: SELECT * FROM meals WHERE user_id = auth.user_id()
+
+  user_target_history:
+    auto_subscribe: true
+    query: SELECT * FROM target_history WHERE user_id = auth.user_id()

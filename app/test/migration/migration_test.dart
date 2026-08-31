@@ -13,6 +13,7 @@ import 'generated/schema_v7.dart' as v7;
 import 'generated/schema_v8.dart' as v8;
 import 'generated/schema_v9.dart' as v9;
 import 'generated/schema_v10.dart' as v10;
+import 'generated/schema_v11.dart' as v11;
 
 /// The migration harness required by docs/MOBILE.md and docs/REVIEW.md §6.1:
 /// a bad on-device migration destroys user data irrecoverably, so every schema
@@ -429,13 +430,54 @@ void main() {
     await db.close();
   });
 
-  test('database schema matches the committed v11 snapshot', () async {
+  test('v11 -> v12 adds target_history AND preserves all user data', () async {
+    final schema = await verifier.schemaAt(11);
+    final v11Db = v11.DatabaseAtV11(schema.newConnection());
+    await v11Db.customStatement(
+      "INSERT INTO food_logs (id, date, meal, name, grams, serving_label, "
+      "serving_qty, energy_kcal, protein_g, carb_g, fat_g, logged_via, "
+      "created_at, updated_at) VALUES ('fl','2026-08-31','lunch','dal',225,"
+      "'katori',1.5,180,9,22,6,'search',1,1)");
+    await v11Db.customStatement(
+      "INSERT INTO meals (id, name, items, use_count, created_at, updated_at) "
+      "VALUES ('m','usual breakfast','[]',4,1,1)");
+    await v11Db.customStatement(
+      "INSERT INTO user_foods (id, name, kind, use_count, created_at, "
+      "updated_at) VALUES ('uf','mum rajma','custom',3,1,1)");
+    await v11Db.customStatement(
+      "INSERT INTO workouts (id, date, name, kind, sets, logged_via, "
+      "created_at, updated_at) "
+      "VALUES ('w','2026-08-31','bench','strength','[]','vita',1,1)");
+    await v11Db.close();
+
+    final db = SakamaDatabase.withExecutor(schema.newConnection());
+    await verifier.migrateAndValidate(db, 12);
+
+    // The rows this table exists to SCORE must survive the migration that
+    // adds it — a lost log is worse than a mis-scored one.
+    final log = await db.select(db.foodLogs).getSingle();
+    expect(log.servingLabel, 'katori');
+    expect(log.servingQty, 1.5);
+    expect(log.grams, 225);
+
+    // v11's own addition specifically, plus the tables around it.
+    expect((await db.select(db.meals).getSingle()).name, 'usual breakfast');
+    expect((await db.select(db.userFoods).getSingle()).name, 'mum rajma');
+    expect((await db.select(db.workouts).getSingle()).name, 'bench');
+
+    // Empty, not absent: an upgrading device has no recorded history until the
+    // seed row lands, and the diary falls back rather than showing zeros.
+    expect(await db.select(db.targetHistory).get(), isEmpty);
+    await db.close();
+  });
+
+  test('database schema matches the committed v12 snapshot', () async {
     // Creates a fresh db from SakamaDatabase's Dart definitions and diffs it
-    // against drift_schemas/drift_schema_v11.json. Fails if the code drifts
+    // against drift_schemas/drift_schema_v12.json. Fails if the code drifts
     // from the committed snapshot without a new schema version + migration.
-    final connection = await verifier.startAt(11);
+    final connection = await verifier.startAt(12);
     final db = SakamaDatabase.withExecutor(connection);
-    await verifier.migrateAndValidate(db, 11);
+    await verifier.migrateAndValidate(db, 12);
     await db.close();
   });
 

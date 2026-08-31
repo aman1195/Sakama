@@ -43,10 +43,18 @@ class HistorySummary {
   /// of seven as eating 500 kcal a day, which is both wrong and alarming. The
   /// count of logged days is reported separately so the average can be read
   /// with the right amount of trust.
+  /// [targetFor] answers what the target WAS on a given day (yyyy-MM-dd), and
+  /// returns 0 when no target is known for it.
+  ///
+  /// A per-day answer rather than one number, because this summary is what
+  /// Vita stands on when it says "you were on target N days". Scoring 28 days
+  /// with today's goal made that sentence wrong for anyone who had ever
+  /// changed it — and wrong in a way the user could not see, since the diary
+  /// beside it would eventually say something else.
   static HistorySummary from({
     required List<FoodLog> logs,
     required int windowDays,
-    required int calorieTarget,
+    required int Function(String ymd) targetFor,
     List<WeightLog> weights = const [],
   }) {
     final byDay = <String, List<FoodLog>>{};
@@ -66,12 +74,15 @@ class HistorySummary {
     final totals = byDay.values.map(DayTotals.fromLogs).toList();
     final kcal = totals.map((t) => t.calories).toList();
     final protein = totals.map((t) => t.proteinG).toList();
-    final onTarget = calorieTarget <= 0
-        ? 0
-        : kcal
-            .where((c) =>
-                c >= calorieTarget * 0.85 && c <= calorieTarget * 1.05)
-            .length;
+    // Each day against its own target. A day with no known target is skipped
+    // rather than counted as a miss: unscorable is not failure.
+    var onTarget = 0;
+    for (final day in byDay.entries) {
+      final target = targetFor(day.key);
+      if (target <= 0) continue;
+      final c = DayTotals.fromLogs(day.value).calories;
+      if (c >= target * 0.85 && c <= target * 1.05) onTarget++;
+    }
 
     double? change;
     int? weightDays;

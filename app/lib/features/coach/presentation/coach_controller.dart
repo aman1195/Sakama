@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/db/database.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../home/presentation/home_page.dart' show targetsProvider;
+import '../../onboarding/data/target_history_repository.dart';
 import '../../onboarding/domain/nutrition_targets.dart';
 import '../../onboarding/domain/profile_record.dart';
 import '../../home/domain/day_totals.dart' show Meal;
@@ -542,10 +543,17 @@ class CoachController extends Notifier<CoachState> {
       final weights = await (db.select(db.weightLogs)
             ..where((t) => t.date.isBiggerOrEqualValue(_ymdOf(from))))
           .get();
+      // Scored day by day against the target that was in force then, so Vita
+      // and the diary tell the user the same story about the same week.
+      final timeline = await (await ref
+              .read(targetHistoryRepositoryProvider.future))
+          .all();
       history = HistorySummary.from(
         logs: past,
         windowDays: historyWindowDays,
-        calorieTarget: targets?.calories ?? 0,
+        targetFor: (ymd) =>
+            TargetHistoryRepository.resolve(timeline, ymd)?.calories ??
+            (targets?.calories ?? 0),
         weights: weights,
       );
     } catch (e) {

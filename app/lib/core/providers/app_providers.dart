@@ -21,6 +21,7 @@ import '../../features/foods/data/off_repository.dart';
 import '../../features/foods/domain/barcode_result.dart';
 import '../../features/settings/data/attribution_repository.dart';
 import '../../features/onboarding/data/profile_repository.dart';
+import '../../features/onboarding/data/target_history_repository.dart';
 import '../../features/water/data/water_repository.dart';
 import '../../features/plans/data/plan_repository.dart';
 import '../../features/weight/data/weight_repository.dart';
@@ -114,6 +115,22 @@ final workoutRepositoryProvider =
     FutureProvider<WorkoutRepository>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return WorkoutRepository(db);
+});
+
+/// What the targets were, per date (A1). Synced; the diary and every trend read
+/// history through it so a changed goal never re-scores days already lived.
+final targetHistoryRepositoryProvider =
+    FutureProvider<TargetHistoryRepository>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return TargetHistoryRepository(db);
+});
+
+/// The whole (small) target timeline, live. Every row is a CHANGE, so this is
+/// a handful of rows, not one per day.
+final targetHistoryProvider =
+    StreamProvider<List<TargetHistoryRow>>((ref) async* {
+  final repo = await ref.watch(targetHistoryRepositoryProvider.future);
+  yield* repo.watchAll();
 });
 
 /// Favourites + custom foods (docs/architecture/08-user-foods.md). SYNCED, and
