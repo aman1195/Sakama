@@ -1,10 +1,10 @@
-import 'dart:convert';
 import 'dart:developer' as dev;
 
 import 'package:powersync/powersync.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../env/env.dart';
+import 'sync_failure_repository.dart';
 
 /// PowerSync <-> Supabase bridge, ported from the CC0 `supabase-todolist-drift`
 /// demo (docs/references/BY-MODULE.md). Downloads ride PowerSync's replication;
@@ -90,20 +90,19 @@ class SupabaseConnector extends PowerSyncBackendConnector {
   Future<void> _recordFailure(
       PowerSyncDatabase database, CrudEntry op, PostgrestException e) async {
     try {
-      await database.execute(
-        'INSERT INTO sync_failures '
-        '(id, target_table, op, row_id, code, message, payload, created_at) '
-        'VALUES (uuid(), ?, ?, ?, ?, ?, ?, ?)',
-        [
-          op.table,
-          op.op.name,
-          op.id,
-          e.code,
-          e.message,
-          op.opData == null ? null : jsonEncode(op.opData),
-          DateTime.now().millisecondsSinceEpoch,
-        ],
+      final stmt = SyncFailureStatement.build(
+        // PowerSync's own id for this op, so a retry of the same transaction
+        // updates its receipt instead of writing another one.
+        clientId: op.clientId,
+        table: op.table,
+        op: op.op.name,
+        rowId: op.id,
+        code: e.code,
+        message: e.message,
+        payload: op.opData,
+        at: DateTime.now().millisecondsSinceEpoch,
       );
+      await database.execute(stmt.sql, stmt.params);
     } catch (recordError) {
       dev.log('could not record dropped op: $recordError',
           name: 'sakama.sync', level: 1000);

@@ -100,4 +100,74 @@ void main() {
     expect(jsonDecode(row.payload!), sent,
         reason: 'without the payload, "3 entries failed" is only an apology');
   });
+
+  group('the recording statement', () {
+    /// THE STATEMENT THE CONNECTOR RUNS, exercised against the real schema.
+    ///
+    /// It is the one write in the system whose failure is swallowed by a catch
+    /// and logged where nobody reads. A wrong column name or a miscounted
+    /// placeholder would make the whole feature a silent no-op — the exact
+    /// shape of bug it exists to expose. The first version could not be tested
+    /// at all because it called PowerSync's SQL `uuid()`.
+    test('inserts a row that matches the columns it names', () async {
+      final stmt = SyncFailureStatement.build(
+        clientId: 42,
+        table: 'food_logs',
+        op: 'put',
+        rowId: 'row-1',
+        code: '23514',
+        message: 'violates check constraint',
+        payload: {'name': 'Butter Chicken', 'logged_via': 'recent'},
+        at: 1700,
+      );
+      await db.customStatement(stmt.sql, stmt.params);
+
+      final row = (await repo.all()).single;
+      expect(row.id, '42');
+      expect(row.targetTable, 'food_logs');
+      expect(row.op, 'put');
+      expect(row.rowId, 'row-1');
+      expect(row.code, '23514');
+      expect(row.createdAt, 1700);
+      expect(jsonDecode(row.payload!)['name'], 'Butter Chicken');
+    });
+
+    test('a retry of the same op updates its receipt instead of adding one',
+        () async {
+      // A transaction holding a poison op AND a transient failure never
+      // completes, so it retries every 30s. With a fresh uuid each time that
+      // is "121 entries didn't save" for one lost entry, and the count the
+      // user reads is the thing that goes wrong.
+      for (var i = 0; i < 5; i++) {
+        final stmt = SyncFailureStatement.build(
+          clientId: 7,
+          table: 'food_logs',
+          op: 'put',
+          rowId: 'row-1',
+          code: '23514',
+          at: 1700 + i,
+        );
+        await db.customStatement(stmt.sql, stmt.params);
+      }
+      final rows = await repo.all();
+      expect(rows.length, 1, reason: 'one lost entry is one receipt');
+      expect(rows.single.createdAt, 1704, reason: 'refreshed, not duplicated');
+    });
+
+    test('two different ops keep two receipts', () async {
+      for (final id in [1, 2]) {
+        final stmt = SyncFailureStatement.build(
+          clientId: id, table: 'food_logs', op: 'put', rowId: 'r$id', at: id);
+        await db.customStatement(stmt.sql, stmt.params);
+      }
+      expect((await repo.all()).length, 2);
+    });
+
+    test('a null payload is allowed — a delete carries no row', () async {
+      final stmt = SyncFailureStatement.build(
+        clientId: 9, table: 'food_logs', op: 'delete', rowId: 'r', at: 1);
+      await db.customStatement(stmt.sql, stmt.params);
+      expect((await repo.all()).single.payload, isNull);
+    });
+  });
 }

@@ -15,16 +15,26 @@ class SyncFailureRepository {
 
   /// Newest first — the most recent loss is the one the user is asking about.
   Stream<List<SyncFailureRow>> watchAll() =>
-      (_db.select(_db.syncFailures)
-            ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
-          .watch();
+      (_db.select(_db.syncFailures)..orderBy(_newestFirst)).watch();
 
   Future<List<SyncFailureRow>> all() =>
-      (_db.select(_db.syncFailures)
-            ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
-          .get();
+      (_db.select(_db.syncFailures)..orderBy(_newestFirst)).get();
 
-  Stream<int> watchCount() => watchAll().map((rows) => rows.length);
+  /// A COUNT, not a list mapped to its length: the count drives a badge that
+  /// re-reads on every write, and every row carries a payload.
+  Stream<int> watchCount() {
+    final c = _db.syncFailures.id.count();
+    return (_db.selectOnly(_db.syncFailures)..addColumns([c]))
+        .map((r) => r.read(c) ?? 0)
+        .watchSingle();
+  }
+
+  /// Receipts for one poison batch land in the same millisecond, so `id`
+  /// breaks the tie and the list does not reshuffle between reads.
+  static final _newestFirst = [
+    (dynamic t) => OrderingTerm.desc(t.createdAt as GeneratedColumn<int>),
+    (dynamic t) => OrderingTerm.desc(t.id as GeneratedColumn<String>),
+  ];
 
   Future<void> clear() => _db.delete(_db.syncFailures).go();
 
@@ -67,4 +77,52 @@ class SyncFailureRepository {
     }
     return null;
   }
+}
+
+/// The receipt INSERT, built as data.
+///
+/// Separate from the connector for two reasons, both learned the hard way.
+///
+/// It is TESTABLE. The connector holds a PowerSyncDatabase, and the first
+/// version called SQL `uuid()`, which only PowerSync's extension provides — so
+/// the one statement in the system whose failure is swallowed by a catch could
+/// not be exercised against a plain database at all. A wrong column name or a
+/// miscounted placeholder would have been invisible in exactly the way this
+/// feature exists to prevent.
+///
+/// It is IDEMPOTENT. The id is PowerSync's own `clientId` for the op, not a
+/// fresh uuid. A transaction holding a poison op AND then hitting a transient
+/// failure never completes, so it retries every 30 seconds and re-records the
+/// same loss forever — "121 entries didn't save" for one entry. Keyed by
+/// clientId with INSERT OR REPLACE, a retry updates the receipt it already
+/// wrote.
+class SyncFailureStatement {
+  const SyncFailureStatement(this.sql, this.params);
+  final String sql;
+  final List<Object?> params;
+
+  static const _sql = 'INSERT OR REPLACE INTO sync_failures '
+      '(id, target_table, op, row_id, code, message, payload, created_at) '
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+
+  static SyncFailureStatement build({
+    required int clientId,
+    required String table,
+    required String op,
+    required String rowId,
+    String? code,
+    String? message,
+    Map<String, dynamic>? payload,
+    required int at,
+  }) =>
+      SyncFailureStatement(_sql, [
+        clientId.toString(),
+        table,
+        op,
+        rowId,
+        code,
+        message,
+        payload == null ? null : jsonEncode(payload),
+        at,
+      ]);
 }

@@ -56,14 +56,48 @@ class SyncFailureNotice extends ConsumerWidget {
               style: TextStyle(color: scheme.onTertiaryContainer),
             ),
             trailing: Icon(Icons.chevron_right, color: scheme.onTertiaryContainer),
-            onTap: () => _show(context, ref),
+            onTap: () => _show(context),
           ),
         ),
       ),
     );
   }
 
-  void _show(BuildContext context, WidgetRef ref) {
+  /// Clearing is DESTRUCTIVE, and not obviously so.
+  ///
+  /// The row itself was reconciled off the device when the op was dropped, so
+  /// the payload on the receipt is the last copy of that entry. A button that
+  /// reads like dismissing a notification would quietly end the recovery story
+  /// this table exists for, and on a build that cannot be hotfixed. So it
+  /// confirms, and names what goes.
+  Future<void> _confirmClear(
+      BuildContext context, WidgetRef ref, int count) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear the list?'),
+        content: Text(count == 1
+            ? 'This is the only remaining copy of that entry. Clearing it '
+                'deletes it for good.'
+            : 'These are the only remaining copies of those $count entries. '
+                'Clearing them deletes them for good.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Keep')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Clear')),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    final repo = await ref.read(syncFailureRepositoryProvider.future);
+    await repo.clear();
+    if (context.mounted) Navigator.of(context).pop();
+  }
+
+  void _show(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -86,9 +120,11 @@ class SyncFailureNotice extends ConsumerWidget {
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: Sk.lg),
-                for (final r in rows)
+                for (final (i, r) in rows.indexed)
                   Semantics(
-                    identifier: 'sync-failure-${r.id}',
+                    // Positional and stable: the row id is PowerSync's op id,
+                    // which no driver or test can know in advance.
+                    identifier: 'sync-failure-$i',
                     child: SkRow(
                       icon: Icons.error_outline,
                       title: SyncFailureRepository.describe(r),
@@ -100,15 +136,12 @@ class SyncFailureNotice extends ConsumerWidget {
                     ),
                   ),
                 const SizedBox(height: Sk.lg),
-                FilledButton(
-                  key: const Key('sync-failures-clear'),
-                  onPressed: () async {
-                    final repo =
-                        await ref.read(syncFailureRepositoryProvider.future);
-                    await repo.clear();
-                    if (context.mounted) Navigator.of(context).pop();
-                  },
-                  child: const Text('Clear this list'),
+                Semantics(
+                  identifier: 'sync-failures-clear',
+                  child: FilledButton(
+                    onPressed: () => _confirmClear(context, ref, rows.length),
+                    child: const Text('Clear this list'),
+                  ),
                 ),
               ],
             ),

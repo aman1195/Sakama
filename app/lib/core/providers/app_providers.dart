@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -59,19 +60,31 @@ final authServiceProvider = Provider<AuthService>((ref) {
   // Local-only conversations are outside PowerSync's clear, so they are dropped
   // explicitly on a CONFIRMED identity change (docs/architecture/06 §2a).
   auth.onIdentityChanged = () async {
+    // EACH CLEAR IS GUARDED SEPARATELY. They are all wipes of the departing
+    // user's health data, and a sequential chain means one throw strands
+    // everything after it in the next user's session — the receipts most of
+    // all, since they are last and carry row payloads.
+    Future<void> wipe(String what, Future<void> Function() go) async {
+      try {
+        await go();
+      } catch (e) {
+        debugPrint('identity change: could not clear $what: $e');
+      }
+    }
+
     final repo = await ref.read(chatRepositoryProvider.future);
-    await repo.deleteAll();
+    await wipe('conversations', repo.deleteAll);
     // Memory is DISTILLED health data — the most sensitive thing on the
     // device — so it must be dropped on the same signal. Blanket, not
     // user-scoped: at identity-change time the departing uid is precisely what
     // has just gone away, so forgetAll(oldId) would leave rows behind in
     // exactly the case this exists to handle (review of #106).
     final memory = await ref.read(memoryRepositoryProvider.future);
-    await memory.deleteAll();
+    await wipe('memory', memory.deleteAll);
     // Receipts carry the payload of the row that failed, so they hold health
     // data and follow the same rule as the conversations and the memory.
     final failures = await ref.read(syncFailureRepositoryProvider.future);
-    await failures.clear();
+    await wipe('sync receipts', failures.clear);
   };
   return auth;
 });
