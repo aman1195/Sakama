@@ -34,6 +34,7 @@ import '../auth/auth_service.dart';
 import '../config/remote_config.dart';
 import '../config/remote_config_service.dart';
 import '../db/database.dart';
+import '../sync/sync_failure_repository.dart';
 import '../sync/sync_service.dart';
 
 /// Singleton sync service; owns the database and the replication lifecycle.
@@ -67,6 +68,10 @@ final authServiceProvider = Provider<AuthService>((ref) {
     // exactly the case this exists to handle (review of #106).
     final memory = await ref.read(memoryRepositoryProvider.future);
     await memory.deleteAll();
+    // Receipts carry the payload of the row that failed, so they hold health
+    // data and follow the same rule as the conversations and the memory.
+    final failures = await ref.read(syncFailureRepositoryProvider.future);
+    await failures.clear();
   };
   return auth;
 });
@@ -115,6 +120,26 @@ final workoutRepositoryProvider =
     FutureProvider<WorkoutRepository>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return WorkoutRepository(db);
+});
+
+/// Receipts for writes the server refused (#148 follow-up). Local-only.
+final syncFailureRepositoryProvider =
+    FutureProvider<SyncFailureRepository>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return SyncFailureRepository(db);
+});
+
+/// How many writes were discarded, live. Drives the only honest thing the app
+/// can do about silent loss: say it happened.
+final syncFailureCountProvider = StreamProvider<int>((ref) async* {
+  final repo = await ref.watch(syncFailureRepositoryProvider.future);
+  yield* repo.watchCount();
+});
+
+final syncFailuresProvider =
+    StreamProvider<List<SyncFailureRow>>((ref) async* {
+  final repo = await ref.watch(syncFailureRepositoryProvider.future);
+  yield* repo.watchAll();
 });
 
 /// What the targets were, per date (A1). Synced; the diary and every trend read

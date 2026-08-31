@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:developer' as dev;
 
 import 'package:powersync/powersync.dart';
@@ -53,8 +54,19 @@ class SupabaseConnector extends PowerSyncBackendConnector {
         }
       } on PostgrestException catch (e) {
         if (e.code != null && _fatal.hasMatch(e.code!)) {
-          // Never silent: a dropped health-data write must be diagnosable.
-          // TODO(observability): count these once analytics exists (no PII).
+          // NEVER SILENT — and a log line is not enough.
+          //
+          // Dropping the op is right (retrying forever wedges the queue), but
+          // on its own it made data loss invisible: the local write succeeded,
+          // the UI said so, the op was discarded, and the next checkpoint
+          // reconciled the row away. Three weeks of meals went that way before
+          // a human noticed (#148), because `dev.log` reaches nobody in a
+          // release build.
+          //
+          // So the receipt is PERSISTED, with the payload, which is what makes
+          // the loss visible in the UI and the row recoverable once the cause
+          // is fixed.
+          await _recordFailure(database, op, e);
           dev.log(
             'dropping poison op ${op.op.name} ${op.table}/${op.id}: '
             '${e.code} ${e.message}',
@@ -67,5 +79,34 @@ class SupabaseConnector extends PowerSyncBackendConnector {
       }
     }
     await tx.complete();
+  }
+
+  /// Persist a receipt for an op we are about to throw away.
+  ///
+  /// Guarded, and deliberately: this runs while handling a failure, and a
+  /// failure to record a failure must not take down the upload loop or mask
+  /// the original error. Losing the receipt is bad; losing the rest of the
+  /// transaction because bookkeeping threw would be worse.
+  Future<void> _recordFailure(
+      PowerSyncDatabase database, CrudEntry op, PostgrestException e) async {
+    try {
+      await database.execute(
+        'INSERT INTO sync_failures '
+        '(id, target_table, op, row_id, code, message, payload, created_at) '
+        'VALUES (uuid(), ?, ?, ?, ?, ?, ?, ?)',
+        [
+          op.table,
+          op.op.name,
+          op.id,
+          e.code,
+          e.message,
+          op.opData == null ? null : jsonEncode(op.opData),
+          DateTime.now().millisecondsSinceEpoch,
+        ],
+      );
+    } catch (recordError) {
+      dev.log('could not record dropped op: $recordError',
+          name: 'sakama.sync', level: 1000);
+    }
   }
 }
