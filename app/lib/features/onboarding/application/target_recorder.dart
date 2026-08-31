@@ -23,11 +23,10 @@ class TargetRecorder extends ConsumerStatefulWidget {
   final Widget child;
 
   @override
-  ConsumerState<TargetRecorder> createState() => TargetRecorderState();
+  ConsumerState<TargetRecorder> createState() => _TargetRecorderState();
 }
 
-@visibleForTesting
-class TargetRecorderState extends ConsumerState<TargetRecorder> {
+class _TargetRecorderState extends ConsumerState<TargetRecorder> {
   /// Passes run one at a time, in order.
   ///
   /// A date rollover that also changes the plan's day type fires both
@@ -37,10 +36,6 @@ class TargetRecorderState extends ConsumerState<TargetRecorder> {
   /// rather than dropped: a dropped pass could be the one carrying a real
   /// change.
   Future<void> _queue = Future.value();
-
-  /// Completes when every queued pass has run. Test seam only.
-  @visibleForTesting
-  Future<void> get settled => _queue;
 
   @override
   void initState() {

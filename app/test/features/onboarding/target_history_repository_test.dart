@@ -230,4 +230,35 @@ void main() {
           reason: 'and it does not depend on the order rows arrive in');
     });
   });
+
+  group('cross-device convergence', () {
+    test('the id for a date is derived, so two devices write the SAME row',
+        () async {
+      // With a random uuid they write two rows. Both reach the server, the
+      // second violates unique (user_id, date) with a 23505 — which IS in the
+      // connector's fatal set — so it is dropped and stays local forever. That
+      // device then holds a ghost plus the winner's row and can resolve the day
+      // differently from the other device, permanently.
+      expect(
+        TargetHistoryRepository.idFor(userId: 'u1', date: '2026-08-31'),
+        TargetHistoryRepository.idFor(userId: 'u1', date: '2026-08-31'),
+      );
+      await repo.recordIfChanged(
+          date: '2026-08-31', targets: t1900, userId: 'u1');
+      expect((await repo.all()).single.id,
+          TargetHistoryRepository.idFor(userId: 'u1', date: '2026-08-31'));
+    });
+
+    test('different users never share an id', () {
+      // `id` is the PRIMARY KEY server-side, so it is global: keying on date
+      // alone would collide across accounts.
+      expect(TargetHistoryRepository.idFor(userId: 'u1', date: '2026-08-31'),
+          isNot(TargetHistoryRepository.idFor(userId: 'u2', date: '2026-08-31')));
+    });
+
+    test('different dates never share an id', () {
+      expect(TargetHistoryRepository.idFor(userId: 'u1', date: '2026-08-30'),
+          isNot(TargetHistoryRepository.idFor(userId: 'u1', date: '2026-08-31')));
+    });
+  });
 }

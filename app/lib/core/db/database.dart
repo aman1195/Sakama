@@ -572,9 +572,9 @@ class SakamaDatabase extends _$SakamaDatabase {
             }
             if (from < 12) {
               // What the targets WERE, per date (A1). Additive — no existing
-              // row is touched, and an empty table simply means history falls
-              // back to today's targets exactly as it did before, until the
-              // seed row lands.
+              // row is touched. Empty until the recorder's first pass, and a
+              // day with no row is scored against nothing rather than against
+              // today's target.
               await m.createTable(targetHistory);
             }
           },

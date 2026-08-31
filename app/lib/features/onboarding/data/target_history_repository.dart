@@ -1,5 +1,4 @@
 import 'package:drift/drift.dart';
-import 'package:powersync/powersync.dart' show uuid;
 
 import '../../../core/db/database.dart';
 import '../domain/nutrition_targets.dart';
@@ -183,6 +182,28 @@ class TargetHistoryRepository {
     });
   }
 
+  /// The id for a date, DERIVED rather than random.
+  ///
+  /// Two devices that write the same date must produce the same id. With a
+  /// random uuid they do not: both rows reach the server, the second violates
+  /// the unique (user_id, date) index with a 23505, and that code IS in the
+  /// connector's fatal set — so the op is discarded and, as its comment says,
+  /// "the row stays locally". That device then holds two rows for one date
+  /// (its own ghost plus the winner's) and resolves the day to whichever is
+  /// newer, while the other device resolves it to the winner. Two devices, two
+  /// verdicts on the same past week, permanently, curable only by reinstall —
+  /// precisely the divergence this table exists to prevent.
+  ///
+  /// Derived, the same write from both devices is the same row, and the
+  /// connector's upsert-on-id makes the second one a harmless last-write-wins.
+  ///
+  /// The user id is part of the key because `id` is the PRIMARY KEY server-side
+  /// and is therefore global: date alone would collide across accounts. The
+  /// pre-auth `local:` form never reaches the server anyway (a null user_id
+  /// cannot satisfy the not-null column), so it cannot collide there.
+  static String idFor({String? userId, required String date}) =>
+      '${userId ?? 'local'}:$date';
+
   Future<void> _insert({
     required String date,
     required NutritionTargets targets,
@@ -192,7 +213,7 @@ class TargetHistoryRepository {
     // Read the clock ONCE: created_at and updated_at describe the same event.
     final at = _now;
     await _db.into(_db.targetHistory).insert(TargetHistoryCompanion.insert(
-          id: uuid.v4(),
+          id: idFor(userId: userId, date: date),
           userId: Value(userId),
           date: date,
           calories: targets.calories,

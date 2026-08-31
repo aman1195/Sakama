@@ -466,7 +466,8 @@ void main() {
     expect((await db.select(db.workouts).getSingle()).name, 'bench');
 
     // Empty, not absent: an upgrading device has no recorded history until the
-    // seed row lands, and the diary falls back rather than showing zeros.
+    // recorder's first pass backfills it, and until then its days are
+    // unscorable rather than scored against the wrong number.
     expect(await db.select(db.targetHistory).get(), isEmpty);
     await db.close();
   });

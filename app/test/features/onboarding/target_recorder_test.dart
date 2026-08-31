@@ -92,7 +92,7 @@ void main() {
         reason: 'and that day must resolve to a real number, not null');
   });
 
-  test('the backfill runs BEFORE the row for today, not after', () async {
+  test('one pass covers both the oldest logged day and today', () async {
     await FoodLogRepository(db).add(
         date: '2026-07-02', meal: 'lunch', name: 'dal', grams: 200,
         energyKcal: 180, proteinG: 9, carbG: 22, fatG: 6);
