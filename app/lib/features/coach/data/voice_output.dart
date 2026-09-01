@@ -117,9 +117,12 @@ class EmbeddedVoicePolicy {
   }
 }
 
-/// [SpeechSynthesizer] over `flutter_tts` (MIT, rule 4 — verified from the
-/// package's own LICENSE, including that the grant still carries "sell", which
-/// is the clause Best-Flutter-UI-Templates deletes).
+/// [SpeechSynthesizer] over `flutter_tts` (MIT, rule 4).
+///
+/// Licence read from the package's own LICENSE rather than the pub.dev badge,
+/// and specifically checked for the right to SELL. A permissive-looking grant
+/// with that one right removed is the known trap this project has a named
+/// entry for in CLAUDE.md rule 4; flutter_tts keeps it.
 class PluginSpeechSynthesizer implements SpeechSynthesizer {
   PluginSpeechSynthesizer({FlutterTts? tts}) : _tts = tts ?? FlutterTts();
   final FlutterTts _tts;
