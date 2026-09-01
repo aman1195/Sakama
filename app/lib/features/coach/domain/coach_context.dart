@@ -20,6 +20,7 @@ class CoachContext {
     required List<FoodLog> todayLogs,
     required DateTime now,
     PlanDay? planDay,
+    bool planTargetsOverridden = false,
     List<String> favouriteFoods = const [],
     List<({String kind, String content})> memories = const [],
     HistorySummary? history,
@@ -44,6 +45,15 @@ class CoachContext {
     // overlays it); this adds the qualitative rules the numbers can't carry.
     if (planDay != null) {
       b.writeln('Active plan today: ${planDay.label}.');
+      // Say it, or the model reconciles the gap itself. It is told the plan and
+      // then handed a target that is not the plan's, and the likeliest way to
+      // make those agree is to coach toward the number that was refused for
+      // being unsafe.
+      if (planTargetsOverridden) {
+        b.writeln("This plan day's calorie target was below a safe minimum, so "
+            'it is NOT in force: the numbers below are the safe computed '
+            'targets. Do not coach toward the plan\'s lower number.');
+      }
       final w = planDay.fastingWindow;
       if (w != null) {
         final eating = w.isEatingAt(now.hour * 60 + now.minute);

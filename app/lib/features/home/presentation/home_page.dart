@@ -26,16 +26,38 @@ String _ymd(DateTime d) =>
 /// link in the plan engine's day type → targets_default → computed chain).
 /// Null only if there is no profile (the gate makes that unreachable in the
 /// shell, but handle it).
+/// True when an active plan day prescribes below the clinical calorie floor, so
+/// its NUMBERS are not in force today.
+///
+/// Separate and public because the override must be VISIBLE. Its rules — the
+/// eating window, the foods to avoid, the checklist — still apply, so without
+/// this the screen contradicts itself: the plan says "clear soup only" while
+/// the ring is scored against a full maintenance target, and nothing explains
+/// why. This is not a rare shape; the canonical example plan in
+/// docs/architecture/04-plan-engine.md has a 1200 kcal reset day, which is
+/// below the 1500 floor for men.
+///
+/// [targetsProvider] is derived from this, so the two cannot drift apart.
+final planTargetsOverriddenProvider = Provider<bool>((ref) {
+  final profile = ref.watch(profileProvider).value;
+  final planDay = ref.watch(activePlanDayProvider);
+  if (profile == null || planDay == null) return false;
+  final input = profile.toCalculatorInput(DateTime.now());
+  return planDay.targets.violatesCalorieFloor(
+      const TargetCalculator().targets(input),
+      TargetCalculator.calorieFloor(input.sex));
+});
+
 final targetsProvider = Provider<NutritionTargets?>((ref) {
   final profile = ref.watch(profileProvider).value;
   if (profile == null) return null;
-  final input = profile.toCalculatorInput(DateTime.now());
-  final computed = const TargetCalculator().targets(input);
+  final computed =
+      const TargetCalculator().targets(profile.toCalculatorInput(DateTime.now()));
   final planDay = ref.watch(activePlanDayProvider);
   if (planDay == null) return computed;
 
-  // A plan day that prescribes below the clinical floor is NOT honoured, and
-  // the computed default stands for the whole day.
+  // A plan day that prescribes below the clinical floor does not set today's
+  // numbers; the computed default does.
   //
   // Wholesale rather than clamping the calories alone: the plan's macros were
   // sized for the unsafe number, so raising only the energy would leave protein
@@ -46,10 +68,7 @@ final targetsProvider = Provider<NutritionTargets?>((ref) {
   // scored against, which is why the check lives here rather than at ingest:
   // it also covers plans already stored on the device and plans arriving from
   // another device, neither of which passes through generation again.
-  if (planDay.targets
-      .violatesCalorieFloor(computed, TargetCalculator.calorieFloor(input.sex))) {
-    return computed;
-  }
+  if (ref.watch(planTargetsOverriddenProvider)) return computed;
   return planDay.targets.toNutritionTargets(computed);
 });
 

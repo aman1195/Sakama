@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/providers/app_providers.dart';
+import '../../onboarding/domain/target_calculator.dart';
 import '../application/plan_providers.dart';
 import '../domain/plan.dart';
 
@@ -151,13 +153,24 @@ class _Header extends StatelessWidget {
       };
 }
 
-class _TargetsCard extends StatelessWidget {
+class _TargetsCard extends ConsumerWidget {
   const _TargetsCard({required this.title, required this.targets});
   final String title;
   final PlanTargets targets;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // A stated target below the clinical floor is never applied for this user
+    // (targetsProvider refuses it), so showing the number bare would tell them
+    // they are on 900 kcal when they are not. Reads the profile here rather
+    // than taking it as a parameter so both call sites are covered by one rule.
+    final profile = ref.watch(profileProvider).value;
+    final belowFloor = profile != null &&
+        targets.calories != null &&
+        targets.calories! <
+            TargetCalculator.calorieFloor(
+                profile.toCalculatorInput(DateTime.now()).sex);
+
     final rows = <(String, int?)>[
       ('Calories', targets.calories),
       ('Protein', targets.proteinG),
@@ -182,6 +195,18 @@ class _TargetsCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(title, style: Theme.of(context).textTheme.titleSmall),
+            if (belowFloor) ...[
+              const SizedBox(height: 6),
+              Semantics(
+                identifier: 'plan-target-below-floor',
+                child: Text(
+                  'Below a safe minimum, so this is not applied — your usual '
+                  'target is used on these days.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+            ],
             const SizedBox(height: 8),
             for (final (label, value) in rows)
               if (value != null)

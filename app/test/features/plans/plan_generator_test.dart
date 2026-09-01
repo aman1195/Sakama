@@ -89,6 +89,38 @@ void main() {
     });
   });
 
+  /// The mapping from a gateway failure to the exception the UI words.
+  ///
+  /// Extracted from `fetchRaw` because inline it was reachable by NO test: the
+  /// generator's own tests override `fetchRaw` wholesale to stay off the
+  /// network, so deleting the branch reddened nothing.
+  group('gatewayFailure', () {
+    test('a spent cap is reported as the cap, not as a fault', () {
+      final e = gatewayFailure(429, '{"error":"budget_exhausted"}');
+      expect(e.budgetExhausted, isTrue);
+      expect(e.unsafePlan, isFalse);
+    });
+
+    test('a safety refusal is flagged as one', () {
+      final e = gatewayFailure(502, '{"error":"unsafe_plan"}');
+      expect(e.unsafePlan, isTrue);
+      expect(e.budgetExhausted, isFalse);
+    });
+
+    test('an ordinary gateway failure is neither', () {
+      final e = gatewayFailure(502, '{"error":"provider_error"}');
+      expect(e.unsafePlan, isFalse);
+      expect(e.budgetExhausted, isFalse);
+    });
+
+    test('the cap wins over a safety refusal in the same response', () {
+      // Whatever else went wrong, the user cannot generate again today, and
+      // "try a less aggressive goal" would send them at a locked door.
+      final e = gatewayFailure(429, '{"error":"unsafe_plan"}');
+      expect(e.budgetExhausted, isTrue);
+    });
+  });
+
   /// The gateway refuses a generated plan below the clinical calorie floor.
   /// Reading that refusal correctly is what separates "adjust your goal" from
   /// "try again in a minute", and the body's shape is not guaranteed.

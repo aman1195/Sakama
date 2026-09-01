@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sakama/core/db/database.dart';
 import 'package:sakama/core/providers/app_providers.dart';
+import 'package:sakama/features/onboarding/domain/enums.dart';
+import 'package:sakama/features/onboarding/domain/profile_record.dart';
 import 'package:sakama/features/plans/presentation/plan_detail_page.dart';
 
 /// A plan exercising every rendered section: default targets, a day type with
@@ -178,5 +180,56 @@ void main() {
 
     expect(find.textContaining('no longer saved'), findsOneWidget);
     await _dispose(tester);
+  });
+
+  /// The 'reset' day above states 1200 kcal — the same number as the canonical
+  /// example plan in docs/architecture/04-plan-engine.md, and below the 1500
+  /// floor for men. Rendering it bare tells a user they are on 1200 when
+  /// targetsProvider will refuse it.
+  group('a day type below the floor is marked as not applied', () {
+    ProfileRecord profileFor(Sex sex) => ProfileRecord(
+        dob: DateTime(1994), weightKg: 70, heightCm: 175, sex: sex,
+        activity: ActivityLevel.moderate, goal: Goal.maintain,
+        diet: DietPreference.veg, cuisine: CuisinePreference.both,
+        onboardingComplete: true);
+
+    Future<void> mountWith(WidgetTester tester, SakamaDatabase db, Sex sex) async {
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          databaseProvider.overrideWith((ref) async => db),
+          profileProvider.overrideWith((ref) => Stream.value(profileFor(sex))),
+        ],
+        child: const MaterialApp(home: PlanDetailPage(planId: 'plan-1')),
+      ));
+      await _pumpFrames(tester);
+    }
+
+    testWidgets('marked for a man, whose floor is 1500', (tester) async {
+      final db = SakamaDatabase.withExecutor(NativeDatabase.memory());
+      addTearDown(db.close);
+      await _seed(tester, db);
+      await mountWith(tester, db, Sex.male);
+
+      expect(find.bySemanticsIdentifier('plan-target-below-floor'),
+          findsOneWidget);
+      expect(find.textContaining('not applied'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 50));
+    });
+
+    testWidgets('not marked at exactly the floor', (tester) async {
+      // 1200 is the floor for women, so the same plan is honoured and marking
+      // it would be a false alarm on a legitimate plan.
+      final db = SakamaDatabase.withExecutor(NativeDatabase.memory());
+      addTearDown(db.close);
+      await _seed(tester, db);
+      await mountWith(tester, db, Sex.female);
+
+      expect(find.bySemanticsIdentifier('plan-target-below-floor'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 50));
+    });
   });
 }
