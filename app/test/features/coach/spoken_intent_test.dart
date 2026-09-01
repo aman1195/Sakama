@@ -118,4 +118,54 @@ void main() {
       expect(of('one two three four five'), SpokenIntent.unrecognised);
     });
   });
+
+  /// The decision the widget dispatches on. Extracted so the branch that turns
+  /// speech into a health-diary WRITE is reachable by a test at all.
+  group('actionForDictation', () {
+    DictationAction act(String text, {bool pending = true}) =>
+        actionForDictation(text: text, hasPendingDraft: pending);
+
+    test('with nothing pending, even "yes" is just dictation', () {
+      // No card is asking a question, so there is nothing to agree to.
+      expect(act('yes', pending: false), DictationAction.fillComposer);
+      expect(act('no', pending: false), DictationAction.fillComposer);
+    });
+
+    test('a clear yes to a pending proposal confirms it', () {
+      expect(act('yes'), DictationAction.confirmDraft);
+      expect(act('log it'), DictationAction.confirmDraft);
+      expect(act('haan'), DictationAction.confirmDraft);
+    });
+
+    test('a clear no discards it', () {
+      expect(act('no'), DictationAction.dismissDraft);
+      expect(act('nahi'), DictationAction.dismissDraft);
+    });
+
+    test('anything else leaves the proposal standing', () {
+      // The proposal is NOT dismissed here — the user gets to see it and the
+      // words go to the composer, so nothing is lost either way.
+      for (final s in [
+        'yes but it was two rotis',
+        'no I had two rotis not three',
+        'how many calories is that',
+        'two rotis and dal',
+        '',
+      ]) {
+        expect(act(s), DictationAction.fillComposer, reason: '"$s"');
+      }
+    });
+
+    test('nothing except an unmistakable yes can reach the write', () {
+      // The property that matters, stated once: sweep a spread of realistic
+      // utterances and assert none of the ambiguous ones confirms.
+      const risky = [
+        'yes no', 'no yes', 'yeah actually no', 'yesterday', 'eyes',
+        'yes I think so maybe', 'ok but change it', 'not yet', 'wrong',
+      ];
+      for (final s in risky) {
+        expect(act(s), isNot(DictationAction.confirmDraft), reason: '"$s"');
+      }
+    });
+  });
 }

@@ -30,6 +30,41 @@ enum SpokenIntent {
   unrecognised,
 }
 
+/// What the app should DO with a finished dictation.
+///
+/// Separate from [SpokenIntent] because the same words mean different things
+/// depending on whether a proposal is on screen: with nothing pending, "yes"
+/// is just a word to put in the composer.
+enum DictationAction {
+  /// Write the pending draft.
+  confirmDraft,
+
+  /// Discard it.
+  dismissDraft,
+
+  /// Put the words in the composer, unsent, for the user to send or edit.
+  fillComposer,
+}
+
+/// Decide what a dictation result does.
+///
+/// PURE AND PUBLIC so it is testable. Left inside the widget, the branch that
+/// turns speech into a health-diary WRITE would be reachable by no test — the
+/// same absence that let an unreachable error message ship in #151.
+DictationAction actionForDictation({
+  required String text,
+  required bool hasPendingDraft,
+}) {
+  if (!hasPendingDraft) return DictationAction.fillComposer;
+  return switch (classifySpokenReply(text)) {
+    SpokenIntent.confirm => DictationAction.confirmDraft,
+    SpokenIntent.dismiss => DictationAction.dismissDraft,
+    // Not an answer. The proposal stays up and the words become dictation, so
+    // a misheard word costs a tap rather than a wrong entry.
+    SpokenIntent.unrecognised => DictationAction.fillComposer,
+  };
+}
+
 /// Words that mean yes, in the English and Hindi an Indian user actually
 /// speaks to a phone. Romanised Hindi because that is what a speech engine set
 /// to en-IN returns.
