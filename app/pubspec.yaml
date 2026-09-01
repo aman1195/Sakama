@@ -54,6 +54,9 @@ dependencies:
   image_picker: ^1.2.3
   flutter_secure_storage: ^11.0.0
   speech_to_text: ^7.3.0
+  # Speaking Vita's replies (A5). MIT — verified from the package LICENSE,
+  # grant retains "sell". On-device enforcement lives in voice_output.dart.
+  flutter_tts: ^4.2.5
 
 dev_dependencies:
   flutter_test:
