@@ -35,6 +35,19 @@ class PlanGenerationException implements Exception {
   String toString() => 'PlanGenerationException: $message';
 }
 
+/// Did the gateway refuse this plan on safety grounds?
+///
+/// The error body arrives as untyped JSON — a decoded map on one path, a raw
+/// string on another, depending on how the response parsed. Read it defensively
+/// and default to false: mistaking an ordinary outage for a safety refusal
+/// would tell the user to change their goal when they should just retry.
+bool describesUnsafePlan(Object? details) {
+  if (details == null) return false;
+  final error = details is Map ? details['error'] : null;
+  if (error is String) return error == 'unsafe_plan';
+  return details is String && details.contains('unsafe_plan');
+}
+
 /// Turns an onboarded profile into a validated plan. Injectable so tests never
 /// touch the network and the UI can be built before the gateway is deployed
 /// (mirrors [AiEstimator]).
@@ -96,6 +109,15 @@ class EdgeFunctionPlanGenerator implements PlanGenerator {
       if (e.status == 429) {
         throw PlanGenerationException('daily limit reached',
             budgetExhausted: true);
+      }
+      // The gateway refuses a generated plan that prescribes below the clinical
+      // calorie floor. That is a decision we made, not a fault — saying
+      // "gateway error 502" would blame the network for it and invite a retry
+      // that has no better chance of succeeding.
+      if (describesUnsafePlan(e.details)) {
+        throw PlanGenerationException(
+            "that plan came back with an unsafely low calorie target, so it "
+            "wasn't used. Try again, or adjust your goal.");
       }
       throw PlanGenerationException('gateway error ${e.status}');
     } catch (e) {

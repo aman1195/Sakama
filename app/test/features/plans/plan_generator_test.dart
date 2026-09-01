@@ -88,4 +88,28 @@ void main() {
       expect(g.calls, 1);
     });
   });
+
+  /// The gateway refuses a generated plan below the clinical calorie floor.
+  /// Reading that refusal correctly is what separates "adjust your goal" from
+  /// "try again in a minute", and the body's shape is not guaranteed.
+  group('describesUnsafePlan', () {
+    test('recognises the refusal as a decoded map', () {
+      expect(describesUnsafePlan({'error': 'unsafe_plan'}), isTrue);
+    });
+
+    test('recognises it as a raw JSON string', () {
+      expect(describesUnsafePlan('{"error":"unsafe_plan"}'), isTrue);
+    });
+
+    test('an ordinary outage is NOT read as a safety refusal', () {
+      // Getting this wrong tells a user to change their goal when the real
+      // answer is to retry in a minute.
+      expect(describesUnsafePlan({'error': 'provider_error'}), isFalse);
+      expect(describesUnsafePlan('{"error":"provider_error"}'), isFalse);
+      expect(describesUnsafePlan(null), isFalse);
+      expect(describesUnsafePlan(''), isFalse);
+      expect(describesUnsafePlan(const <String, dynamic>{}), isFalse);
+      expect(describesUnsafePlan(42), isFalse);
+    });
+  });
 }

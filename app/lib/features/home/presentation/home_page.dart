@@ -29,12 +29,28 @@ String _ymd(DateTime d) =>
 final targetsProvider = Provider<NutritionTargets?>((ref) {
   final profile = ref.watch(profileProvider).value;
   if (profile == null) return null;
-  final computed =
-      const TargetCalculator().targets(profile.toCalculatorInput(DateTime.now()));
+  final input = profile.toCalculatorInput(DateTime.now());
+  final computed = const TargetCalculator().targets(input);
   final planDay = ref.watch(activePlanDayProvider);
-  return planDay == null
-      ? computed
-      : planDay.targets.toNutritionTargets(computed);
+  if (planDay == null) return computed;
+
+  // A plan day that prescribes below the clinical floor is NOT honoured, and
+  // the computed default stands for the whole day.
+  //
+  // Wholesale rather than clamping the calories alone: the plan's macros were
+  // sized for the unsafe number, so raising only the energy would leave protein
+  // + carb + fat summing to less than the ring is scored against. The computed
+  // set is internally consistent and always above the floor.
+  //
+  // This is the only place plan targets become the numbers a user is shown and
+  // scored against, which is why the check lives here rather than at ingest:
+  // it also covers plans already stored on the device and plans arriving from
+  // another device, neither of which passes through generation again.
+  if (planDay.targets
+      .violatesCalorieFloor(computed, TargetCalculator.calorieFloor(input.sex))) {
+    return computed;
+  }
+  return planDay.targets.toNutritionTargets(computed);
 });
 
 /// Today's food logs, live. The date comes from [currentDateProvider], so the

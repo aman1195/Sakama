@@ -74,9 +74,25 @@ class PlanTargets {
         waterMl: waterMl ?? base.waterMl,
       );
 
+  /// Would honouring these targets ask the user to eat less than is safe?
+  ///
+  /// A plan overrides the computed target wholesale, and plans are DATA (ADR
+  /// 0007): written by a model in `generate-plan`, synced from another device,
+  /// or seeded. The generator's system prompt asks for "never below ~1200
+  /// kcal", but a prompt is a request, not a constraint — nothing rejected a
+  /// plan that ignored it, and nothing on this side re-checked. So the safety
+  /// floor in [TargetCalculator] guarded the path that computes a target and
+  /// none of the paths that replace one.
+  ///
+  /// [floor] is sex-aware, so it is stricter than the number in the prompt.
+  bool violatesCalorieFloor(NutritionTargets fallback, int floor) =>
+      (calories ?? fallback.calories) < floor;
+
   /// Complete these targets into concrete [NutritionTargets], filling any field
   /// still null from [fallback] (the computed maintenance default). This is the
   /// last link in the fallback chain: day type → targets_default → computed.
+  ///
+  /// Callers that show these to a user must check [violatesCalorieFloor] first.
   NutritionTargets toNutritionTargets(NutritionTargets fallback) =>
       NutritionTargets(
         calories: calories ?? fallback.calories,

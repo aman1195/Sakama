@@ -18,6 +18,20 @@ class TargetCalculator {
   static const _calorieFloorMale = 1500;
   static const _calorieFloorFemaleOther = 1200;
 
+  /// The floor as a rule anyone can apply, not just this calculator.
+  ///
+  /// PUBLIC ON PURPOSE. The deficit math below is not the only thing that can
+  /// set a daily calorie target: an active plan's day type overrides it wholesale
+  /// (`PlanTargets.toNutritionTargets`), and plans are JSON — written by a model
+  /// in `generate-plan`, or synced from another device, or seeded. Until this was
+  /// callable from outside, the floor guarded the one path that never needed
+  /// guarding and none of the paths that did.
+  ///
+  /// The server prompt asks a model for "never below ~1200 kcal". That is a
+  /// request, not a guarantee, and it is not the sex-aware number used here.
+  static int calorieFloor(Sex sex) =>
+      sex == Sex.male ? _calorieFloorMale : _calorieFloorFemaleOther;
+
   /// Basal metabolic rate — Mifflin–St Jeor (1990), the modern standard
   /// (~5% error). weight kg, height cm, age years:
   ///   BMR = 10·kg + 6.25·cm − 5·age + sexConstant
@@ -31,9 +45,8 @@ class TargetCalculator {
   /// Goal-adjusted daily calorie target, rounded to 10, with a sex-aware floor.
   int calorieTarget(Profile p) {
     final adjusted = tdee(p) * (1 + p.goal.calorieDelta);
-    final floor = p.sex == Sex.male ? _calorieFloorMale : _calorieFloorFemaleOther;
     final rounded = (adjusted / 10).round() * 10;
-    return math.max(rounded, floor);
+    return math.max(rounded, calorieFloor(p.sex));
   }
 
   /// Protein is anchored to BODY WEIGHT (g per kg), not to a % of the calorie
