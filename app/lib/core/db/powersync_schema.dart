@@ -150,6 +150,19 @@ const powersyncSchema = Schema([
     Column.integer('synthetic'), // bool as 0/1
     Column.integer('created_at'),
   ]),
+  // Receipts for writes the server refused (#148 follow-up). LOCAL-ONLY: it
+  // holds fragments of health data, and a diagnostic table is the last thing
+  // that should be shipped to a server. Writing to a local-only table produces
+  // no crud op, so recording a failure cannot itself fail to upload.
+  Table.localOnly('sync_failures', [
+    Column.text('target_table'),
+    Column.text('op'),
+    Column.text('row_id'),
+    Column.text('code'),
+    Column.text('message'),
+    Column.text('payload'),
+    Column.integer('created_at'),
+  ]),
   // Reference tables — LOCAL-ONLY: real SQLite tables PowerSync creates but
   // never syncs and never routes through the upload queue. They hold shipped
   // reference data, not per-user data, so there is no Supabase mirror and no

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/kit/kit.dart';
 import '../../../core/providers/app_providers.dart';
+import 'sync_failure_notice.dart';
 import '../../weight/presentation/weight_section.dart';
 import 'account_section.dart';
 
@@ -21,6 +22,11 @@ class MePage extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(Sk.lg, 0, Sk.lg, Sk.xxl),
           children: [
             const SkTitle('You'),
+            // ONLY when there is something to report. A permanent "sync is
+            // fine" row would be noise; this appears because something the
+            // user did was thrown away, and saying so is the least the app
+            // owes them (#148).
+            const SyncFailureNotice(),
             const WeightSection(),
             const SkSection('Settings'),
             // ONE grouped card instead of five floating ones (SAK-126).

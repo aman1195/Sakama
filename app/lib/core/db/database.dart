@@ -448,10 +448,54 @@ class OffFoods extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// Writes the server refused, kept so they are not lost in silence.
+///
+/// The upload path discards an op the server can never accept — a constraint
+/// violation, an RLS refusal — because retrying it forever would wedge the
+/// queue behind a poison message. That is the right call, and on its own it
+/// made data loss INVISIBLE: the local insert succeeded, the UI said "Logged
+/// X", the op was dropped, and the next sync checkpoint reconciled the row out
+/// of existence. Three weeks of meals went that way before anyone noticed
+/// (#148).
+///
+/// So every discarded op is recorded here first, WITH ITS PAYLOAD, which makes
+/// the loss visible in the UI and the entry recoverable once the cause is
+/// fixed. A row is a receipt for something the user did that the system threw
+/// away.
+///
+/// LOCAL-ONLY, and deliberately: it holds fragments of health data, and a
+/// diagnostic table is the last thing that should be shipped to a server. It
+/// is dropped on identity change alongside the conversations and memory.
+@DataClassName('SyncFailureRow')
+class SyncFailures extends Table {
+  TextColumn get id => text()();
+
+  /// Which table the write was for, and what kind of write.
+  ///
+  /// NOT `table_name`: Drift's own [Table.tableName] member collides with a
+  /// column of that name, in the generated schema snapshots as well as here.
+  TextColumn get targetTable => text()();
+  TextColumn get op => text()(); // put | patch | delete
+  TextColumn get rowId => text()();
+
+  /// The Postgres error, kept verbatim. `code` is what makes a failure
+  /// classifiable later; `message` is what makes it explicable now.
+  TextColumn get code => text().nullable()();
+  TextColumn get message => text().nullable()();
+
+  /// The row as it was sent, JSON. This is what turns a record of loss into a
+  /// chance of recovery — without it, "3 entries failed" is only an apology.
+  TextColumn get payload => text().nullable()();
+  IntColumn get createdAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 @DriftDatabase(
     tables: [FoodLogs, Profiles, WaterLogs, WeightLogs, UserPlans, UserFoods, Meals,
       Workouts, TargetHistory,
-      ChatThreads, ChatMessages, MemoryFacts, Foods, OffFoods])
+      ChatThreads, ChatMessages, MemoryFacts, Foods, OffFoods, SyncFailures])
 class SakamaDatabase extends _$SakamaDatabase {
   SakamaDatabase()
       : managedExternally = false,
@@ -469,7 +513,7 @@ class SakamaDatabase extends _$SakamaDatabase {
   final bool managedExternally;
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => managedExternally
@@ -576,6 +620,11 @@ class SakamaDatabase extends _$SakamaDatabase {
               // day with no row is scored against nothing rather than against
               // today's target.
               await m.createTable(targetHistory);
+            }
+            if (from < 13) {
+              // Receipts for writes the server refused (#148 follow-up).
+              // Local-only, additive — no existing row is touched.
+              await m.createTable(syncFailures);
             }
           },
         );
