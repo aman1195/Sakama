@@ -16,6 +16,7 @@ import {
 } from "../_shared/gateway.ts";
 import { unfence } from "../_shared/json_content.ts";
 import { servedAsRequested } from "../_shared/model_guard.ts";
+import { fetchUpstream, UpstreamTimeout } from "../_shared/upstream.ts";
 
 const DAILY_CAP = 8;          // photos/user/day — vision is pricier than text
 const VITA_CAP = 30;          // a converse photo also costs one coach exchange
@@ -203,14 +204,19 @@ Deno.serve(async (req) => {
   let lastDetail = "";
 
   for (const candidate of chain) {
-    const res = await fetch(candidate.url, {
+    // Bounded, so a model that accepts the connection and then goes quiet
+    // fails THIS link instead of hanging the whole request. The existing catch
+    // then does the right thing by itself: fall through to the next candidate.
+    // Before the deadline, a hung accurate model meant no answer and no
+    // refund — the fallback chain #134 added could not even be reached.
+    const res = await fetchUpstream(candidate.url, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${candidate.key}`,
         "Content-Type": "application/json",
       },
       body: requestBody(candidate),
-    }).catch((e) => {
+    }, UpstreamTimeout.vision).catch((e) => {
       // A transport failure is a failure of THIS link, not of the request.
       console.error(`${candidate.label} transport error :: ${e}`);
       return null;

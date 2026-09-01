@@ -8,6 +8,7 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { resolveUpstream } from "../_shared/gateway.ts";
+import { fetchUpstream, UpstreamTimeout } from "../_shared/upstream.ts";
 import { unfence } from "../_shared/json_content.ts";
 import { servedAsRequested } from "../_shared/model_guard.ts";
 
@@ -70,7 +71,9 @@ Deno.serve(async (req) => {
     openRouterModel: MODEL,
   });
 
-  const orRes = await fetch(up.url, {
+  let orRes: Response;
+  try {
+    orRes = await fetchUpstream(up.url, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${up.key}`,
@@ -85,7 +88,16 @@ Deno.serve(async (req) => {
       response_format: { type: "json_object" },
       max_tokens: 400,
     }),
-  });
+    }, UpstreamTimeout.chat);
+  } catch (e) {
+    // A HANG IS NOT FREE. Without a deadline this await never returns, the
+    // platform kills the function, and the refund below never runs — the user
+    // loses one of their daily allowance and gets nothing back. Nothing was
+    // billed upstream either way (#104).
+    console.error(`upstream unreachable feature=estimate :: ${e}`);
+    if (!byok) await supabase.rpc("refund_ai_usage", { p_feature: "estimate" });
+    return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
+  }
   // Same rule as photosnap (see the 0009 migration): the provider REJECTED the
   // request, so no tokens were billed and the user must not lose an estimate
   // for our outage. A 2xx we cannot parse is NOT refunded — that one was
