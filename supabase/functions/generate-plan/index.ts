@@ -12,7 +12,12 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { resolveUpstream } from "../_shared/gateway.ts";
-import { fetchUpstream, UpstreamTimeout } from "../_shared/upstream.ts";
+import {
+  BodyReadTimeoutMs,
+  fetchUpstream,
+  readTextWithin,
+  UpstreamTimeout,
+} from "../_shared/upstream.ts";
 import { unfence } from "../_shared/json_content.ts";
 import { servedAsRequested } from "../_shared/model_guard.ts";
 
@@ -163,14 +168,16 @@ Deno.serve(async (req) => {
     // loses one of their daily allowance and gets nothing back. Nothing was
     // billed upstream either way (#104).
     console.error(`upstream unreachable feature=plan_gen :: ${e}`);
-    if (!byok) await supabase.rpc("refund_ai_usage", { p_feature: "plan_gen" });
+    // NO REFUND on an abandoned request — see migration 0009 and the note in
+    // vita/index.ts.
     return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
   }
   // Refund a rejected request (see the 0009 migration). Plan generation has the
   // tightest cap of the four, so losing one to a provider outage is the most
   // painful — a user could be locked out of generating a plan all day.
   if (!orRes.ok) {
-    const detail = await orRes.text().catch(() => "");
+    // Bounded: this read sits BEFORE the refund below.
+    const detail = await readTextWithin(orRes, BodyReadTimeoutMs);
     console.error(`openrouter ${orRes.status} feature=plan_gen :: ${detail.slice(0, 500)}`);
     if (!byok) await supabase.rpc("refund_ai_usage", { p_feature: "plan_gen" });
     return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });

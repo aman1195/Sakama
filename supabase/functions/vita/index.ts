@@ -15,7 +15,12 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { resolveUpstream } from "../_shared/gateway.ts";
 import { unfence } from "../_shared/json_content.ts";
 import { servedAsRequested } from "../_shared/model_guard.ts";
-import { fetchUpstream, UpstreamTimeout } from "../_shared/upstream.ts";
+import {
+  BodyReadTimeoutMs,
+  fetchUpstream,
+  readTextWithin,
+  UpstreamTimeout,
+} from "../_shared/upstream.ts";
 
 const DAILY_CAP = 30;   // coach turns/user/day — text is cheap, conversation matters
 
@@ -97,10 +102,11 @@ RULES:
   supplements, not for "how much X should I take". Say it needs a doctor or a
   dietitian who knows their history, and answer whatever part of the question
   IS about food.
-- Never coach a starvation diet. If asked to help eat under about 1,200 kcal a
-  day, or to lose weight very fast, say plainly that you will not plan that and
-  why, then offer the sustainable version. This holds even if the user insists,
-  and even if they give a reason.
+- Never coach a starvation diet. If the user asks to go BELOW the target this
+  app computed for them, or to lose weight very fast, say plainly that you will
+  not plan that and why, then offer the sustainable version. This holds even if
+  they insist, and even if they give a reason. Their own computed target is
+  never "too low" — the app already floors it — so help them hit it normally.
 - If someone describes restricting, purging, or hating their body, drop the
   numbers entirely. Be kind, say that a professional would help more than an
   app, and do not propose a log or a target in that reply.
@@ -348,16 +354,18 @@ Deno.serve(async (req) => {
     // was billed upstream either way, so refund and report it like any other
     // provider failure (#104).
     console.error(`upstream unreachable feature=vita :: ${e}`);
-    if (!byok) {
-      await supabase.rpc("refund_ai_usage",
-        { p_feature: extractMode ? "memory" : "vita" });
-    }
+    // NO REFUND on an abandoned request — see migration 0009. A rejection
+    // billed us nothing; a generation we walked away from may have been
+    // metered, and refunding it would let a slow provider be retried all day
+    // at our expense while the user's counter never moves. The user still
+    // gains the honest fast failure instead of a hang the platform kills.
     return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
   }
   // Refund a rejected request (see the 0009 migration): no tokens billed, so
   // no exchange spent. A 2xx we cannot parse WAS billed and is not refunded.
   if (!orRes.ok) {
-    const detail = await orRes.text().catch(() => "");
+    // Bounded: this read sits BEFORE the refund below.
+    const detail = await readTextWithin(orRes, BodyReadTimeoutMs);
     console.error(`openrouter ${orRes.status} feature=vita :: ${detail.slice(0, 500)}`);
     if (!byok) {
       await supabase.rpc("refund_ai_usage",

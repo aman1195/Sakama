@@ -16,7 +16,14 @@ import {
 } from "../_shared/gateway.ts";
 import { unfence } from "../_shared/json_content.ts";
 import { servedAsRequested } from "../_shared/model_guard.ts";
-import { fetchUpstream, UpstreamTimeout } from "../_shared/upstream.ts";
+import {
+  Deadline,
+  fetchUpstream,
+  UpstreamTimeout,
+  readTextWithin,
+  BodyReadTimeoutMs,
+  UpstreamTimeoutError,
+} from "../_shared/upstream.ts";
 
 const DAILY_CAP = 8;          // photos/user/day — vision is pricier than text
 const VITA_CAP = 30;          // a converse photo also costs one coach exchange
@@ -139,6 +146,14 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: "usage_error" }), { status: 500 });
       }
       if (vitaCount === null || vitaCount === undefined) {
+        // GIVE THE PHOTO BACK. The photo was charged a few lines above, and
+        // this request never reaches a provider — so refusing it while keeping
+        // the charge costs the user one of eight daily photos for a request
+        // that did nothing. The exchange cap is what is exhausted here, not
+        // the photo cap.
+        if (!byok) {
+          await supabase.rpc("refund_ai_usage", { p_feature: "photosnap" });
+        }
         return new Response(
           JSON.stringify({ error: "budget_exhausted", which: "exchange" }),
           { status: 429 },
@@ -202,8 +217,25 @@ Deno.serve(async (req) => {
   let or: unknown = null;
   let lastStatus = 0;
   let lastDetail = "";
+  // A TIMEOUT IS NOT A REJECTION, and migration 0009 draws the refund line
+  // there deliberately: a rejected request billed us nothing, while a request
+  // we ABANDONED may well have been generated and metered upstream. Refunding
+  // it would let a slow provider be retried indefinitely at our cost while the
+  // user's counter never moves.
+  let abandoned = false;
+
+  // The chain is walked SEQUENTIALLY, so the budget belongs to the request,
+  // not to each call. Three 75s attempts would outlive the platform's 150s and
+  // be killed mid-flight — losing the refund below, which is the whole point.
+  const deadline = Deadline.inMs(UpstreamTimeout.chain);
 
   for (const candidate of chain) {
+    if (!deadline.hasRoomFor(UpstreamTimeout.minAttempt)) {
+      // Stop while there is still time to answer honestly and refund.
+      console.error("photosnap chain budget exhausted; not starting another");
+      abandoned = true;
+      break;
+    }
     // Bounded, so a model that accepts the connection and then goes quiet
     // fails THIS link instead of hanging the whole request. The existing catch
     // then does the right thing by itself: fall through to the next candidate.
@@ -216,9 +248,10 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: requestBody(candidate),
-    }, UpstreamTimeout.vision).catch((e) => {
+    }, deadline.sliceFor(UpstreamTimeout.vision)).catch((e) => {
       // A transport failure is a failure of THIS link, not of the request.
       console.error(`${candidate.label} transport error :: ${e}`);
+      if (e instanceof UpstreamTimeoutError) abandoned = true;
       return null;
     });
 
@@ -229,7 +262,7 @@ Deno.serve(async (req) => {
       // The image, the prompt, the user context and the API key are not in it,
       // so no health data and no secret reaches the log (OWASP M1, rule 3).
       lastStatus = res.status;
-      lastDetail = await res.text().catch(() => "");
+      lastDetail = await readTextWithin(res, BodyReadTimeoutMs);
       console.error(
         `${candidate.label} ${res.status} mode=${converse ? "converse" : "analyze"} ` +
           `image_b64_len=${image.length} byok=${byok ? "yes" : "no"} :: ` +
@@ -270,7 +303,15 @@ Deno.serve(async (req) => {
     // REFUND: no upstream billed us for a usable answer, so the user should not
     // lose a daily estimate for our outage. Best-effort: a failed refund must
     // not turn a provider error into a 500.
-    if (!byok) {
+    //
+    // NOT when we ABANDONED the request. Migration 0009 draws this line and
+    // gives the reason: a refund is safe when the provider REJECTED us,
+    // because then nothing was billed. A generation we walked away from may
+    // have completed and been metered, and refunding it would let a slow
+    // provider be retried all day at our expense while the counter stays put.
+    // We keep the honest fast failure; we do not also hand back budget we may
+    // have spent.
+    if (!byok && !abandoned) {
       await supabase.rpc("refund_ai_usage", { p_feature: "photosnap" });
       if (converse) await supabase.rpc("refund_ai_usage", { p_feature: "vita" });
     }

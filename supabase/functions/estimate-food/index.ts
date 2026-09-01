@@ -8,7 +8,12 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { resolveUpstream } from "../_shared/gateway.ts";
-import { fetchUpstream, UpstreamTimeout } from "../_shared/upstream.ts";
+import {
+  BodyReadTimeoutMs,
+  fetchUpstream,
+  readTextWithin,
+  UpstreamTimeout,
+} from "../_shared/upstream.ts";
 import { unfence } from "../_shared/json_content.ts";
 import { servedAsRequested } from "../_shared/model_guard.ts";
 
@@ -95,7 +100,9 @@ Deno.serve(async (req) => {
     // loses one of their daily allowance and gets nothing back. Nothing was
     // billed upstream either way (#104).
     console.error(`upstream unreachable feature=estimate :: ${e}`);
-    if (!byok) await supabase.rpc("refund_ai_usage", { p_feature: "estimate" });
+    // NO REFUND on an abandoned request — see migration 0009 and the note in
+    // vita/index.ts. We keep the fast failure; we do not hand back budget we
+    // may have spent upstream.
     return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
   }
   // Same rule as photosnap (see the 0009 migration): the provider REJECTED the
@@ -104,7 +111,8 @@ Deno.serve(async (req) => {
   // billed. Log the upstream reason: a bare 502 is what made the 2026-08-07
   // credit exhaustion take half an hour to identify.
   if (!orRes.ok) {
-    const detail = await orRes.text().catch(() => "");
+    // Bounded: this read sits BEFORE the refund below.
+    const detail = await readTextWithin(orRes, BodyReadTimeoutMs);
     console.error(`openrouter ${orRes.status} feature=estimate :: ${detail.slice(0, 500)}`);
     if (!byok) await supabase.rpc("refund_ai_usage", { p_feature: "estimate" });
     return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
