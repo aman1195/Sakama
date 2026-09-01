@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../home/presentation/home_page.dart' show planTargetsOverriddenProvider;
 import '../application/plan_providers.dart';
 import '../domain/plan_log_notice.dart';
 
@@ -16,14 +17,22 @@ class PlanLogNoticeCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final notice =
         PlanLogNotice.forDay(ref.watch(activePlanDayProvider), DateTime.now());
-    if (notice == null) return const SizedBox.shrink();
+    // The plan's rules still apply on a day whose NUMBERS were refused, so this
+    // card has something to say even when the notice itself is empty.
+    final overridden = ref.watch(planTargetsOverriddenProvider);
+    if (notice == null && !overridden) return const SizedBox.shrink();
 
     final scheme = Theme.of(context).colorScheme;
     final lines = <String>[
-      if (notice.outsideWindow)
+      // First: without it the rest of the card describes a plan whose target is
+      // not the one being counted against, and nothing says so.
+      if (overridden)
+        "Today's plan target was below a safe minimum, so your usual target is "
+            'in force. The rest of the plan still applies.',
+      if (notice != null && notice.outsideWindow)
         'Outside your eating window (${notice.windowStart}–${notice.windowEnd}). '
             'You can still log — just a heads-up.',
-      if (notice.avoidFoods.isNotEmpty)
+      if (notice != null && notice.avoidFoods.isNotEmpty)
         'Your plan asks you to avoid today: ${notice.avoidFoods.join(', ')}.',
     ];
 

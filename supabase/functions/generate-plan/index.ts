@@ -19,6 +19,7 @@ import {
   UpstreamTimeout,
 } from "../_shared/upstream.ts";
 import { unfence } from "../_shared/json_content.ts";
+import { AbsoluteCalorieFloor, checkPlanSafety } from "../_shared/plan_safety.ts";
 import { servedAsRequested } from "../_shared/model_guard.ts";
 
 const DAILY_CAP = 2; // plan generations per user per day — server-side (design §8)
@@ -201,7 +202,34 @@ Deno.serve(async (req) => {
   }
 
   // Pass the model JSON through; the CLIENT validates hard (untrusted input).
-  return new Response(unfence(content), {
+  const planJson = unfence(content);
+
+  // ONE exception to passing it through: a plan that prescribes starvation.
+  // The prompt above asks for "never below ~1200 kcal" and nothing checked that
+  // the model listened. Fail closed — handing back a plan the client will then
+  // refuse to honour is worse than no plan, because the user would be shown a
+  // protocol they are not actually being scored against.
+  //
+  // NOT REFUNDED, and that is the 0009 rule working as written, not an
+  // oversight: the provider answered 2xx, so those tokens were billed. This is
+  // the same case as a 2xx we cannot parse.
+  let verdict;
+  try {
+    verdict = checkPlanSafety(JSON.parse(planJson));
+  } catch (_) {
+    // Unparseable is the client's problem to report, as before — it is not a
+    // safety failure, and treating it as one would change an existing error.
+    verdict = { safe: true };
+  }
+  if (!verdict.safe) {
+    console.error(
+      `plan REJECTED feature=plan_gen: states ${verdict.lowest} kcal, ` +
+        `floor ${AbsoluteCalorieFloor}`,
+    );
+    return new Response(JSON.stringify({ error: "unsafe_plan" }), { status: 502 });
+  }
+
+  return new Response(planJson, {
     headers: { "Content-Type": "application/json" },
   });
 });

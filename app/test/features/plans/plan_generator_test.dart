@@ -88,4 +88,60 @@ void main() {
       expect(g.calls, 1);
     });
   });
+
+  /// The mapping from a gateway failure to the exception the UI words.
+  ///
+  /// Extracted from `fetchRaw` because inline it was reachable by NO test: the
+  /// generator's own tests override `fetchRaw` wholesale to stay off the
+  /// network, so deleting the branch reddened nothing.
+  group('gatewayFailure', () {
+    test('a spent cap is reported as the cap, not as a fault', () {
+      final e = gatewayFailure(429, '{"error":"budget_exhausted"}');
+      expect(e.budgetExhausted, isTrue);
+      expect(e.unsafePlan, isFalse);
+    });
+
+    test('a safety refusal is flagged as one', () {
+      final e = gatewayFailure(502, '{"error":"unsafe_plan"}');
+      expect(e.unsafePlan, isTrue);
+      expect(e.budgetExhausted, isFalse);
+    });
+
+    test('an ordinary gateway failure is neither', () {
+      final e = gatewayFailure(502, '{"error":"provider_error"}');
+      expect(e.unsafePlan, isFalse);
+      expect(e.budgetExhausted, isFalse);
+    });
+
+    test('the cap wins over a safety refusal in the same response', () {
+      // Whatever else went wrong, the user cannot generate again today, and
+      // "try a less aggressive goal" would send them at a locked door.
+      final e = gatewayFailure(429, '{"error":"unsafe_plan"}');
+      expect(e.budgetExhausted, isTrue);
+    });
+  });
+
+  /// The gateway refuses a generated plan below the clinical calorie floor.
+  /// Reading that refusal correctly is what separates "adjust your goal" from
+  /// "try again in a minute", and the body's shape is not guaranteed.
+  group('describesUnsafePlan', () {
+    test('recognises the refusal as a decoded map', () {
+      expect(describesUnsafePlan({'error': 'unsafe_plan'}), isTrue);
+    });
+
+    test('recognises it as a raw JSON string', () {
+      expect(describesUnsafePlan('{"error":"unsafe_plan"}'), isTrue);
+    });
+
+    test('an ordinary outage is NOT read as a safety refusal', () {
+      // Getting this wrong tells a user to change their goal when the real
+      // answer is to retry in a minute.
+      expect(describesUnsafePlan({'error': 'provider_error'}), isFalse);
+      expect(describesUnsafePlan('{"error":"provider_error"}'), isFalse);
+      expect(describesUnsafePlan(null), isFalse);
+      expect(describesUnsafePlan(''), isFalse);
+      expect(describesUnsafePlan(const <String, dynamic>{}), isFalse);
+      expect(describesUnsafePlan(42), isFalse);
+    });
+  });
 }

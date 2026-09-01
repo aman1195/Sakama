@@ -6,7 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/database.dart';
 import '../../../core/providers/app_providers.dart';
-import '../../home/presentation/home_page.dart' show targetsProvider;
+import '../../home/presentation/home_page.dart'
+    show planTargetsOverriddenProvider, targetsProvider;
 import '../../onboarding/data/target_history_repository.dart';
 import '../../onboarding/domain/nutrition_targets.dart';
 import '../../onboarding/domain/profile_record.dart';
@@ -570,6 +571,7 @@ class CoachController extends Notifier<CoachState> {
         todayLogs: logs,
         now: now,
         planDay: planDay,
+        planTargetsOverridden: ref.read(planTargetsOverriddenProvider),
         favouriteFoods: favourites,
         memories: [
           for (final f in facts) (kind: f.kind, content: f.content),

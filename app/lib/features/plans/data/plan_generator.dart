@@ -24,15 +24,57 @@ Map<String, dynamic> planProfileProjection(ProfileRecord p, DateTime now) => {
 /// model output is NOT this — that comes back as a [PlanImportError] so the UI
 /// can word it differently.
 class PlanGenerationException implements Exception {
-  PlanGenerationException(this.message, {this.budgetExhausted = false});
+  PlanGenerationException(this.message,
+      {this.budgetExhausted = false, this.unsafePlan = false});
   final String message;
 
   /// True when the server said the user's daily plan-generation cap is spent
   /// (rule 9) — the UI words that differently from a transient failure.
   final bool budgetExhausted;
 
+  /// True when the gateway refused the generated plan because it prescribed
+  /// below the clinical calorie floor.
+  ///
+  /// A FLAG rather than a message the UI prints, matching [budgetExhausted]:
+  /// the wording is the app's to choose, and text arriving from the server
+  /// should never reach a user's screen unread.
+  final bool unsafePlan;
+
   @override
   String toString() => 'PlanGenerationException: $message';
+}
+
+/// Turn a gateway failure into the exception the UI words.
+///
+/// PURE AND PUBLIC so it can be tested. Inline in `fetchRaw` this branch was
+/// reachable by no test in the suite — the generator's own tests override
+/// `fetchRaw` wholesale to stay off the network, so deleting the mapping
+/// reddened nothing.
+PlanGenerationException gatewayFailure(int status, Object? details) {
+  if (status == 429) {
+    return PlanGenerationException('daily limit reached', budgetExhausted: true);
+  }
+  // The gateway refuses a generated plan that prescribes below the clinical
+  // calorie floor. That is a decision we made, not a fault — "gateway error
+  // 502" would blame the network for it and invite a retry that has no better
+  // chance of succeeding, at the cost of one of two daily generations.
+  if (describesUnsafePlan(details)) {
+    return PlanGenerationException('unsafe plan rejected', unsafePlan: true);
+  }
+  return PlanGenerationException('gateway error $status');
+}
+
+/// Did the gateway refuse this plan on safety grounds?
+///
+/// The error body arrives as untyped JSON — a decoded map on one path, a raw
+/// string on another, depending on how the response parsed. Read it defensively
+/// and default to false: mistaking an ordinary outage for a safety refusal
+/// would tell the user to change their goal when they should just retry.
+bool describesUnsafePlan(Object? details) {
+  if (details == null) return false;
+  final error = details is Map ? details['error'] : null;
+  if (error is String) return error == 'unsafe_plan';
+  return details is String && details.contains('unsafe_plan');
 }
 
 /// Turns an onboarded profile into a validated plan. Injectable so tests never
@@ -93,11 +135,7 @@ class EdgeFunctionPlanGenerator implements PlanGenerator {
         'byok': ?byok,
       });
     } on FunctionException catch (e) {
-      if (e.status == 429) {
-        throw PlanGenerationException('daily limit reached',
-            budgetExhausted: true);
-      }
-      throw PlanGenerationException('gateway error ${e.status}');
+      throw gatewayFailure(e.status, e.details);
     } catch (e) {
       throw PlanGenerationException('network error: $e');
     }

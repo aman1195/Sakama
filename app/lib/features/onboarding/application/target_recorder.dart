@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/current_date_provider.dart';
-import '../../home/presentation/home_page.dart' show targetsProvider;
+import '../../home/presentation/home_page.dart'
+    show planTargetsOverriddenProvider, targetsProvider;
 import '../../plans/application/plan_providers.dart';
 import '../data/target_history_repository.dart';
 import '../domain/nutrition_targets.dart';
@@ -67,7 +68,11 @@ class _TargetRecorderState extends ConsumerState<TargetRecorder> {
       if (!mounted) return;
       final targets = ref.read(targetsProvider);
       final profile = ref.read(profileProvider).value;
-      final planActive = ref.read(activePlanDayProvider) != null;
+      // A plan whose numbers were refused for being unsafe did NOT set today's
+      // targets, so recording the row as plan-sourced would be a small lie in
+      // the one table kept for provenance audits.
+      final planActive = ref.read(activePlanDayProvider) != null &&
+          !ref.read(planTargetsOverriddenProvider);
       final date = ref.read(currentDateProvider);
       final userId = ref.read(currentUserIdProvider);
 
@@ -107,10 +112,11 @@ Future<void> recordTargetsFor({
 }) async {
   if (targets == null) return; // no profile yet; nothing to record
 
-  // A plan day type may legitimately carry no calorie figure (a fasting day),
-  // and plan JSON is unvalidated input. Recording zero would score every day of
-  // that plan as "over"; refusing to record leaves the previous row in force,
-  // which is the honest answer until A2's floor lands in the target maths.
+  // Belt and braces. `targetsProvider` now floors every path that reaches here
+  // — a computed target is floored by TargetCalculator, and a plan target below
+  // the floor is not honoured — so this should be unreachable. It stays because
+  // recording zero would score every day of a plan as "over", and the cost of a
+  // guard that never fires is nothing next to the cost of that.
   if (targets.calories <= 0) {
     debugPrint('target recorder: skipping non-positive target');
     return;

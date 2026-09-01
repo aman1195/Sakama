@@ -62,10 +62,19 @@ class _PlansPageState extends ConsumerState<PlansPage> {
       }
     } on PlanGenerationException catch (e) {
       if (!mounted) return;
-      _snack(e.budgetExhausted
-          ? "You've used today's plan generations. Add your own AI key for "
-              'unlimited, or try again tomorrow.'
-          : "Couldn't generate a plan right now. Please try again.");
+      _snack(switch (e) {
+        // Ordered: the cap is spent whatever else went wrong, so say that first.
+        _ when e.budgetExhausted =>
+          "You've used today's plan generations. Add your own AI key for "
+              'unlimited, or try again tomorrow.',
+        // A refusal, not a fault. "Please try again" would be a lie here: the
+        // same request has no better chance, and each attempt costs one of two
+        // daily generations.
+        _ when e.unsafePlan =>
+          'That plan came back with an unsafely low calorie target, so it '
+              "wasn't applied. Try a less aggressive goal.",
+        _ => "Couldn't generate a plan right now. Please try again.",
+      });
     } finally {
       if (mounted) setState(() => _generating = false);
     }
