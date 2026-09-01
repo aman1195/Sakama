@@ -12,6 +12,12 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { resolveUpstream } from "../_shared/gateway.ts";
+import {
+  BodyReadTimeoutMs,
+  fetchUpstream,
+  readTextWithin,
+  UpstreamTimeout,
+} from "../_shared/upstream.ts";
 import { unfence } from "../_shared/json_content.ts";
 import { servedAsRequested } from "../_shared/model_guard.ts";
 
@@ -138,7 +144,9 @@ Deno.serve(async (req) => {
     openRouterModel: MODEL,
   });
 
-  const orRes = await fetch(up.url, {
+  let orRes: Response;
+  try {
+    orRes = await fetchUpstream(up.url, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${up.key}`,
@@ -153,12 +161,23 @@ Deno.serve(async (req) => {
       response_format: { type: "json_object" },
       max_tokens: MAX_TOKENS,
     }),
-  });
+    }, UpstreamTimeout.plan);
+  } catch (e) {
+    // A HANG IS NOT FREE. Without a deadline this await never returns, the
+    // platform kills the function, and the refund below never runs — the user
+    // loses one of their daily allowance and gets nothing back. Nothing was
+    // billed upstream either way (#104).
+    console.error(`upstream unreachable feature=plan_gen :: ${e}`);
+    // NO REFUND on an abandoned request — see migration 0009 and the note in
+    // vita/index.ts.
+    return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
+  }
   // Refund a rejected request (see the 0009 migration). Plan generation has the
   // tightest cap of the four, so losing one to a provider outage is the most
   // painful — a user could be locked out of generating a plan all day.
   if (!orRes.ok) {
-    const detail = await orRes.text().catch(() => "");
+    // Bounded: this read sits BEFORE the refund below.
+    const detail = await readTextWithin(orRes, BodyReadTimeoutMs);
     console.error(`openrouter ${orRes.status} feature=plan_gen :: ${detail.slice(0, 500)}`);
     if (!byok) await supabase.rpc("refund_ai_usage", { p_feature: "plan_gen" });
     return new Response(JSON.stringify({ error: "provider_error" }), { status: 502 });
