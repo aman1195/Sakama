@@ -1,4 +1,3 @@
-import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -44,8 +43,13 @@ abstract class SpeechSynthesizer {
   /// Voices the platform offers, as raw maps from the plugin.
   Future<List<Map<String, String>>> voices();
 
-  /// Select the voice to speak with.
-  Future<void> useVoice(Map<String, String> voice);
+  /// Select the voice to speak with. False when the platform did not take it.
+  ///
+  /// RETURNS A RESULT because the platform can refuse. Android's `setVoice`
+  /// answers 0 with only a debug log when no voice matches on name+locale, and
+  /// a `void` here discarded that — leaving us believing a vetted voice was in
+  /// force while the engine kept its own.
+  Future<bool> useVoice(Map<String, String> voice);
 
   Future<void> speak(String text);
   Future<void> stop();
@@ -138,7 +142,8 @@ class PluginSpeechSynthesizer implements SpeechSynthesizer {
   }
 
   @override
-  Future<void> useVoice(Map<String, String> voice) => _tts.setVoice(voice);
+  Future<bool> useVoice(Map<String, String> voice) async =>
+      await _tts.setVoice(voice) == 1;
 
   @override
   Future<void> speak(String text) => _tts.speak(text);
@@ -159,25 +164,39 @@ class VoiceOutput {
   final SpeechSynthesizer _tts;
   final bool _isAndroid;
 
-  /// Resolved once, then reused: enumerating voices is a platform round trip
-  /// and the answer does not change while the app is running.
-  bool _resolved = false;
-  bool _haveEmbeddedVoice = false;
-
-  /// True once we have spoken and not yet stopped. Barge-in reads this.
-  bool get isSpeaking => _speaking;
-  bool _speaking = false;
+  /// The vetted voice, once we have found one.
+  ///
+  /// The LIST is cached, not the permission. Enumerating voices is a platform
+  /// round trip, but "we are allowed to speak" is re-established before every
+  /// utterance — see [speak].
+  Map<String, String>? _voice;
 
   Future<SpeakOutcome> speak(String text) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return SpeakOutcome.empty;
     try {
-      if (!await _ensureEmbeddedVoice()) return SpeakOutcome.noOnDeviceVoice;
-      _speaking = true;
+      // RE-PINNED EVERY TIME, and the result checked.
+      //
+      // Resolving this once and caching "yes" was a hole big enough to undo
+      // the whole file. Two ways the pin disappears underneath us, both in the
+      // plugin's own source:
+      //
+      //  - the Android plugin RECREATES its TextToSpeech object when the
+      //    service connection dies (memory pressure, an engine update, the
+      //    user changing engines in Settings). Its re-init restores only the
+      //    LANGUAGE, so the vetted voice is gone — and the next utterance
+      //    would go out on the engine's default, which for many locales is a
+      //    network voice. That is precisely the voice this class exists to
+      //    refuse.
+      //  - `setVoice` can simply answer 0 when nothing matches, with no
+      //    exception. Ignoring that meant believing a pin we never got.
+      //
+      // A round trip per utterance is nothing next to a health line being
+      // synthesized by someone else's server.
+      if (!await _pinEmbeddedVoice()) return SpeakOutcome.noOnDeviceVoice;
       await _tts.speak(trimmed);
       return SpeakOutcome.ok;
     } catch (e) {
-      _speaking = false;
       debugPrint('voice output: $e');
       return SpeakOutcome.failed;
     }
@@ -186,7 +205,6 @@ class VoiceOutput {
   /// Stop immediately. This is barge-in: the user talking over Vita, or
   /// leaving the screen, must silence it at once.
   Future<void> stop() async {
-    _speaking = false;
     try {
       await _tts.stop();
     } catch (e) {
@@ -194,24 +212,21 @@ class VoiceOutput {
     }
   }
 
-  Future<bool> _ensureEmbeddedVoice() async {
-    if (_resolved) return _haveEmbeddedVoice;
-    _resolved = true;
-    final policy = EmbeddedVoicePolicy(isAndroid: _isAndroid);
-    final choice = policy.choose(await _tts.voices());
-    if (choice == null) {
-      _haveEmbeddedVoice = false;
-      return false;
-    }
-    // Set it explicitly even on iOS: the engine's current voice is not
-    // necessarily the one we vetted.
-    await _tts.useVoice(choice);
-    _haveEmbeddedVoice = true;
-    return true;
+  /// Ensure an on-device voice is selected RIGHT NOW. False means stay silent.
+  Future<bool> _pinEmbeddedVoice() async {
+    // A failed enumeration is NOT remembered. Caching the failure turned one
+    // transient null from the platform into permanent silence for the rest of
+    // the process, under a message telling the user their phone cannot do it.
+    _voice ??= EmbeddedVoicePolicy(isAndroid: _isAndroid)
+        .choose(await _tts.voices());
+    final choice = _voice;
+    if (choice == null) return false;
+
+    if (await _tts.useVoice(choice)) return true;
+    // The platform did not take it. The voice we vetted may have been
+    // uninstalled; drop it so the next attempt looks again rather than
+    // retrying a name that no longer exists.
+    _voice = null;
+    return false;
   }
 }
-
-/// Whether this build is running on Android, for callers that need it outside
-/// a widget. Kept next to the policy it feeds so the two cannot disagree.
-bool get isAndroidPlatform =>
-    !kIsWeb && Platform.isAndroid;

@@ -51,6 +51,18 @@ void main() {
       // "yes um no" is a person changing their mind mid-sentence. Resolving it
       // either way is a guess, and one of the guesses writes.
       expect(of('yes um no'), SpokenIntent.unrecognised);
+      // The case that actually PINS leading-only: stripping anywhere would
+      // turn this into "yes" and confirm it. Review showed the assertion
+      // above passes either way, so on its own it tested nothing.
+      expect(of('yes um'), SpokenIntent.unrecognised);
+      expect(of('ok well'), SpokenIntent.unrecognised);
+    });
+
+    test('filler does not buy extra words', () {
+      // Length is judged BEFORE stripping. The other order let seven filler
+      // words vanish and an eight-word utterance confirm.
+      expect(of('um uh er hmm well so like yes'), SpokenIntent.unrecognised);
+      expect(of('um yes'), SpokenIntent.confirm, reason: 'a hesitant yes is a yes');
     });
   });
 
@@ -117,6 +129,13 @@ void main() {
     test('past the limit it is a message', () {
       expect(of('one two three four five'), SpokenIntent.unrecognised);
     });
+
+    test('the limit itself does the work, not just the word list', () {
+      // Five words that are ALL affirmative tokens. Only the length rule can
+      // refuse this, so raising the limit reddens the test.
+      expect(of('yes yes yes yes yes'), SpokenIntent.unrecognised);
+      expect(of('ok ok ok ok ok'), SpokenIntent.unrecognised);
+    });
   });
 
   /// The decision the widget dispatches on. Extracted so the branch that turns
@@ -166,6 +185,39 @@ void main() {
       for (final s in risky) {
         expect(act(s), isNot(DictationAction.confirmDraft), reason: '"$s"');
       }
+    });
+  });
+
+  /// Removed after review. Every one of these reached a database write.
+  group('words that are not consent', () {
+    test('a laugh is not a yes', () {
+      // Someone amused by a 900 kcal samosa is not agreeing to log it.
+      expect(of('ha'), SpokenIntent.unrecognised);
+      expect(of('Ha!'), SpokenIntent.unrecognised);
+    });
+
+    test('a bare "ji" is a request to REPEAT, not agreement', () {
+      // In Hindi "ji?" commonly means "sorry, what?". Confirming a write on a
+      // request to repeat is the exact inversion this file exists to prevent.
+      expect(of('ji'), SpokenIntent.unrecognised);
+      expect(of('ji?'), SpokenIntent.unrecognised);
+      // The unambiguous forms still work.
+      expect(of('haan ji'), SpokenIntent.confirm);
+      expect(of('ji haan'), SpokenIntent.confirm);
+    });
+
+    test('a single stray letter is not a decision', () {
+      expect(of('k'), SpokenIntent.unrecognised);
+    });
+
+    test('a bare verb is a clipped command, not an answer', () {
+      // "log" is what "log two rotis" degrades to, and confirming would write
+      // a pending draft for a completely different food.
+      expect(of('log'), SpokenIntent.unrecognised);
+      expect(of('save'), SpokenIntent.unrecognised);
+      // With the object, it is unmistakable.
+      expect(of('log it'), SpokenIntent.confirm);
+      expect(of('save it'), SpokenIntent.confirm);
     });
   });
 }

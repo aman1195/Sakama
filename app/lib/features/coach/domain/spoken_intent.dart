@@ -68,14 +68,31 @@ DictationAction actionForDictation({
 /// Words that mean yes, in the English and Hindi an Indian user actually
 /// speaks to a phone. Romanised Hindi because that is what a speech engine set
 /// to en-IN returns.
+/// EVERY ENTRY HERE IS A DATABASE WRITE. A word earns its place only if a
+/// person saying it, alone, to a card asking "shall I log this?", cannot
+/// plausibly have meant anything else.
+///
+/// Five were removed after review for failing exactly that test, and the
+/// pattern is worth keeping in mind when adding more:
+///
+///   'ha'   — a laugh. Someone amused by a 900 kcal samosa is not agreeing.
+///   'ji'   — in Hindi a bare "ji?" is usually "sorry, what?", a request to
+///            REPEAT. Confirming a write on a request to repeat is the exact
+///            inversion this file exists to prevent. 'haan ji' and 'ji haan'
+///            stay: those are unambiguous.
+///   'k'    — a single letter, and the likeliest output of a recogniser that
+///            caught almost nothing.
+///   'log'  — what a clipped "log two rotis" degrades to, which would confirm
+///            a pending draft for a completely different food.
+///   'save' — the same, and 'save it' still covers the real answer.
 const _affirmatives = {
-  'yes', 'yeah', 'yep', 'yup', 'ya', 'yah', 'yes please', 'ok', 'okay', 'k',
+  'yes', 'yeah', 'yep', 'yup', 'ya', 'yah', 'yes please', 'ok', 'okay',
   'sure', 'confirm', 'confirmed', 'correct', 'right', 'thats right',
-  'that is right', 'log it', 'log that', 'log', 'save it', 'save that', 'save',
+  'that is right', 'log it', 'log that', 'save it', 'save that',
   'add it', 'add that', 'do it', 'go ahead', 'please do', 'perfect', 'exactly',
-  'sounds good', 'looks good', 'thats it', 'that is it', 'good',
+  'sounds good', 'looks good', 'thats it', 'that is it',
   // Hindi / Indian English, romanised.
-  'haan', 'han', 'ha', 'haan ji', 'ji', 'ji haan', 'bilkul', 'theek hai',
+  'haan', 'han', 'haan ji', 'ji haan', 'bilkul', 'theek hai',
   'thik hai', 'sahi hai', 'kar do', 'kar de', 'haan kar do',
 };
 
@@ -101,11 +118,19 @@ const _maxAnswerWords = 4;
 /// Only call this when a proposal is actually on screen. With nothing pending,
 /// "yes" is just a word.
 SpokenIntent classifySpokenReply(String utterance) {
-  final normalised = _normalise(utterance);
-  if (normalised.isEmpty) return SpokenIntent.unrecognised;
+  final cleaned = _clean(utterance);
+  if (cleaned.isEmpty) return SpokenIntent.unrecognised;
 
-  final words = normalised.split(' ');
-  if (words.length > _maxAnswerWords) return SpokenIntent.unrecognised;
+  // LENGTH IS JUDGED BEFORE FILLER IS STRIPPED. The other order let filler
+  // buy extra words: "um uh er hmm well so like yes" is eight words and
+  // confirmed, because seven of them vanished before anything counted. Filler
+  // should forgive a hesitant answer, not extend how long an answer may be.
+  if (cleaned.split(' ').length > _maxAnswerWords) {
+    return SpokenIntent.unrecognised;
+  }
+
+  final normalised = _stripLeadingFiller(cleaned);
+  if (normalised.isEmpty) return SpokenIntent.unrecognised;
 
   final yes = _affirmatives.contains(normalised);
   final no = _negatives.contains(normalised);
@@ -122,7 +147,7 @@ SpokenIntent classifySpokenReply(String utterance) {
 /// Speech engines punctuate ("Yes."), capitalise, and prepend filler ("um,
 /// yes"). None of that changes the meaning, and all of it would defeat an
 /// exact-match lookup.
-String _normalise(String raw) {
+String _clean(String raw) {
   var s = raw.toLowerCase().trim();
   // Apostrophes are DELETED, not spaced, so "that's" becomes "thats" rather
   // than "that s" — the latter is three words and would blow the answer-length
@@ -131,12 +156,16 @@ String _normalise(String raw) {
   s = s.replaceAll(RegExp("['‘’ʼ]"), '');
   // Everything else non-alphanumeric becomes a separator.
   s = s.replaceAll(RegExp(r'[^a-z0-9\s]'), ' ');
-  s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
-  if (s.isEmpty) return s;
+  return s.replaceAll(RegExp(r'\s+'), ' ').trim();
+}
 
-  // Leading filler only. A filler word in the middle ("yes um no") is exactly
-  // the confusion this must not resolve.
-  final words = s.split(' ');
+/// Drop hesitation at the START of an answer.
+///
+/// Leading only. A filler word in the MIDDLE ("yes um no") is a person
+/// changing their mind mid-sentence, which is exactly the confusion that must
+/// not resolve to a decision.
+String _stripLeadingFiller(String cleaned) {
+  final words = cleaned.split(' ');
   const filler = {'um', 'uh', 'er', 'hmm', 'hm', 'well', 'so', 'like'};
   var start = 0;
   while (start < words.length - 1 && filler.contains(words[start])) {

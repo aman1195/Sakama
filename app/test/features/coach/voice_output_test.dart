@@ -6,23 +6,34 @@ import 'package:sakama/features/coach/data/voice_output.dart';
 /// says never happens. The plugin does not prevent that; this does.
 
 class _FakeSynth implements SpeechSynthesizer {
-  _FakeSynth(this._voices, {this.throwOnSpeak = false});
-  final List<Map<String, String>> _voices;
+  _FakeSynth(this._voices, {this.throwOnSpeak = false, this.acceptVoice = true});
+  List<Map<String, String>> _voices;
   final bool throwOnSpeak;
+
+  /// The platform can refuse a voice — Android answers 0 with no exception.
+  bool acceptVoice;
+  bool throwOnVoices = false;
 
   Map<String, String>? selected;
   final spoken = <String>[];
   int stops = 0;
   int voiceQueries = 0;
+  int voicePins = 0;
 
   @override
   Future<List<Map<String, String>>> voices() async {
     voiceQueries++;
+    if (throwOnVoices) throw Exception('platform returned null');
     return _voices;
   }
 
   @override
-  Future<void> useVoice(Map<String, String> voice) async => selected = voice;
+  Future<bool> useVoice(Map<String, String> voice) async {
+    voicePins++;
+    if (!acceptVoice) return false;
+    selected = voice;
+    return true;
+  }
 
   @override
   Future<void> speak(String text) async {
@@ -160,20 +171,64 @@ void main() {
           throwOnSpeak: true);
       final out = VoiceOutput(synthesizer: synth, isAndroidOverride: true);
       expect(await out.speak('hello'), SpeakOutcome.failed);
-      expect(out.isSpeaking, isFalse, reason: 'a failed speak is not speaking');
     });
 
-    test('voices are enumerated once, not per utterance', () async {
+    test('the voice LIST is enumerated once, but the pin is re-issued every '
+        'time', () async {
+      // THE BLOCKING BUG. Pinning once and caching "allowed" meant that when
+      // the Android engine is recreated — service connection dropped, engine
+      // updated, engine changed in Settings — it restores only the LANGUAGE,
+      // and the next reply goes out on the engine's default voice, which for
+      // many locales is a network one. Enumerating is a cheap round trip;
+      // being wrong about this reads health data to a server.
       final synth = _FakeSynth([_voice('local', 'en-IN', network: '0')]);
       final out = VoiceOutput(synthesizer: synth, isAndroidOverride: true);
       await out.speak('one');
       await out.speak('two');
-      expect(synth.voiceQueries, 1);
+      expect(synth.voiceQueries, 1, reason: 'the list does not change');
+      expect(synth.voicePins, 2, reason: 'the pin can be lost between them');
       expect(synth.spoken, ['one', 'two']);
     });
 
-    test('the refusal is remembered, so it cannot leak on a later utterance',
+    test('a REFUSED pin is not spoken through', () async {
+      // setVoice answers 0 when nothing matches, with no exception. Ignoring
+      // that meant believing a pin we never got and speaking anyway.
+      final synth = _FakeSynth([_voice('local', 'en-IN', network: '0')],
+          acceptVoice: false);
+      final out = VoiceOutput(synthesizer: synth, isAndroidOverride: true);
+      expect(await out.speak('hello'), SpeakOutcome.noOnDeviceVoice);
+      expect(synth.spoken, isEmpty);
+    });
+
+    test('a refused pin makes the next attempt look for a voice again',
         () async {
+      // The vetted voice may have been uninstalled. Retrying the same name
+      // forever would be silence that never recovers.
+      final synth = _FakeSynth([_voice('gone', 'en-IN', network: '0')],
+          acceptVoice: false);
+      final out = VoiceOutput(synthesizer: synth, isAndroidOverride: true);
+      await out.speak('one');
+      synth.acceptVoice = true;
+      synth._voices = [_voice('installed', 'en-IN', network: '0')];
+      expect(await out.speak('two'), SpeakOutcome.ok);
+      expect(synth.selected!['name'], 'installed');
+    });
+
+    test('a transient enumeration failure is not remembered forever', () async {
+      // Caching the failure turned one null from the platform into permanent
+      // silence, under a message telling the user their PHONE cannot do it.
+      final synth = _FakeSynth([_voice('local', 'en-IN', network: '0')])
+        ..throwOnVoices = true;
+      final out = VoiceOutput(synthesizer: synth, isAndroidOverride: true);
+      expect(await out.speak('one'), SpeakOutcome.failed);
+
+      synth.throwOnVoices = false;
+      expect(await out.speak('two'), SpeakOutcome.ok,
+          reason: 'the device was always capable; the query failed once');
+    });
+
+    test('a network-only device stays silent on every utterance, not just the '
+        'first', () async {
       final synth = _FakeSynth([_voice('cloud', 'en-IN', network: '1')]);
       final out = VoiceOutput(synthesizer: synth, isAndroidOverride: true);
       await out.speak('first');
@@ -181,22 +236,19 @@ void main() {
       expect(synth.spoken, isEmpty);
     });
 
-    test('barge-in stops immediately and clears the speaking flag', () async {
+    test('barge-in stops immediately', () async {
       final synth = _FakeSynth([_voice('local', 'en-IN', network: '0')]);
       final out = VoiceOutput(synthesizer: synth, isAndroidOverride: true);
       await out.speak('a long reply');
-      expect(out.isSpeaking, isTrue);
-
       await out.stop();
       expect(synth.stops, 1);
-      expect(out.isSpeaking, isFalse);
     });
 
     test('stopping when nothing is speaking is harmless', () async {
       final synth = _FakeSynth(const []);
       final out = VoiceOutput(synthesizer: synth, isAndroidOverride: true);
       await out.stop();
-      expect(out.isSpeaking, isFalse);
+      expect(synth.stops, 1, reason: 'a stop with nothing to stop must not throw');
     });
   });
 }
