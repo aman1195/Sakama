@@ -12,7 +12,9 @@ import '../domain/coach_message.dart';
 import '../domain/tool_draft.dart';
 import '../data/voice_input.dart';
 import '../data/voice_output.dart';
+import '../application/voice_session.dart';
 import '../domain/spoken_intent.dart';
+import 'voice_mode_sheet.dart';
 import 'coach_controller.dart';
 
 /// Vita — the coach tab. A persistent chat grounded in today's real data.
@@ -84,6 +86,69 @@ class _CoachPageState extends ConsumerState<CoachPage> {
       _toast('This phone has no private voice available, so Vita stayed '
           'silent. The reply is on screen.');
     }
+  }
+
+  /// Open VOICE MODE (S-101).
+  ///
+  /// THE MIC OPENS THE MODE, and that is the answer to "where is voice mode?".
+  /// Before this it opened dictation, which transcribed into the composer and
+  /// stopped — the feature existed and nobody could find it, because there was
+  /// nothing to find. Dictation is still here on a long-press for anyone who
+  /// wants words in the box rather than a conversation.
+  Future<void> _openVoiceMode() async {
+    if (!await ensureAiConsent(context, ref)) return;
+    if (!mounted) return;
+    if (await _voice.needsNetworkDisclosure()) {
+      if (!await _confirmAndroidVoice()) return;
+      await _voice.rememberNetworkDisclosure();
+    }
+    if (!mounted) return;
+
+    final notifier = ref.read(coachControllerProvider.notifier);
+    final session = VoiceSession(
+      input: _voice,
+      output: _speech,
+      turn: (text) async {
+        await notifier.send(text);
+        final messages = ref.read(coachControllerProvider).messages;
+        return messages
+            .lastWhere((m) => m.role == CoachRole.vita,
+                orElse: () => const CoachMessage(CoachRole.vita, ''))
+            .content;
+      },
+      hasPendingDraft: () =>
+          ref.read(coachControllerProvider).pendingDrafts.isNotEmpty,
+      confirmDraft: () async {
+        await notifier.confirmDraft();
+        final messages = ref.read(coachControllerProvider).messages;
+        return messages
+            .lastWhere((m) => m.role == CoachRole.vita,
+                orElse: () => const CoachMessage(CoachRole.vita, 'Logged.'))
+            .content;
+      },
+      dismissDraft: notifier.dismissDraft,
+    );
+
+    // Fire the loop and show the sheet over it. The sheet listens; it does not
+    // drive — closing it stops the session, and the session ending pops it.
+    final running = session.run();
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (_) => FractionallySizedBox(
+        heightFactor: 1,
+        child: VoiceModeSheet(session: session),
+      ),
+    );
+    // Whatever closed it — the button, a swipe, silence — the microphone must
+    // not still be open.
+    await session.stop();
+    await running;
   }
 
   /// Dictate into the composer (ADR 0016 decision 12).
@@ -310,7 +375,11 @@ class _CoachPageState extends ConsumerState<CoachPage> {
                     Semantics(
                       identifier: 'coach-mic',
                       button: true,
-                      child: IconButton(
+                      child: GestureDetector(
+                        // Long-press keeps plain dictation for anyone who wants
+                        // words in the box rather than a conversation.
+                        onLongPress: state.sending ? null : _dictate,
+                        child: IconButton(
                         icon: Icon(_listening ? Icons.stop_circle_outlined
                                               : Icons.mic_none),
                         // Colour, not just a swapped glyph: a mic that is
@@ -318,8 +387,9 @@ class _CoachPageState extends ConsumerState<CoachPage> {
                         color: _listening
                             ? Theme.of(context).colorScheme.error
                             : null,
-                        tooltip: _listening ? 'Stop' : 'Speak',
-                        onPressed: state.sending ? null : _dictate,
+                        tooltip: _listening ? 'Stop' : 'Talk to Vita',
+                        onPressed: state.sending ? null : _openVoiceMode,
+                        ),
                       ),
                     ),
                     Expanded(
