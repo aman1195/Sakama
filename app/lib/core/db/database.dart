@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:drift_flutter/drift_flutter.dart';
 
 part 'database.g.dart';
@@ -33,10 +34,10 @@ class FoodLogs extends Table {
   TextColumn get servingLabel => text().nullable()(); // "katori", "roti"
   RealColumn get servingQty => real().nullable()(); // 1.5
   RealColumn get energyKcal => real()();
-  RealColumn get proteinG => real().withDefault(const Constant(0))();
-  RealColumn get carbG => real().withDefault(const Constant(0))();
-  RealColumn get fatG => real().withDefault(const Constant(0))();
-  TextColumn get loggedVia => text().withDefault(const Constant('search'))();
+  RealColumn get proteinG => real().withDefault(const Constant(0)).clientDefault(() => 0)();
+  RealColumn get carbG => real().withDefault(const Constant(0)).clientDefault(() => 0)();
+  RealColumn get fatG => real().withDefault(const Constant(0)).clientDefault(() => 0)();
+  TextColumn get loggedVia => text().withDefault(const Constant('search')).clientDefault(() => 'search')();
   IntColumn get createdAt => integer()(); // epoch ms
   IntColumn get updatedAt => integer()(); // epoch ms — LWW conflict key
 
@@ -60,9 +61,9 @@ class Profiles extends Table {
   TextColumn get goal => text()();
   TextColumn get diet => text()();
   TextColumn get cuisine => text()();
-  TextColumn get conditions => text().withDefault(const Constant(''))();
+  TextColumn get conditions => text().withDefault(const Constant('')).clientDefault(() => '')();
   BoolColumn get onboardingComplete =>
-      boolean().withDefault(const Constant(false))();
+      boolean().withDefault(const Constant(false)).clientDefault(() => false)();
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()(); // LWW
 
@@ -134,7 +135,7 @@ class TargetHistory extends Table {
   IntColumn get waterMl => integer()();
 
   /// computed | plan | seed
-  TextColumn get source => text().withDefault(const Constant('computed'))();
+  TextColumn get source => text().withDefault(const Constant('computed')).clientDefault(() => 'computed')();
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()(); // LWW
 
@@ -177,12 +178,12 @@ class Meals extends Table {
   /// Items are JSON on the row, not a child table, for the same reason workout
   /// sets are: an item has no identity of its own and is never queried
   /// independently of its meal.
-  TextColumn get items => text().withDefault(const Constant('[]'))();
+  TextColumn get items => text().withDefault(const Constant('[]')).clientDefault(() => '[]')();
 
   /// Which slot it usually fills, so logging can default sensibly. Nullable:
   /// plenty of meals are eaten at any hour.
   TextColumn get defaultMeal => text().nullable()();
-  IntColumn get useCount => integer().withDefault(const Constant(0))();
+  IntColumn get useCount => integer().withDefault(const Constant(0)).clientDefault(() => 0)();
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();
 
@@ -201,7 +202,7 @@ class Workouts extends Table {
 
   /// strength | cardio | mobility | sport | other. A closed vocabulary so the
   /// UI can group and Vita can reason about intensity.
-  TextColumn get kind => text().withDefault(const Constant('strength'))();
+  TextColumn get kind => text().withDefault(const Constant('strength')).clientDefault(() => 'strength')();
 
   IntColumn get durationMin => integer().nullable()();
 
@@ -211,13 +212,13 @@ class Workouts extends Table {
   RealColumn get energyKcal => real().nullable()();
 
   /// Sets as JSON: [{"reps":10,"weight_kg":80}, ...]. Empty for cardio.
-  TextColumn get sets => text().withDefault(const Constant('[]'))();
+  TextColumn get sets => text().withDefault(const Constant('[]')).clientDefault(() => '[]')();
 
   TextColumn get notes => text().nullable()();
 
   /// How it was captured — same provenance vocabulary as food_logs
   /// (CLAUDE.md rule 7): manual | vita | health_kit | wearable.
-  TextColumn get loggedVia => text().withDefault(const Constant('manual'))();
+  TextColumn get loggedVia => text().withDefault(const Constant('manual')).clientDefault(() => 'manual')();
 
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()(); // LWW
@@ -237,8 +238,8 @@ class UserPlans extends Table {
   TextColumn get name => text()();
   TextColumn get config => text()(); // the Plan JSON (jsonEncode of the config)
   TextColumn get source =>
-      text().withDefault(const Constant('user_imported'))(); // ai_generated|user_imported|template
-  BoolColumn get active => boolean().withDefault(const Constant(false))();
+      text().withDefault(const Constant('user_imported')).clientDefault(() => 'user_imported')(); // ai_generated|user_imported|template
+  BoolColumn get active => boolean().withDefault(const Constant(false)).clientDefault(() => false)();
   TextColumn get startDate => text().nullable()(); // yyyy-MM-dd (cyclic/duration)
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()(); // LWW
@@ -281,7 +282,7 @@ class UserFoods extends Table {
   RealColumn get servingGrams => real().nullable()();
 
   /// Drives most-used ordering, so the common path gets shorter with use.
-  IntColumn get useCount => integer().withDefault(const Constant(0))();
+  IntColumn get useCount => integer().withDefault(const Constant(0)).clientDefault(() => 0)();
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()(); // LWW
 
@@ -314,7 +315,7 @@ class ChatThreads extends Table {
   /// Message count at the last extraction. Extraction is batched every N turns
   /// (decision 5), and this is what makes "N turns since last time" answerable
   /// without counting rows on every send.
-  IntColumn get summarizedUpTo => integer().withDefault(const Constant(0))();
+  IntColumn get summarizedUpTo => integer().withDefault(const Constant(0)).clientDefault(() => 0)();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -331,7 +332,7 @@ class ChatMessages extends Table {
   TextColumn get threadId => text()();
   TextColumn get role => text()(); // 'user' | 'vita'
   TextColumn get content => text()();
-  BoolColumn get synthetic => boolean().withDefault(const Constant(false))();
+  BoolColumn get synthetic => boolean().withDefault(const Constant(false)).clientDefault(() => false)();
   IntColumn get createdAt => integer()();
 
   @override
@@ -368,7 +369,7 @@ class MemoryFacts extends Table {
   /// 0..1, from the extractor. Low-confidence facts are stored but ranked below
   /// confident ones rather than discarded — the user can see and delete them,
   /// which is more honest than silently dropping what we half-heard.
-  RealColumn get confidence => real().withDefault(const Constant(0.5))();
+  RealColumn get confidence => real().withDefault(const Constant(0.5)).clientDefault(() => 0.5)();
 
   /// The thread this was learned from. NULLABLE, and deliberately not a foreign
   /// key: deleting a thread must not cascade away what was learned from it
@@ -509,6 +510,67 @@ class SakamaDatabase extends _$SakamaDatabase {
   /// the Supabase migration, not here. Plain-Drift mode (tests, local-only)
   /// keeps the normal create/migrate path.
   SakamaDatabase.withExecutor(super.executor, {this.managedExternally = false});
+
+  /// Columns whose value Drift believes can never be null, on tables PowerSync
+  /// physically created.
+  ///
+  /// WHY THIS EXISTS. `withDefault` puts a DEFAULT in a CREATE TABLE that Drift
+  /// runs — and under [managedExternally] Drift never runs one. PowerSync
+  /// creates these tables from powersync_schema.dart, where every column is
+  /// nullable and nothing has a default. So a column that an INSERT omits is
+  /// stored NULL, while the generated row mapper reads it with `!`. The read
+  /// then throws "Null check operator used on a null value" for that table
+  /// FOREVER, not just for the row that is wrong.
+  ///
+  /// That is not hypothetical: `chat_threads.summarized_up_to` shipped this
+  /// way. `createThread` never wrote the column, so every chat history read
+  /// crashed, and memory extraction — which reads the same row — failed
+  /// silently inside its own catch, so Vita never learned anything. One
+  /// missing column, two features dead, no error anywhere the user could see.
+  ///
+  /// Every column now also carries a `clientDefault`, so new rows always get a
+  /// value. This repairs the rows written before that.
+  static const _defaultsToRepair = <String, Map<String, String>>{
+    'chat_threads': {'summarized_up_to': '0'},
+    'chat_messages': {'synthetic': '0'},
+    'memory_facts': {'confidence': '0.5'},
+    'food_logs': {
+      'protein_g': '0', 'carb_g': '0', 'fat_g': '0', 'logged_via': "'search'",
+    },
+    'profiles': {'conditions': "''", 'onboarding_complete': '0'},
+    'target_history': {'source': "'computed'"},
+    'meals': {'items': "'[]'", 'use_count': '0'},
+    'workouts': {'kind': "'strength'", 'sets': "'[]'", 'logged_via': "'manual'"},
+    'user_plans': {'source': "'user_imported'", 'active': '0'},
+    'user_foods': {'use_count': '0'},
+  };
+
+  /// Backfill NULLs that should never have been written. Idempotent and cheap:
+  /// every statement is a no-op once the rows are clean.
+  ///
+  /// Runs at open, BEFORE the UI reads anything, because a single bad row is
+  /// enough to break a whole screen.
+  Future<void> repairMissingDefaults() async {
+    for (final entry in _defaultsToRepair.entries) {
+      for (final col in entry.value.entries) {
+        try {
+          await customStatement(
+            'UPDATE ${entry.key} SET ${col.key} = ${col.value} '
+            'WHERE ${col.key} IS NULL',
+          );
+        } catch (e) {
+          // A table this build does not have yet must not stop the others, and
+          // must never stop the app from opening.
+          debugPrint('repairMissingDefaults ${entry.key}.${col.key}: $e');
+        }
+      }
+    }
+  }
+
+  /// The repair list, for the guard test that keeps it in step with the schema.
+  @visibleForTesting
+  static Map<String, Map<String, String>> get defaultsToRepair =>
+      _defaultsToRepair;
 
   final bool managedExternally;
 
