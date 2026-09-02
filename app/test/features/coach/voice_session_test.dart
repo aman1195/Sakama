@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sakama/features/coach/application/voice_session.dart';
 import 'package:sakama/features/coach/data/voice_input.dart';
 import 'package:sakama/features/coach/data/voice_output.dart';
+import 'package:sakama/features/coach/domain/spoken_intent.dart';
 
 /// The loop is what makes this a MODE rather than a dictation box, so the loop
 /// is what gets tested: that it keeps going, that it stops when it should, and
@@ -375,8 +376,14 @@ void main() {
   /// "Voice mode works, but it's basic." Most of that was DEAD AIR: the
   /// platform waited three seconds of silence before deciding the user had
   /// finished, on every single turn, before the model was even asked.
+  ///
+  /// But shortening it is NOT uniformly safe, and review proved why by
+  /// execution: truncation INVERTS the classifier rather than defeating it
+  /// safely. "yes but not the rice" is not an answer; clipped to "yes" it
+  /// confirms and writes a food row. So the short pause is used only where a
+  /// clipped turn costs a repeat, never where it costs a diary entry.
   group('end-of-turn pause', () {
-    test('a conversation ends a turn sooner than a dictated list', () async {
+    test('an ordinary turn ends sooner than a dictated list', () async {
       final h = build(heard: [ok, quiet, quiet]);
       await h.session.run();
 
@@ -386,18 +393,56 @@ void main() {
           reason: 'three seconds per turn is why it felt slow');
     });
 
+    test('THE TURN THAT ANSWERS A PROPOSAL keeps the long pause', () async {
+      // The only turn where a clipped utterance writes to a health diary.
+      final h = build(heard: [ok, quiet, quiet], pendingDraft: true);
+      await h.session.run();
+
+      expect(h.engine.seenPause, VoiceInput.dictationPause,
+          reason: 'clipping "yes but not the rice" to "yes" logs food the '
+              'user was in the middle of refusing');
+    });
+
+    test('the rule is one function, so it cannot be re-derived differently',
+        () {
+      expect(VoiceInput.pauseForTurn(answeringProposal: true),
+          VoiceInput.dictationPause);
+      expect(VoiceInput.pauseForTurn(answeringProposal: false),
+          VoiceInput.conversationPause);
+    });
+
     test('dictation keeps the long pause, because listing a meal has gaps', () {
       // "two rotis... dal... and a bit of rice" must not be cut off after the
       // first item.
       expect(VoiceInput.dictationPause, const Duration(seconds: 3));
     });
 
-    test('the conversational pause is short but not trigger-happy', () {
-      // Cutting someone off mid-thought is worse than a short wait. Under a
-      // second would clip normal speech.
-      expect(VoiceInput.conversationPause.inMilliseconds,
-          greaterThanOrEqualTo(1000));
-      expect(VoiceInput.conversationPause.inMilliseconds, lessThanOrEqualTo(2000));
+    test('the conversational pause is exactly the value that was reasoned about',
+        () {
+      // A band let 1.0s and 1.999s pass equally. If this number moves, it
+      // should move deliberately, with the reasoning updated.
+      expect(VoiceInput.conversationPause, const Duration(milliseconds: 1500));
+    });
+  });
+
+  /// THE PROPERTY THE FIRST VERSION OF THIS PR CLAIMED, AND DID NOT HAVE.
+  group('truncation inverts the classifier', () {
+    test('a clipped answer confirms where the full sentence does not', () {
+      for (final full in [
+        'yes but not the rice',
+        'okay hold on',
+        'sure but half',
+        'haan lekin thoda',
+      ]) {
+        final clipped = full.split(' ').first;
+        expect(actionForDictation(text: full, hasPendingDraft: true),
+            DictationAction.fillComposer,
+            reason: '"$full" is not an answer');
+        expect(actionForDictation(text: clipped, hasPendingDraft: true),
+            DictationAction.confirmDraft,
+            reason: '"$clipped" IS — which is why the answering turn must not '
+                'be cut short');
+      }
     });
   });
 }

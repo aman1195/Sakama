@@ -152,8 +152,11 @@ class VoiceSession {
           phase: VoicePhase.listening, transcript: '', clearNotice: true));
 
       final heard = await input.listenOnce(
-        // A conversation ends a turn far sooner than a dictated shopping list.
-        pauseFor: VoiceInput.conversationPause,
+        // A short pause for an ordinary turn, the long one when a proposal is
+        // on screen — because on THAT turn a clipped "yes but not the rice"
+        // becomes "yes" and writes a food row. Truncation inverts the
+        // classifier rather than defeating it safely.
+        pauseFor: VoiceInput.pauseForTurn(answeringProposal: hasPendingDraft()),
         onPartial: (t) {
           if (_stopping) return;
           _set(_state.copyWith(transcript: t));
