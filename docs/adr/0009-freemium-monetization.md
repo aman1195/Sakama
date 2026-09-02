@@ -135,9 +135,44 @@ Checked directly against the Hugging Face and GitHub APIs, and against Apple's d
 The pattern is consistent enough to be a rule: **the headline licence describes the wrapper, not the
 asset**. Verify weights separately from code, from the registry, before a model enters the picker.
 
+### 9f. Plus is HIGHER CAPS, never unlimited (owner ruling, 2026-09-02)
+
+> "There is no company who [is] unlimited, every company has a cap — and also we are not funded yet."
+
+Both halves are the decision. Unlimited is not the industry norm it is marketed as, and for an
+unfunded company an **unbounded per-user cost behind a fixed monthly price** is a bet that no
+subscriber is heavy. That bet loses on the users who like the product most.
+
+**The rule that sets every Plus cap:**
+
+```
+cap × cost-per-call × 30  <  subscription price × target margin
+```
+
+A subscriber who hits their cap **every single day** must still cost less than they pay. Any cap
+that fails that line is not a cap, it is a hope. Set the caps from the arithmetic, not from what
+sounds generous — and re-check them whenever provider pricing moves, because the left side is
+someone else's number.
+
+**The mechanism already exists, which is the good news.** `increment_ai_usage(p_feature, p_cap)`
+already takes the cap as a *parameter* (migration 0005) and enforces it atomically server-side. The
+Edge Functions pass constants today (`DAILY_CAP = 30` for Vita, 8 for PhotoSnap, 10 for estimates,
+2 for plan generation, 12 for extraction). Plus is therefore **not new metering** — it is the same
+call with a cap resolved from the caller's entitlement instead of a compile-time constant.
+
+That is the whole server-side change: `cap = f(feature, tier)`. What remains genuinely new is the
+entitlement itself — StoreKit and Play Billing, receipt validation, restore-purchases, and a
+trustworthy server-side answer to "is this user on Plus right now". The cap must be resolved
+**server-side from a verified receipt**, never from a client claim, for the same reason the caps
+were put in the Edge Function rather than the app.
+
+**Over the cap stays a gentle prompt, not a broken feature** — the original rule in this ADR, and
+it applies to Plus too. A paying user who hits a limit is owed a clear message about when it
+resets, not a dead button.
+
 ### Open — owner decisions, not recorded here
 
-1. Does Plus mean genuinely unlimited, or higher caps?
+1. ~~Does Plus mean genuinely unlimited, or higher caps?~~ **Decided: higher caps — see 9f.**
 2. Is voice inside Plus, or metered and sold separately?
 3. Is the on-device tier free, or a Plus feature? Free is more generous and costs nothing; Plus-
    gating it is the only lever that makes a subscription attractive to a flagship owner who could
