@@ -22,11 +22,15 @@ class _ScriptedEngine implements SpeechEngine {
   @override
   bool get isListening => _listening;
 
+  Duration? seenPause;
+
   @override
   Future<bool> start({
     required void Function(String text, bool isFinal) onResult,
     required Duration limit,
+    Duration pauseFor = VoiceInput.dictationPause,
   }) async {
+    seenPause = pauseFor;
     final r = _script[calls.clamp(0, _script.length - 1)];
     calls++;
     if (r.outcome == VoiceOutcome.denied) return false;
@@ -365,6 +369,35 @@ void main() {
       final h = build(heard: [ok, quiet, quiet], reply: 'You are doing well.');
       await h.session.run();
       expect(h.sent, ['how is my protein']);
+    });
+  });
+
+  /// "Voice mode works, but it's basic." Most of that was DEAD AIR: the
+  /// platform waited three seconds of silence before deciding the user had
+  /// finished, on every single turn, before the model was even asked.
+  group('end-of-turn pause', () {
+    test('a conversation ends a turn sooner than a dictated list', () async {
+      final h = build(heard: [ok, quiet, quiet]);
+      await h.session.run();
+
+      expect(h.engine.seenPause, VoiceInput.conversationPause);
+      expect(h.engine.seenPause!.inMilliseconds,
+          lessThan(VoiceInput.dictationPause.inMilliseconds),
+          reason: 'three seconds per turn is why it felt slow');
+    });
+
+    test('dictation keeps the long pause, because listing a meal has gaps', () {
+      // "two rotis... dal... and a bit of rice" must not be cut off after the
+      // first item.
+      expect(VoiceInput.dictationPause, const Duration(seconds: 3));
+    });
+
+    test('the conversational pause is short but not trigger-happy', () {
+      // Cutting someone off mid-thought is worse than a short wait. Under a
+      // second would clip normal speech.
+      expect(VoiceInput.conversationPause.inMilliseconds,
+          greaterThanOrEqualTo(1000));
+      expect(VoiceInput.conversationPause.inMilliseconds, lessThanOrEqualTo(2000));
     });
   });
 }

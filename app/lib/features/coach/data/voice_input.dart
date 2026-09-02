@@ -13,6 +13,7 @@ abstract class SpeechEngine {
   Future<bool> start({
     required void Function(String text, bool isFinal) onResult,
     required Duration limit,
+    Duration pauseFor,
   });
   Future<void> stop();
   bool get isListening;
@@ -31,6 +32,7 @@ class PluginSpeechEngine implements SpeechEngine {
   Future<bool> start({
     required void Function(String text, bool isFinal) onResult,
     required Duration limit,
+    Duration pauseFor = VoiceInput.dictationPause,
   }) async {
     if (!_initialised) {
       _initialised = await _speech.initialize(
@@ -48,9 +50,7 @@ class PluginSpeechEngine implements SpeechEngine {
         cancelOnError: true,
         listenMode: ListenMode.dictation,
         listenFor: limit,
-        // People pause mid-sentence when dictating a meal, so this is not as
-        // tight as it looks.
-        pauseFor: const Duration(seconds: 3),
+        pauseFor: pauseFor,
       ),
     );
     return true;
@@ -134,14 +134,34 @@ class VoiceInput {
   ///
   /// [onPartial] streams interim text so the composer fills in as the user
   /// speaks — dictation that shows nothing for six seconds feels broken.
+  /// How long a silence must last before the platform decides you have
+  /// finished, when DICTATING into the composer.
+  ///
+  /// Long on purpose here: people pause mid-sentence while listing a meal
+  /// ("two rotis… dal… and a bit of rice"), and cutting them off loses the
+  /// rest of the food.
+  static const dictationPause = Duration(seconds: 3);
+
+  /// The same, in a CONVERSATION.
+  ///
+  /// Three seconds of dead air after every sentence is most of why voice mode
+  /// feels slow — it is not the model, it is the wait before the model is even
+  /// asked. A conversational turn ends much sooner than a dictated list, and
+  /// the cost of ending it too early is small here: a truncated utterance
+  /// becomes an ordinary message, and only an unmistakable answer can confirm
+  /// a write.
+  static const conversationPause = Duration(milliseconds: 1500);
+
   Future<VoiceResult> listenOnce({
     Duration limit = const Duration(seconds: 30),
+    Duration pauseFor = dictationPause,
     void Function(String partial)? onPartial,
   }) async {
     var text = '';
     try {
       final started = await _engine.start(
         limit: limit,
+        pauseFor: pauseFor,
         onResult: (t, isFinal) {
           text = t;
           if (!isFinal) onPartial?.call(t);

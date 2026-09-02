@@ -19,11 +19,15 @@ class _FakeEngine implements SpeechEngine {
   @override
   bool get isListening => false;
 
+  Duration? seenPause;
+
   @override
   Future<bool> start({
     required void Function(String text, bool isFinal) onResult,
     required Duration limit,
+    Duration pauseFor = VoiceInput.dictationPause,
   }) async {
+    seenPause = pauseFor;
     if (throwOn != null) throw throwOn!;
     capturedLimit = limit;
     if (!starts) return false;
