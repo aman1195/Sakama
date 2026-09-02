@@ -109,15 +109,27 @@ class EmbeddedVoicePolicy {
     String norm(String? locale) =>
         (locale ?? '').replaceAll('_', '-').toLowerCase();
 
-    final exact = embedded
-        .where((v) => norm(v['locale']) == norm(preferred))
-        .firstOrNull;
-    if (exact != null) return exact;
+    // BEST VOICE FIRST, within each tier. iOS ships a compact default voice
+    // and lets the user download "enhanced" and "premium" ones, and the gap
+    // between them is most of why synthesized speech sounds cheap. They are
+    // all local, so preferring them costs nothing this class is protecting.
+    // Android does not report the field; those simply sort equal.
+    int rank(Map<String, String> v) => switch (v['quality']) {
+          'premium' => 0,
+          'enhanced' => 1,
+          _ => 2,
+        };
+    List<Map<String, String>> best(Iterable<Map<String, String>> vs) =>
+        vs.toList()..sort((a, b) => rank(a).compareTo(rank(b)));
 
-    final sameLanguage = embedded
-        .where((v) => lang(v['locale']) == lang(preferred))
-        .firstOrNull;
-    return sameLanguage ?? embedded.first;
+    final exact =
+        best(embedded.where((v) => norm(v['locale']) == norm(preferred)));
+    if (exact.isNotEmpty) return exact.first;
+
+    final sameLanguage =
+        best(embedded.where((v) => lang(v['locale']) == lang(preferred)));
+    if (sameLanguage.isNotEmpty) return sameLanguage.first;
+    return best(embedded).first;
   }
 }
 

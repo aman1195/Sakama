@@ -45,10 +45,13 @@ class _FakeSynth implements SpeechSynthesizer {
   Future<void> stop() async => stops++;
 }
 
-Map<String, String> _voice(String name, String locale, {String? network}) => {
+Map<String, String> _voice(String name, String locale,
+        {String? network, String? quality}) =>
+    {
       'name': name,
       'locale': locale,
       'network_required': ?network,
+      'quality': ?quality,
     };
 
 void main() {
@@ -249,6 +252,54 @@ void main() {
       final out = VoiceOutput(synthesizer: synth, isAndroidOverride: true);
       await out.stop();
       expect(synth.stops, 1, reason: 'a stop with nothing to stop must not throw');
+    });
+  });
+
+  group('voice QUALITY, which is most of why synthesis sounds cheap', () {
+    const policy = EmbeddedVoicePolicy(isAndroid: false);
+
+    test('a downloaded enhanced voice beats the compact default', () {
+      final chosen = policy.choose([
+        _voice('Rishi-compact', 'en-IN', quality: 'default'),
+        _voice('Rishi-enhanced', 'en-IN', quality: 'enhanced'),
+      ]);
+      expect(chosen!['name'], 'Rishi-enhanced');
+    });
+
+    test('premium beats enhanced', () {
+      final chosen = policy.choose([
+        _voice('b', 'en-IN', quality: 'enhanced'),
+        _voice('a', 'en-IN', quality: 'premium'),
+      ]);
+      expect(chosen!['name'], 'a');
+    });
+
+    test('the right LOCALE still wins over a better voice in the wrong one', () {
+      // Accent is a preference, but a premium American voice reading Indian
+      // dish names is worse than a plain Indian one.
+      final chosen = policy.choose([
+        _voice('us-premium', 'en-US', quality: 'premium'),
+        _voice('in-default', 'en-IN', quality: 'default'),
+      ]);
+      expect(chosen!['name'], 'in-default');
+    });
+
+    test('quality never overrides the network rule', () {
+      const android = EmbeddedVoicePolicy(isAndroid: true);
+      final chosen = android.choose([
+        _voice('cloud-premium', 'en-IN', network: '1', quality: 'premium'),
+        _voice('local-basic', 'en-IN', network: '0', quality: 'default'),
+      ]);
+      expect(chosen!['name'], 'local-basic',
+          reason: 'a better voice is not worth sending health data away');
+    });
+
+    test('a missing quality field sorts last, not first', () {
+      final chosen = policy.choose([
+        _voice('unknown', 'en-IN'),
+        _voice('enhanced', 'en-IN', quality: 'enhanced'),
+      ]);
+      expect(chosen!['name'], 'enhanced');
     });
   });
 }

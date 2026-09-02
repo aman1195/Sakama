@@ -39,6 +39,10 @@ class SyncService {
       ),
       managedExternally: true,
     );
+    // BEFORE anything reads. PowerSync created these tables without defaults,
+    // so a column an older build never wrote is stored NULL and the generated
+    // mapper's `!` turns one bad row into a permanently broken screen.
+    await _drift!.repairMissingDefaults();
     return _drift!;
   }
 
