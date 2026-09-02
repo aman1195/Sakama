@@ -108,17 +108,38 @@ write a food row with no user involved. Caught in review of #155; fixed by await
 settle delay, and a guard that treats our own words as silence.
 
 Those three defences shut the microphone while Vita speaks. Keeping it OPEN — true barge-in, where
-you can cut Vita off mid-sentence — is an **acoustic echo cancellation** problem, not an
-architectural one: iOS solves it natively via `AVAudioSession` in voice-chat mode with AEC enabled.
+you cut Vita off mid-sentence — needs **acoustic echo cancellation**, and iOS provides it natively.
 
-It does not require LiveKit, WebRTC, or a server. It is a contained piece of platform work, and it
-is the single change that would most make the current mode feel like the ones being compared to.
+**Correction to the first version of this section.** It called AEC "a contained piece of platform
+work". It is not, and the reason changes the plan. Checked against `speech_to_text` 7.4.0 source:
+
+- it creates its **own `AVAudioEngine`** and installs a tap on the input node
+  (`SpeechToTextPlugin.swift:359, :593`)
+- it never calls `setVoiceProcessingEnabled(true)`, which is what actually turns on iOS's echo
+  canceller — session mode alone does not
+- it hardcodes `setCategory(.playAndRecord, options: [… .mixWithOthers])` and `setMode(.default)`
+  on **every** listen (`:520-527`)
+- `SpeechListenOptions` exposes no audio-session control at all — the entire surface is
+  `cancelOnError`, `partialResults`, `onDevice`, `listenMode`, `sampleRate`, `autoPunctuation`,
+  `enableHapticFeedback`, `pauseFor`, `listenFor`, `localeId`
+
+So AEC is unreachable from Dart while `speech_to_text` owns audio capture. Setting the mode
+afterwards loses the race on the next listen, and would not enable voice processing on an engine
+that is already running.
+
+**The consequence is a simplification, not a setback: barge-in and the sherpa-onnx move are the
+same piece of work.** Owning audio capture is what makes streaming ASR possible AND what lets us
+enable voice processing. They should be scoped as one project, not two — and neither needs LiveKit,
+WebRTC or a server.
 
 ## 7. Recommendation
 
-1. **Now — make what exists good.** Native AEC for true barge-in, and `sherpa-onnx` for streaming
-   ASR + a Kokoro voice. No server, no audio egress, no ADR reversal, no new per-minute cost.
-   Measure on a real iPhone 13 before adopting: cold start, per-sentence latency, battery, size.
+1. **Now — own the audio input, once.** `sherpa-onnx` streaming ASR + a Kokoro voice + voice
+   processing enabled on our own capture. One project delivering both a better voice and real
+   barge-in; §6 explains why they cannot be separated. No server, no audio egress, no ADR reversal,
+   no per-minute cost. **Spike before adopting**, on a real iPhone 13, to the same evidence-first
+   bar as PhotoSnap: model size and download UX, cold start, per-sentence latency, battery and
+   thermals, and accuracy on Indian English.
 2. **Then — realtime as a metered feature, not the default.** Gemini Live over ephemeral tokens,
    paid tier, direct from the client. It needs its own ADR covering audio egress, the biometric
    category, and a hard per-user minute cap enforced the way `ai_usage` already caps everything
