@@ -148,6 +148,118 @@ WebRTC or a server.
    pipeline. Ephemeral tokens make the server they provide unnecessary, and TEN's licence is
    unresolved regardless.
 
+## 8. Owner decision (2026-09-02): models are the user's choice, downloaded in-app
+
+The direction, as set: **the user picks which models to use, the app names them (Supertonic, Qwen,
+Gemma, …), and there is a download button inside the app.** Small on-device LLMs are in scope too.
+
+That design answers three separate problems at once, which is why it is the right frame:
+
+- **App size stops being a constraint.** Nothing is bundled; the store binary stays near today's
+  25.6 MB. §5's "models are downloaded at runtime" becomes a product feature instead of a
+  workaround.
+- **Naming the models IS the attribution** these licences ask for, which removes the one real
+  obligation OpenRAIL-M and the Gemma terms impose on a distributor.
+- **The user opts in.** A gigabyte is a serious ask on Indian mobile data. It should be a choice
+  with a number attached, not a surprise on first launch.
+
+### What actually fits on the target device
+
+Measured from the Hugging Face API on 2026-09-02, not estimated:
+
+| Role | Candidate | Size | Licence |
+|---|---|---|---|
+| TTS | Kokoro-82M `uint8f16` | **114 MB** | Apache-2.0 |
+| TTS | Kokoro-82M `q4f16` | 155 MB | Apache-2.0 |
+| TTS | Supertonic 3 (published ONNX) | **401 MB** | OpenRAIL-M (code MIT) |
+| STT | sherpa-onnx streaming ASR | 60–80 MB | Apache-2.0 |
+| LLM | Gemma 3 1B `IQ4_XS` | **714 MB** | Gemma terms |
+| LLM | Qwen3 1.7B `IQ4_XS` | **1010 MB** | Apache-2.0 |
+
+A full local stack is therefore **roughly 0.9–1.2 GB**. The iPhone 13 has **4 GB of RAM**, so a 1B–2B
+model at Q4 is workable and a 4B is not — iOS will jetsam the app long before the model finishes
+loading. Size the picker to that, and do not offer what cannot run.
+
+Supertonic has no quantised build published (the `onnx-community` mirror holds stubs), so at 401 MB
+it is 3.5× Kokoro today. If a quantised release lands, its 31 languages and measured 0.3× RTF on an
+e-reader CPU make it a serious contender — that is a spike question, not a desk one.
+
+### The strongest case for an on-device LLM is NOT quality
+
+§5 says a 1–3B model is a large quality regression for coaching, and that stands. But it is the
+wrong yardstick, because the right job for a local model here is **rule 1**: offline-first. Vita is
+the only part of this app that stops working without signal. A local model does not have to beat
+the gateway — it has to beat *nothing at all* on a train, in a basement, on a dead prepaid balance.
+Framed that way it is a fallback tier, not a replacement, and it is something no competitor ships.
+
+### The safety question this opens, and it is real
+
+ADR 0016's guardrails — propose-confirm, and the refusals around eating disorders — were written
+assuming a capable model. A 1B model will follow them **less reliably**.
+
+Propose-confirm protects us structurally: the model can only ever *propose*, and a human confirms,
+so a weak model cannot write a wrong row on its own. The refusals have no such structural backstop.
+**Any SLM that ships must be re-tested against the same safety prompts before it is offered**, and
+if it fails them it does not go in the picker. That is a gate, not a preference.
+
+### Device-tiered availability (owner direction, 2026-09-02)
+
+The picker should **detect the device and unlock accordingly**: a flagship can download anything, a
+mid-range phone sees a shorter list, and each entry carries plain-language descriptors — *fast*,
+*slow to start*, *better voice*, *heavy on battery* — instead of RTF and megabytes.
+
+This is right, and it prevents the worst failure this feature can produce: a user spends a gigabyte
+of mobile data, the app is jetsammed on first use, and they blame the app rather than the model.
+Four things decide whether it works.
+
+**1. Gate on AVAILABLE memory, not on a device model.** iOS exposes
+`os_proc_available_memory()` — Apple's recommended API for how much memory *this app* may still
+use before jetsam — alongside `ProcessInfo.processInfo.physicalMemory` for total RAM. A lookup
+table of device names would be wrong the week a new phone ships, and per
+[MOBILE.md](../MOBILE.md) **we cannot hotfix**. Ask the device what it has; do not consult a list
+of what devices usually have.
+
+**2. The thresholds belong in remote config, not the binary.** The same reason. `app_config`
+already carries `min_supported_build` and the kill switches, and it is read-only to the client and
+off the PowerSync publication. Model entries and their RAM floors belong there, so a model that
+turns out to thrash on 4 GB can be withdrawn without a store release.
+
+**3. Show what a device cannot run, and say why.** Hiding entries produces "why does my friend have
+this?". Showing *"Needs 6 GB — this phone has 4 GB"* is the same instinct as the sync-failure
+receipts and the below-the-floor plan notice: this app tells people what happened rather than
+quietly doing less. It also sets expectations before someone upgrades.
+
+**4. Lead the descriptors with TIME TO FIRST AUDIO.** Every latency analysis of this pipeline puts
+the bottleneck in TTS first-audio, not the LLM — the spread across candidate engines is 106 ms to
+3,658 ms, an order of magnitude, while a 1B LLM's first token is 20–30 ms. So the label a user
+reads should answer *"how long before it talks"* and *"how good does it sound"*, in that order.
+The LLM tier additionally needs a **battery and heat** warning, because that is where the power
+goes.
+
+**The floor matters more than the ceiling.** A large share of this app's market has 3–4 GB devices
+that can run streaming STT and a small TTS but **cannot** hold a 1B LLM alongside the app. That is
+not an edge case to handle with an empty screen; it is the common case, and it should read as
+*"your phone can do voice; offline coaching needs more memory"* — a complete answer, not a gap.
+
+**Thresholds come from the spike, not from a table.** Nearly every mobile figure in the published
+comparisons is marked *estimated*. The RAM floors and the descriptor wording should be set from
+measurements on real hardware, starting with the iPhone 13 (A15, 4 GB) — which is both the test
+device and a fair proxy for the mid tier.
+
+### What this means to build
+
+1. A **model registry** — id, role (STT/TTS/LLM), display name, provider, size, licence, minimum
+   device RAM, download URL, checksum.
+2. A **download manager** — resumable, pausable, cancellable, deletable, with the size shown before
+   a byte moves, and Wi-Fi-only by default.
+3. A **models screen** naming each model and its provider and licence, which is the attribution.
+4. **Graceful fallback** — Apple's on-device voices and the gateway model remain the default, so the
+   app is whole before anything is downloaded and stays whole if the user declines or deletes.
+5. **A device probe** — available memory at download time, checked against a remote-config floor,
+   with an honest reason shown when a model is out of reach.
+
+Steps 1–4 are independent of which runtime wins the spike, so they can be built before it resolves.
+
 ## Sources
 
 - Gemini API pricing (Live API native audio, 25 tokens/second) — https://ai.google.dev/gemini-api/docs/pricing
