@@ -143,6 +143,27 @@ class PluginSpeechSynthesizer implements SpeechSynthesizer {
   PluginSpeechSynthesizer({FlutterTts? tts}) : _tts = tts ?? FlutterTts();
   final FlutterTts _tts;
 
+  /// `speak` must not return until the utterance has finished.
+  ///
+  /// THE DEFAULT IS false, AND IT IS DANGEROUS HERE. Without this the plugin
+  /// hands the text to the synthesizer and returns immediately (iOS:
+  /// `synthesizer.speak(utterance)` then `result(1)`). Voice mode then reopens
+  /// the microphone while the loudspeaker is still playing — and
+  /// `speech_to_text` configures the session with `.mixWithOthers` and mode
+  /// `.default`, so there is no echo cancellation and the recogniser hears
+  /// Vita.
+  ///
+  /// What it hears is the worst possible text: Vita's own confirmation prompt
+  /// says "shall I log that?", and "log that" is an affirmative. The app would
+  /// confirm its own proposal and write a food row with no user involved. It
+  /// would also never fall silent, so the session could not time out.
+  bool _awaitConfigured = false;
+  Future<void> _configure() async {
+    if (_awaitConfigured) return;
+    _awaitConfigured = true;
+    await _tts.awaitSpeakCompletion(true);
+  }
+
   @override
   Future<List<Map<String, String>>> voices() async {
     final raw = await _tts.getVoices;
@@ -158,7 +179,10 @@ class PluginSpeechSynthesizer implements SpeechSynthesizer {
       await _tts.setVoice(voice) == 1;
 
   @override
-  Future<void> speak(String text) => _tts.speak(text);
+  Future<void> speak(String text) async {
+    await _configure();
+    await _tts.speak(text);
+  }
 
   @override
   Future<void> stop() => _tts.stop();

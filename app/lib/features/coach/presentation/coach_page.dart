@@ -43,6 +43,16 @@ class _CoachPageState extends ConsumerState<CoachPage> {
   /// dictated line no longer speaks either, which is the honest reading — once
   /// you are typing, you are in a typing conversation.
   String? _dictated;
+
+  /// The running voice session, if any.
+  ///
+  /// HELD BY THE PAGE, not local to the opener, because the page is the only
+  /// thing that learns the user has left. Keeping it in a local meant a tab
+  /// switch stopped the SPEAKER and left the MICROPHONE open, cycling turns
+  /// out loud on another screen until the user came back. On a health app a
+  /// live microphone the user believes is closed is the worst thing to leave
+  /// running.
+  VoiceSession? _session;
   final _scroll = ScrollController();
 
   @override
@@ -54,7 +64,12 @@ class _CoachPageState extends ConsumerState<CoachPage> {
     // `TickerMode(enabled: isActive)` (go_router route.dart:1696), so losing
     // the ticker is the signal that this tab went away — and depending on it
     // brings us back here the moment it flips.
-    if (!TickerMode.valuesOf(context).enabled) unawaited(_speech.stop());
+    if (!TickerMode.valuesOf(context).enabled) {
+      unawaited(_speech.stop());
+      // The MICROPHONE too. Stopping only the speaker was half the rule.
+      unawaited(_session?.stop() ?? Future<void>.value());
+      unawaited(_voice.stop());
+    }
   }
 
   @override
@@ -64,6 +79,10 @@ class _CoachPageState extends ConsumerState<CoachPage> {
     // tab switch, because the branch stays mounted; believing it did was the
     // bug, and the fix is in didChangeDependencies rather than here.
     unawaited(_speech.stop());
+    // Teardown does not complete the sheet's route, so the session's own
+    // cleanup never runs — stop it here or the recogniser outlives the page.
+    unawaited(_session?.stop() ?? Future<void>.value());
+    unawaited(_voice.stop());
     _input.dispose();
     _scroll.dispose();
     super.dispose();
@@ -96,6 +115,10 @@ class _CoachPageState extends ConsumerState<CoachPage> {
   /// nothing to find. Dictation is still here on a long-press for anyone who
   /// wants words in the box rather than a conversation.
   Future<void> _openVoiceMode() async {
+    // Two taps during the consent read would build two sessions over ONE
+    // recogniser, and speech_to_text has no already-listening guard: the
+    // second `listen` silently replaces the first one's result callback.
+    if (_session != null) return;
     if (!await ensureAiConsent(context, ref)) return;
     if (!mounted) return;
     if (await _voice.needsNetworkDisclosure()) {
@@ -129,6 +152,7 @@ class _CoachPageState extends ConsumerState<CoachPage> {
       dismissDraft: notifier.dismissDraft,
     );
 
+    _session = session;
     // Fire the loop and show the sheet over it. The sheet listens; it does not
     // drive — closing it stops the session, and the session ending pops it.
     final running = session.run();
@@ -149,6 +173,7 @@ class _CoachPageState extends ConsumerState<CoachPage> {
     // not still be open.
     await session.stop();
     await running;
+    if (identical(_session, session)) _session = null;
   }
 
   /// Dictate into the composer (ADR 0016 decision 12).
@@ -388,7 +413,12 @@ class _CoachPageState extends ConsumerState<CoachPage> {
                             ? Theme.of(context).colorScheme.error
                             : null,
                         tooltip: _listening ? 'Stop' : 'Talk to Vita',
-                        onPressed: state.sending ? null : _openVoiceMode,
+                        // While dictating, the button says Stop and is red, so
+                        // it must STOP. Opening voice mode there would start a
+                        // second recognition over the first.
+                        onPressed: state.sending
+                            ? null
+                            : (_listening ? _dictate : _openVoiceMode),
                         ),
                       ),
                     ),

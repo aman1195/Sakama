@@ -115,8 +115,17 @@ class VoiceSession {
   /// in a health app is the single worst thing to leave running.
   final int maxQuietTurns;
 
+  /// Pause between Vita finishing and the microphone reopening.
+  ///
+  /// Short, but not zero: `speak` waits for the utterance, and this covers what
+  /// is still decaying in the room afterwards.
+  static const settleAfterSpeaking = Duration(milliseconds: 250);
+
   VoiceSessionState _state = const VoiceSessionState();
   VoiceSessionState get state => _state;
+
+  /// The last thing Vita said, so the loop can recognise its own voice.
+  String _lastSpoken = '';
 
   final _listeners = <void Function(VoiceSessionState)>[];
   void addListener(void Function(VoiceSessionState) l) => _listeners.add(l);
@@ -176,6 +185,26 @@ class VoiceSession {
           return;
 
         case VoiceOutcome.ok:
+          // SECOND LINE OF DEFENCE AGAINST HEARING OURSELVES. The first is
+          // that `speak` now waits for the utterance to finish, so the mic is
+          // shut while the speaker plays. This catches the tail: a reverberant
+          // room, a Bluetooth speaker running behind, a word still decaying
+          // when the mic opens.
+          //
+          // It matters more than an ordinary guard because of WHAT Vita says.
+          // Its confirmation prompt is "shall I log that?", and "log that" is
+          // an affirmative — so an echo could confirm the app's own proposal
+          // and write a food row with no user involved. Treating our own words
+          // as silence also lets the session time out normally instead of
+          // talking to itself forever.
+          if (_isEcho(heard.text)) {
+            quiet++;
+            if (quiet >= maxQuietTurns) {
+              await _finish();
+              return;
+            }
+            continue;
+          }
           quiet = 0;
           await _handle(heard.text);
           if (_stopping) return;
@@ -214,11 +243,33 @@ class VoiceSession {
     }
   }
 
+  /// Did we just hear the reply we ourselves spoke?
+  ///
+  /// Substring both ways, on normalised words: a recogniser catches a FRAGMENT
+  /// of the tail, not the whole sentence, so equality would never fire.
+  bool _isEcho(String heard) {
+    if (_lastSpoken.isEmpty) return false;
+    String flat(String s) => s
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    final said = flat(_lastSpoken);
+    final got = flat(heard);
+    if (got.isEmpty) return false;
+    return said.contains(got) || got.contains(said);
+  }
+
   Future<void> _say(String text) async {
     if (_stopping) return;
+    _lastSpoken = text;
     _set(_state.copyWith(phase: VoicePhase.speaking, reply: text));
     if (_state.muted) return;
     final outcome = await output.speak(text);
+    // Let the room go quiet before the microphone opens again.
+    if (outcome == SpeakOutcome.ok && !_stopping) {
+      await Future<void>.delayed(settleAfterSpeaking);
+    }
     if (outcome == SpeakOutcome.noOnDeviceVoice) {
       // Captions are always on, so the answer is never lost — say once why it
       // is silent, and keep the conversation going.

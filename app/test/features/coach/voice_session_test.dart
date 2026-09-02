@@ -12,8 +12,15 @@ class _ScriptedEngine implements SpeechEngine {
   final List<VoiceResult> _script;
   int calls = 0;
 
+  /// REAL state, not a hardcoded false. Review found every microphone guard in
+  /// the state machine could be deleted with all 16 tests green, because
+  /// nothing in the fixture ever observed the input engine — the test named
+  /// "close stops listening and speaking" asserted the SPEAKER.
+  bool _listening = false;
+  int stops = 0;
+
   @override
-  bool get isListening => false;
+  bool get isListening => _listening;
 
   @override
   Future<bool> start({
@@ -29,12 +36,17 @@ class _ScriptedEngine implements SpeechEngine {
       throw Exception('onDevice recognition is not supported');
     }
     if (r.outcome == VoiceOutcome.failed) throw Exception('mic died');
+    _listening = true;
     if (r.text.isNotEmpty) onResult(r.text, true);
+    _listening = false; // the platform settles before listenOnce returns
     return true;
   }
 
   @override
-  Future<void> stop() async {}
+  Future<void> stop() async {
+    stops++;
+    _listening = false;
+  }
 }
 
 class _FakeSynth implements SpeechSynthesizer {
@@ -59,6 +71,7 @@ void main() {
   ({
     VoiceSession session,
     _FakeSynth synth,
+    _ScriptedEngine engine,
     List<String> sent,
     List<String> confirmed,
     List<String> dismissed,
@@ -75,9 +88,9 @@ void main() {
     final dismissed = <String>[];
     var hasDraft = pendingDraft;
 
+    final engine = _ScriptedEngine(heard);
     final session = VoiceSession(
-      input: VoiceInput(
-          engine: _ScriptedEngine(heard), isAndroidOverride: false),
+      input: VoiceInput(engine: engine, isAndroidOverride: false),
       output: VoiceOutput(synthesizer: synth, isAndroidOverride: android),
       turn: (t) async {
         sent.add(t);
@@ -97,6 +110,7 @@ void main() {
     return (
       session: session,
       synth: synth,
+      engine: engine,
       sent: sent,
       confirmed: confirmed,
       dismissed: dismissed
@@ -137,6 +151,15 @@ void main() {
     final h = build(heard: [quiet, ok, quiet, quiet]);
     await h.session.run();
     expect(h.sent, ['how is my protein']);
+  });
+
+  test('it takes EXACTLY two silent turns, not more', () async {
+    // Raising maxQuietTurns or loosening >= to > used to change nothing that
+    // any test could see, so the stated behaviour was unpinned.
+    final h = build(heard: [quiet, quiet, quiet, quiet, quiet]);
+    await h.session.run();
+    expect(h.engine.calls, 2,
+        reason: 'a mode that keeps listening is a mic the user forgot about');
   });
 
   group('a proposal on screen turns the turn into an answer', () {
@@ -189,14 +212,25 @@ void main() {
   });
 
   group('stopping', () {
-    test('close stops listening and speaking at once', () async {
+    test('close stops the MICROPHONE, not just the speaker', () async {
+      // Deleting `input.stop()` from stop() used to pass every test in this
+      // file. A live microphone the user believes is closed is the worst
+      // failure this feature has.
       final h = build(heard: [ok, ok, ok, quiet, quiet]);
       final running = h.session.run();
       await h.session.stop();
       await running;
 
+      expect(h.engine.stops, greaterThan(0), reason: 'the mic must be closed');
+      expect(h.engine.isListening, isFalse);
       expect(h.synth.stops, greaterThan(0));
       expect(h.session.state.phase, VoicePhase.idle);
+    });
+
+    test('the microphone is closed when silence ends the session', () async {
+      final h = build(heard: [quiet, quiet]);
+      await h.session.run();
+      expect(h.engine.isListening, isFalse);
     });
 
     test('interrupt silences Vita without ending the session', () async {
@@ -275,5 +309,62 @@ void main() {
     await h.session.run();
 
     expect(seen, contains('how is my protein'));
+  });
+
+  /// VITA MUST NOT HEAR ITSELF. `flutter_tts` defaults `awaitSpeakCompletion`
+  /// to false, so `speak` used to return before the utterance played and the
+  /// loop reopened the microphone over the loudspeaker. `speech_to_text` sets
+  /// the audio session to `.mixWithOthers` with no echo cancellation, so the
+  /// recogniser heard Vita — and Vita's own prompt says "shall I log that?",
+  /// where "log that" is an affirmative that CONFIRMS A FOOD WRITE.
+  group('hearing itself', () {
+    test('an echo of the reply is treated as silence, not as a turn', () async {
+      final h = build(
+        heard: [ok, const VoiceResult(VoiceOutcome.ok, 'Here is your'), quiet],
+        reply: 'Here is your answer.',
+      );
+      await h.session.run();
+
+      expect(h.sent, ['how is my protein'],
+          reason: 'the fragment of our own reply must not become a turn');
+    });
+
+    test('an echo cannot confirm a pending proposal', () async {
+      // The catastrophic case: Vita asks "shall I log that?", the mic catches
+      // "log that", and the app confirms its own proposal with no user.
+      // The real trace: the user asks, Vita answers "…Shall I log that?" and
+      // a draft appears, then the microphone opens and catches the tail.
+      final h = build(
+        heard: [ok, const VoiceResult(VoiceOutcome.ok, 'log that'), quiet, quiet],
+        pendingDraft: true,
+        reply: 'You are at 48 grams. Shall I log that?',
+      );
+      await h.session.run();
+
+      expect(h.confirmed, isEmpty,
+          reason: 'the app must never write a food row from its own voice');
+    });
+
+    test('an echo still lets the session time out', () async {
+      // Counting echoes as silence is what stops the app talking to itself
+      // forever and burning the daily cap.
+      final h = build(
+        heard: [
+          const VoiceResult(VoiceOutcome.ok, 'Here is your'),
+          const VoiceResult(VoiceOutcome.ok, 'Here is your'),
+        ],
+        reply: 'Here is your answer.',
+      );
+      await h.session.run();
+      expect(h.session.state.phase, VoicePhase.idle);
+    });
+
+    test('a genuine reply that merely OVERLAPS wording still counts', () async {
+      // The guard must not swallow the user. "protein" appears in neither
+      // direction of the containment check against the reply.
+      final h = build(heard: [ok, quiet, quiet], reply: 'You are doing well.');
+      await h.session.run();
+      expect(h.sent, ['how is my protein']);
+    });
   });
 }

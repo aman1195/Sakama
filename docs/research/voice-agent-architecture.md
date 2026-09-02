@@ -95,8 +95,17 @@ multi-gigabyte download, battery drain and thermals on an iPhone 13. Local STT +
 
 ## 6. Barge-in is a smaller problem than it looks
 
-What ships now is tap-to-interrupt, because holding the microphone open while the speaker plays
-makes Vita hear itself. That is an **acoustic echo cancellation** problem, not an architectural one:
+What ships is tap-to-interrupt, because holding the microphone open while the speaker plays makes
+Vita hear itself.
+
+**That is not theoretical — the first version of voice mode did it.** `flutter_tts` defaults
+`awaitSpeakCompletion` to **false**, so `speak()` returns as soon as the utterance is handed to the
+synthesizer, and the loop reopened the microphone over the loudspeaker. `speech_to_text` configures
+the audio session with `.mixWithOthers` and mode `.default`, so there is no cancellation and the
+recogniser hears the reply. The dangerous part is *what* it hears: Vita's confirmation prompt says
+"shall I log that?", and "log that" is an affirmative — the app could confirm its own proposal and
+write a food row with no user involved. Caught in review of #155; fixed by awaiting completion, a
+settle delay, and a guard that treats our own words as silence. That is an **acoustic echo cancellation** problem, not an architectural one:
 iOS solves it natively via `AVAudioSession` in voice-chat mode with AEC enabled.
 
 It does not require LiveKit, WebRTC, or a server. It is a contained piece of platform work, and it

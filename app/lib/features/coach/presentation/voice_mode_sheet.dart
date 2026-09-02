@@ -36,7 +36,18 @@ class _VoiceModeSheetState extends State<VoiceModeSheet>
   }
 
   void _onState(VoiceSessionState s) {
-    if (mounted) setState(() => _state = s);
+    if (!mounted) return;
+    setState(() => _state = s);
+    // THE SESSION ENDING MUST CLOSE THE SHEET. Two silent turns finish the
+    // loop, and without this the user is left staring at a black panel with a
+    // dim circle, no text, no barrier to tap and no drag to dismiss — the only
+    // way out being an X in the corner. A mode that ends should look ended.
+    //
+    // `failed` deliberately stays: it carries a reason the user needs to read
+    // (permission denied, no private transcription), so it closes on the X.
+    if (s.phase == VoicePhase.idle && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
   }
 
   @override
