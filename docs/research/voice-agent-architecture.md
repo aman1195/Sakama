@@ -105,8 +105,11 @@ the audio session with `.mixWithOthers` and mode `.default`, so there is no canc
 recogniser hears the reply. The dangerous part is *what* it hears: Vita's confirmation prompt says
 "shall I log that?", and "log that" is an affirmative — the app could confirm its own proposal and
 write a food row with no user involved. Caught in review of #155; fixed by awaiting completion, a
-settle delay, and a guard that treats our own words as silence. That is an **acoustic echo cancellation** problem, not an architectural one:
-iOS solves it natively via `AVAudioSession` in voice-chat mode with AEC enabled.
+settle delay, and a guard that treats our own words as silence.
+
+Those three defences shut the microphone while Vita speaks. Keeping it OPEN — true barge-in, where
+you can cut Vita off mid-sentence — is an **acoustic echo cancellation** problem, not an
+architectural one: iOS solves it natively via `AVAudioSession` in voice-chat mode with AEC enabled.
 
 It does not require LiveKit, WebRTC, or a server. It is a contained piece of platform work, and it
 is the single change that would most make the current mode feel like the ones being compared to.
