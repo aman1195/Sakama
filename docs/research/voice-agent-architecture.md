@@ -202,6 +202,50 @@ so a weak model cannot write a wrong row on its own. The refusals have no such s
 **Any SLM that ships must be re-tested against the same safety prompts before it is offered**, and
 if it fails them it does not go in the picker. That is a gate, not a preference.
 
+### Device-tiered availability (owner direction, 2026-09-02)
+
+The picker should **detect the device and unlock accordingly**: a flagship can download anything, a
+mid-range phone sees a shorter list, and each entry carries plain-language descriptors — *fast*,
+*slow to start*, *better voice*, *heavy on battery* — instead of RTF and megabytes.
+
+This is right, and it prevents the worst failure this feature can produce: a user spends a gigabyte
+of mobile data, the app is jetsammed on first use, and they blame the app rather than the model.
+Four things decide whether it works.
+
+**1. Gate on AVAILABLE memory, not on a device model.** iOS exposes
+`os_proc_available_memory()` — Apple's recommended API for how much memory *this app* may still
+use before jetsam — alongside `ProcessInfo.processInfo.physicalMemory` for total RAM. A lookup
+table of device names would be wrong the week a new phone ships, and per
+[MOBILE.md](../MOBILE.md) **we cannot hotfix**. Ask the device what it has; do not consult a list
+of what devices usually have.
+
+**2. The thresholds belong in remote config, not the binary.** The same reason. `app_config`
+already carries `min_supported_build` and the kill switches, and it is read-only to the client and
+off the PowerSync publication. Model entries and their RAM floors belong there, so a model that
+turns out to thrash on 4 GB can be withdrawn without a store release.
+
+**3. Show what a device cannot run, and say why.** Hiding entries produces "why does my friend have
+this?". Showing *"Needs 6 GB — this phone has 4 GB"* is the same instinct as the sync-failure
+receipts and the below-the-floor plan notice: this app tells people what happened rather than
+quietly doing less. It also sets expectations before someone upgrades.
+
+**4. Lead the descriptors with TIME TO FIRST AUDIO.** Every latency analysis of this pipeline puts
+the bottleneck in TTS first-audio, not the LLM — the spread across candidate engines is 106 ms to
+3,658 ms, an order of magnitude, while a 1B LLM's first token is 20–30 ms. So the label a user
+reads should answer *"how long before it talks"* and *"how good does it sound"*, in that order.
+The LLM tier additionally needs a **battery and heat** warning, because that is where the power
+goes.
+
+**The floor matters more than the ceiling.** A large share of this app's market has 3–4 GB devices
+that can run streaming STT and a small TTS but **cannot** hold a 1B LLM alongside the app. That is
+not an edge case to handle with an empty screen; it is the common case, and it should read as
+*"your phone can do voice; offline coaching needs more memory"* — a complete answer, not a gap.
+
+**Thresholds come from the spike, not from a table.** Nearly every mobile figure in the published
+comparisons is marked *estimated*. The RAM floors and the descriptor wording should be set from
+measurements on real hardware, starting with the iPhone 13 (A15, 4 GB) — which is both the test
+device and a fair proxy for the mid tier.
+
 ### What this means to build
 
 1. A **model registry** — id, role (STT/TTS/LLM), display name, provider, size, licence, minimum
@@ -211,6 +255,8 @@ if it fails them it does not go in the picker. That is a gate, not a preference.
 3. A **models screen** naming each model and its provider and licence, which is the attribution.
 4. **Graceful fallback** — Apple's on-device voices and the gateway model remain the default, so the
    app is whole before anything is downloaded and stays whole if the user declines or deletes.
+5. **A device probe** — available memory at download time, checked against a remote-config floor,
+   with an honest reason shown when a model is out of reach.
 
 Steps 1–4 are independent of which runtime wins the spike, so they can be built before it resolves.
 
