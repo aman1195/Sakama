@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../app/kit/kit.dart';
@@ -10,6 +11,8 @@ import '../../settings/presentation/ai_disclosure.dart';
 import '../domain/coach_message.dart';
 import '../domain/tool_draft.dart';
 import '../data/voice_input.dart';
+import '../data/voice_output.dart';
+import '../domain/spoken_intent.dart';
 import 'coach_controller.dart';
 
 /// Vita — the coach tab. A persistent chat grounded in today's real data.
@@ -22,14 +25,65 @@ class CoachPage extends ConsumerStatefulWidget {
 class _CoachPageState extends ConsumerState<CoachPage> {
   final _input = TextEditingController();
   final _voice = VoiceInput();
+  final _speech = VoiceOutput();
   bool _listening = false;
+
+  /// The exact transcript last dictated into the composer, if any.
+  ///
+  /// THE TEXT, NOT A FLAG. A boolean had to be cleared on every path that
+  /// sends, and review found two that do not go through [_send] at all — the
+  /// photo button and the suggestion chip, the latter in a child widget that
+  /// cannot reach this state. A stale `true` there meant a turn the user TYPED
+  /// got read aloud, which is the one thing the rule exists to prevent.
+  ///
+  /// Comparing the text needs no clearing anywhere: a photo turn, a chip turn
+  /// and a typed turn simply do not match, so they cannot speak. Editing a
+  /// dictated line no longer speaks either, which is the honest reading — once
+  /// you are typing, you are in a typing conversation.
+  String? _dictated;
   final _scroll = ScrollController();
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // SWITCHING TABS MUST SILENCE VITA, and `dispose` cannot do it: this page
+    // is a branch of a StatefulShellRoute.indexedStack, so it stays MOUNTED
+    // when the user leaves. go_router wraps each branch in
+    // `TickerMode(enabled: isActive)` (go_router route.dart:1696), so losing
+    // the ticker is the signal that this tab went away — and depending on it
+    // brings us back here the moment it flips.
+    if (!TickerMode.valuesOf(context).enabled) unawaited(_speech.stop());
+  }
+
+  @override
   void dispose() {
+    // The other half of the rule above. This catches teardown — sign-out, a
+    // shell rebuild — which the ticker signal does not. It does NOT catch a
+    // tab switch, because the branch stays mounted; believing it did was the
+    // bug, and the fix is in didChangeDependencies rather than here.
+    unawaited(_speech.stop());
     _input.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  /// Read the newest reply aloud.
+  ///
+  /// Only ever called after a turn the user SPOKE. Typing gets text back;
+  /// speaking gets speech back. That keeps the feature off for anyone who
+  /// never touches the microphone, without a setting to discover.
+  Future<void> _speakLatestReply() async {
+    final messages = ref.read(coachControllerProvider).messages;
+    final latest = messages.lastWhere((m) => m.role == CoachRole.vita,
+        orElse: () => const CoachMessage(CoachRole.vita, ''));
+    final outcome = await _speech.speak(latest.content);
+    if (!mounted) return;
+    if (outcome == SpeakOutcome.noOnDeviceVoice) {
+      // A protection, not a malfunction — the same wording as dictation uses
+      // when the platform refuses rather than uploading.
+      _toast('This phone has no private voice available, so Vita stayed '
+          'silent. The reply is on screen.');
+    }
   }
 
   /// Dictate into the composer (ADR 0016 decision 12).
@@ -45,6 +99,10 @@ class _CoachPageState extends ConsumerState<CoachPage> {
   /// "I ate two rusks" has made a mistake the user cannot see coming. Same
   /// propose-confirm instinct as every other write path here.
   Future<void> _dictate() async {
+    // BARGE-IN. Reaching for the microphone means "I want to talk now", so
+    // Vita stops mid-sentence. Waiting for it to finish is the thing that
+    // makes voice assistants feel like arguing with an answering machine.
+    await _speech.stop();
     if (_listening) {
       await _voice.stop();
       if (mounted) setState(() => _listening = false);
@@ -69,9 +127,41 @@ class _CoachPageState extends ConsumerState<CoachPage> {
 
     switch (result.outcome) {
       case VoiceOutcome.ok:
+        // Answering a pending proposal out loud IS the confirmation — the user
+        // said it deliberately, in response to a card asking the question, so
+        // it is still an explicit act and ADR 0016 decision 2 holds.
+        //
+        // Only an UNMISTAKABLE answer acts. Anything else falls through to the
+        // composer unsent, exactly as before, so a misheard word costs a tap
+        // rather than a wrong entry in a health diary.
+        final notifier = ref.read(coachControllerProvider.notifier);
+        final action = actionForDictation(
+          text: result.text,
+          hasPendingDraft:
+              ref.read(coachControllerProvider).pendingDrafts.isNotEmpty,
+        );
+        switch (action) {
+          case DictationAction.confirmDraft:
+            // The partial-transcript callback above put "yes" in the composer.
+            // Leaving it there sends the word to Vita on the next tap, costing
+            // a real exchange against the daily budget to say nothing.
+            _input.clear();
+            _dictated = null;
+            await notifier.confirmDraft();
+            await _speakLatestReply(); // "Logged 2 items."
+            return;
+          case DictationAction.dismissDraft:
+            _input.clear();
+            _dictated = null;
+            notifier.dismissDraft();
+            return;
+          case DictationAction.fillComposer:
+            break;
+        }
         _input.text = result.text;
         _input.selection =
             TextSelection.collapsed(offset: result.text.length);
+        _dictated = result.text;
       case VoiceOutcome.denied:
         _toast('Sakama needs microphone and speech access. Enable it in '
             'Settings to talk to Vita.');
@@ -98,11 +188,16 @@ class _CoachPageState extends ConsumerState<CoachPage> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('About voice on Android'),
+          // Re-worded when voice gained the ability to LOG. The old copy was
+          // honest about a transcript that landed in a composer the user read
+          // before sending; it is not honest about one that can commit a row.
           content: const Text(
               'Sakama asks Android to transcribe on your phone. On some '
               'devices Android uses its online service instead, which means '
               'what you say is sent to Google. We cannot tell which your '
-              'phone does.\n\nTyping always stays on your phone.'),
+              'phone does.\n\nWhen Vita has asked you to confirm something, '
+              'saying "yes" logs it straight away.\n\nTyping always stays on '
+              'your phone.'),
           actions: [
             TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
@@ -133,8 +228,12 @@ class _CoachPageState extends ConsumerState<CoachPage> {
     // #60: consent before sending the log + profile (incl. health conditions).
     if (!await ensureAiConsent(context, ref)) return;
     if (!mounted) return;
+    // Speak only if this is EXACTLY what was dictated. See [_dictated].
+    final spoken = _dictated != null && text.trim() == _dictated!.trim();
+    _dictated = null;
     _input.clear();
     await ref.read(coachControllerProvider.notifier).send(text);
+    if (spoken && mounted) await _speakLatestReply();
     if (mounted && _scroll.hasClients) {
       _scroll.animateTo(
         _scroll.position.maxScrollExtent,

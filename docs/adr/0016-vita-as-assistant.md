@@ -149,3 +149,53 @@ memory → voice.
 Vita as the app's primary interaction surface, with a propose-confirm safety contract that we
 should not quietly relax later — the confirm step is the reason a hallucination cannot corrupt a
 health diary.
+
+---
+
+## Amendment, 2026-09-01 — speech OUT, and confirming by voice (A5)
+
+Decision 12 covered speech **in** and, correctly, refused a plugin default that would have
+uploaded audio. Speaking replies is a second egress surface with different failure semantics, and
+confirming by voice moves the propose-confirm boundary. Both belong here rather than in a source
+comment.
+
+**12a. A reply is spoken on-device or not at all.**
+
+A reply is health data — "you're 690 kcal short", or a line about a medication. Decision 1 keeps
+conversations on the phone at rest, and reading them aloud through a vendor's synthesis service
+would defeat that with no user-visible signal.
+
+`flutter_tts` (MIT, verified from the package's own LICENSE) does **not** give this by default.
+`speak()` uses whatever voice the engine has selected, and the one network check in the Android
+plugin sits inside a query helper the speak path never calls. So:
+
+- **iOS** is safe by construction: every `AVSpeechSynthesisVoice` is local, and `getVoices` reports
+  no `network_required` key because there is nothing to report.
+- **Android** reports `network_required` on every voice. We select an embedded one explicitly and
+  **stay silent** when there is none, telling the user why. A **missing** flag is a refusal, not a
+  pass.
+
+The pin is re-issued and its result checked **before every utterance**. Resolving it once was the
+blocking finding on #153: the Android plugin recreates its `TextToSpeech` object when the service
+connection dies and restores only the language, so a cached "allowed" would have let a later reply
+go out on the engine's default — which for many locales is a network voice.
+
+**Accepted risk.** "Every iOS voice is local" is an assertion about Apple's API, not about our
+code, and iOS 17 added third-party synthesis providers to that list. We have no source describing
+how those behave. If that changes, the iOS branch needs the same explicit filtering as Android.
+
+**12b. A spoken answer to a pending proposal is an explicit confirmation.**
+
+Decision 2 stands: Vita never writes on its own. Answering a card that asked the question is a
+deliberate user act, not the model deciding. The safeguard is that **only an unmistakable answer
+acts** — ambiguity, length, and any utterance carrying both an agreement and a refusal leave the
+proposal standing and become an ordinary message. A misheard word costs a tap, never a row.
+
+**Accepted risk, and it is real.** On Android the transcript we act on may have been produced by
+Google's remote recogniser, because decision 12 records that the platform falls back silently and
+we cannot detect it. So on Android "explicit user confirmation" rests on a transcript we did not
+produce. iOS refuses outright rather than falling back, so the guarantee is whole there. The
+Android voice disclosure now states that a spoken "yes" logs immediately, so the user is consenting
+to that specific thing rather than to dictation alone.
+
+Revisit if Android ever exposes whether recognition actually ran on-device.
