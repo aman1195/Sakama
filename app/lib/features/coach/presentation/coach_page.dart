@@ -12,7 +12,9 @@ import '../domain/coach_message.dart';
 import '../domain/tool_draft.dart';
 import '../data/voice_input.dart';
 import '../data/voice_output.dart';
+import '../application/voice_session.dart';
 import '../domain/spoken_intent.dart';
+import 'voice_mode_sheet.dart';
 import 'coach_controller.dart';
 
 /// Vita — the coach tab. A persistent chat grounded in today's real data.
@@ -41,6 +43,16 @@ class _CoachPageState extends ConsumerState<CoachPage> {
   /// dictated line no longer speaks either, which is the honest reading — once
   /// you are typing, you are in a typing conversation.
   String? _dictated;
+
+  /// The running voice session, if any.
+  ///
+  /// HELD BY THE PAGE, not local to the opener, because the page is the only
+  /// thing that learns the user has left. Keeping it in a local meant a tab
+  /// switch stopped the SPEAKER and left the MICROPHONE open, cycling turns
+  /// out loud on another screen until the user came back. On a health app a
+  /// live microphone the user believes is closed is the worst thing to leave
+  /// running.
+  VoiceSession? _session;
   final _scroll = ScrollController();
 
   @override
@@ -52,7 +64,12 @@ class _CoachPageState extends ConsumerState<CoachPage> {
     // `TickerMode(enabled: isActive)` (go_router route.dart:1696), so losing
     // the ticker is the signal that this tab went away — and depending on it
     // brings us back here the moment it flips.
-    if (!TickerMode.valuesOf(context).enabled) unawaited(_speech.stop());
+    if (!TickerMode.valuesOf(context).enabled) {
+      unawaited(_speech.stop());
+      // The MICROPHONE too. Stopping only the speaker was half the rule.
+      unawaited(_session?.stop() ?? Future<void>.value());
+      unawaited(_voice.stop());
+    }
   }
 
   @override
@@ -62,6 +79,10 @@ class _CoachPageState extends ConsumerState<CoachPage> {
     // tab switch, because the branch stays mounted; believing it did was the
     // bug, and the fix is in didChangeDependencies rather than here.
     unawaited(_speech.stop());
+    // Teardown does not complete the sheet's route, so the session's own
+    // cleanup never runs — stop it here or the recogniser outlives the page.
+    unawaited(_session?.stop() ?? Future<void>.value());
+    unawaited(_voice.stop());
     _input.dispose();
     _scroll.dispose();
     super.dispose();
@@ -84,6 +105,75 @@ class _CoachPageState extends ConsumerState<CoachPage> {
       _toast('This phone has no private voice available, so Vita stayed '
           'silent. The reply is on screen.');
     }
+  }
+
+  /// Open VOICE MODE (S-101).
+  ///
+  /// THE MIC OPENS THE MODE, and that is the answer to "where is voice mode?".
+  /// Before this it opened dictation, which transcribed into the composer and
+  /// stopped — the feature existed and nobody could find it, because there was
+  /// nothing to find. Dictation is still here on a long-press for anyone who
+  /// wants words in the box rather than a conversation.
+  Future<void> _openVoiceMode() async {
+    // Two taps during the consent read would build two sessions over ONE
+    // recogniser, and speech_to_text has no already-listening guard: the
+    // second `listen` silently replaces the first one's result callback.
+    if (_session != null) return;
+    if (!await ensureAiConsent(context, ref)) return;
+    if (!mounted) return;
+    if (await _voice.needsNetworkDisclosure()) {
+      if (!await _confirmAndroidVoice()) return;
+      await _voice.rememberNetworkDisclosure();
+    }
+    if (!mounted) return;
+
+    final notifier = ref.read(coachControllerProvider.notifier);
+    final session = VoiceSession(
+      input: _voice,
+      output: _speech,
+      turn: (text) async {
+        await notifier.send(text);
+        final messages = ref.read(coachControllerProvider).messages;
+        return messages
+            .lastWhere((m) => m.role == CoachRole.vita,
+                orElse: () => const CoachMessage(CoachRole.vita, ''))
+            .content;
+      },
+      hasPendingDraft: () =>
+          ref.read(coachControllerProvider).pendingDrafts.isNotEmpty,
+      confirmDraft: () async {
+        await notifier.confirmDraft();
+        final messages = ref.read(coachControllerProvider).messages;
+        return messages
+            .lastWhere((m) => m.role == CoachRole.vita,
+                orElse: () => const CoachMessage(CoachRole.vita, 'Logged.'))
+            .content;
+      },
+      dismissDraft: notifier.dismissDraft,
+    );
+
+    _session = session;
+    // Fire the loop and show the sheet over it. The sheet listens; it does not
+    // drive — closing it stops the session, and the session ending pops it.
+    final running = session.run();
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (_) => FractionallySizedBox(
+        heightFactor: 1,
+        child: VoiceModeSheet(session: session),
+      ),
+    );
+    // Whatever closed it — the button, a swipe, silence — the microphone must
+    // not still be open.
+    await session.stop();
+    await running;
+    if (identical(_session, session)) _session = null;
   }
 
   /// Dictate into the composer (ADR 0016 decision 12).
@@ -310,7 +400,11 @@ class _CoachPageState extends ConsumerState<CoachPage> {
                     Semantics(
                       identifier: 'coach-mic',
                       button: true,
-                      child: IconButton(
+                      child: GestureDetector(
+                        // Long-press keeps plain dictation for anyone who wants
+                        // words in the box rather than a conversation.
+                        onLongPress: state.sending ? null : _dictate,
+                        child: IconButton(
                         icon: Icon(_listening ? Icons.stop_circle_outlined
                                               : Icons.mic_none),
                         // Colour, not just a swapped glyph: a mic that is
@@ -318,8 +412,14 @@ class _CoachPageState extends ConsumerState<CoachPage> {
                         color: _listening
                             ? Theme.of(context).colorScheme.error
                             : null,
-                        tooltip: _listening ? 'Stop' : 'Speak',
-                        onPressed: state.sending ? null : _dictate,
+                        tooltip: _listening ? 'Stop' : 'Talk to Vita',
+                        // While dictating, the button says Stop and is red, so
+                        // it must STOP. Opening voice mode there would start a
+                        // second recognition over the first.
+                        onPressed: state.sending
+                            ? null
+                            : (_listening ? _dictate : _openVoiceMode),
+                        ),
                       ),
                     ),
                     Expanded(
