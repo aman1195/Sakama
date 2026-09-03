@@ -90,6 +90,22 @@ create policy "meal-photos: delete own" on storage.objects
   for delete to authenticated
   using (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = (select auth.uid())::text);
 
+-- HOW A DENIAL LOOKS, because it is not what you expect and it decides whether
+-- a probe proves anything (measured against the live project, 2026-09-03):
+--
+--   denied WRITE : HTTP 400, body {"statusCode":"403", ...
+--                  "new row violates row-level security policy"}   ← explicit
+--   denied READ  : HTTP 400, body {"statusCode":"404", "NoSuchKey",
+--                  "Object not found"}                             ← NOT explicit
+--
+-- Supabase hides existence on a denied read rather than returning 403, which is
+-- the right default and makes a read denial INDISTINGUISHABLE from an object
+-- that was never there. So "the other user got an error" proves nothing on its
+-- own. The proof is the pair: the owner reads 200 on a path, and the other user
+-- is told it does not exist. verify-rls.sh does it in that order for that
+-- reason. Every storage error is wrapped in HTTP 400 regardless of cause, so
+-- assert on the body, never the status code.
+
 -- DELETE IS THE USER'S, and it matters more here than on a row. A photo of
 -- someone's body that they cannot remove is worse than one they never took,
 -- and A10 (account deletion) has to be able to empty these buckets. Objects
