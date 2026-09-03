@@ -19,11 +19,15 @@ class _FakeEngine implements SpeechEngine {
   @override
   bool get isListening => false;
 
+  Duration? seenPause;
+
   @override
   Future<bool> start({
     required void Function(String text, bool isFinal) onResult,
     required Duration limit,
+    Duration pauseFor = VoiceInput.dictationPause,
   }) async {
+    seenPause = pauseFor;
     if (throwOn != null) throw throwOn!;
     capturedLimit = limit;
     if (!starts) return false;
@@ -155,6 +159,43 @@ void main() {
           await VoiceInput(engine: _FakeEngine(), isAndroidOverride: false)
               .needsNetworkDisclosure(),
           isFalse);
+    });
+  });
+
+  /// THE HOP NOTHING TESTED. Review reverted the line that carries `pauseFor`
+  /// into the plugin and the entire suite stayed green, because no test ever
+  /// constructed PluginSpeechEngine. Two promises cross here.
+  group('the options handed to the platform', () {
+    test('audio stays on the device', () {
+      // The plugin defaults onDevice to FALSE, which ships audio to Apple or
+      // Google. This is the single line standing between a health disclosure
+      // and someone else's server.
+      final o = PluginSpeechEngine.optionsFor(
+          limit: const Duration(seconds: 30),
+          pauseFor: VoiceInput.conversationPause);
+      expect(o.onDevice, isTrue);
+    });
+
+    test('the chosen pause is the one that reaches the plugin', () {
+      // Not a constant: whatever the caller picked per turn.
+      for (final p in [
+        VoiceInput.conversationPause,
+        VoiceInput.dictationPause,
+        const Duration(milliseconds: 900),
+      ]) {
+        expect(
+            PluginSpeechEngine.optionsFor(
+                    limit: const Duration(seconds: 30), pauseFor: p)
+                .pauseFor,
+            p);
+      }
+    });
+
+    test('partial results are on, or the transcript shows nothing live', () {
+      final o = PluginSpeechEngine.optionsFor(
+          limit: const Duration(seconds: 30), pauseFor: VoiceInput.dictationPause);
+      expect(o.partialResults, isTrue);
+      expect(o.listenFor, const Duration(seconds: 30));
     });
   });
 }

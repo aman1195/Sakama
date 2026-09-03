@@ -13,6 +13,7 @@ abstract class SpeechEngine {
   Future<bool> start({
     required void Function(String text, bool isFinal) onResult,
     required Duration limit,
+    Duration pauseFor,
   });
   Future<void> stop();
   bool get isListening;
@@ -31,6 +32,7 @@ class PluginSpeechEngine implements SpeechEngine {
   Future<bool> start({
     required void Function(String text, bool isFinal) onResult,
     required Duration limit,
+    Duration pauseFor = VoiceInput.dictationPause,
   }) async {
     if (!_initialised) {
       _initialised = await _speech.initialize(
@@ -40,7 +42,23 @@ class PluginSpeechEngine implements SpeechEngine {
     }
     await _speech.listen(
       onResult: (r) => onResult(r.recognizedWords, r.finalResult),
-      listenOptions: SpeechListenOptions(
+      listenOptions: optionsFor(limit: limit, pauseFor: pauseFor),
+    );
+    return true;
+  }
+
+  /// The options handed to the plugin.
+  ///
+  /// EXTRACTED SO IT CAN BE TESTED. This is the one place where two promises
+  /// become a platform call — audio stays on the device, and the turn ends
+  /// after the pause we chose — and review found that reverting either line
+  /// left the whole suite green, because no test ever constructed this class.
+  @visibleForTesting
+  static SpeechListenOptions optionsFor({
+    required Duration limit,
+    required Duration pauseFor,
+  }) =>
+      SpeechListenOptions(
         // THE point of this class. Never default this to false: the plugin
         // does, and that ships the audio to Apple or Google.
         onDevice: true,
@@ -48,13 +66,8 @@ class PluginSpeechEngine implements SpeechEngine {
         cancelOnError: true,
         listenMode: ListenMode.dictation,
         listenFor: limit,
-        // People pause mid-sentence when dictating a meal, so this is not as
-        // tight as it looks.
-        pauseFor: const Duration(seconds: 3),
-      ),
-    );
-    return true;
-  }
+        pauseFor: pauseFor,
+      );
 
   @override
   Future<void> stop() async {
@@ -130,18 +143,64 @@ class VoiceInput {
   /// local model.
   static const androidMinSdkForOnDevice = 31;
 
+  /// How long a silence must last before the platform decides you have
+  /// finished.
+  ///
+  /// Long, and used wherever cutting someone off is expensive: dictating a
+  /// meal into the composer ("two rotis… dal… and a bit of rice"), and
+  /// ANSWERING A PROPOSAL in voice mode. See [conversationPause] for why the
+  /// answering turn belongs on this side.
+  static const dictationPause = Duration(seconds: 3);
+
+  /// The same, for an ORDINARY conversational turn.
+  ///
+  /// Three seconds of dead air after every sentence is most of why voice mode
+  /// feels slow — it is not the model, it is the wait before the model is even
+  /// asked.
+  ///
+  /// TRUNCATION INVERTS SAFETY, WHICH IS WHY THIS IS NOT USED EVERYWHERE. The
+  /// first version of this change claimed a clipped utterance "becomes an
+  /// ordinary message". The opposite is true, and review proved it by
+  /// execution:
+  ///
+  ///     "yes but not the rice"  -> not an answer, goes to the composer
+  ///     clipped to "yes"        -> CONFIRMS, and writes a food row
+  ///
+  /// The classifier is built so that only something SHORT and unambiguous
+  /// counts as a yes. Clipping is the one operation that manufactures exactly
+  /// that. It is why `log` and `save` were already removed from the
+  /// affirmatives — a clipped "log two rotis" would confirm a different food.
+  ///
+  /// So the pause is chosen per turn: this short one when nothing is pending,
+  /// where the worst case is a clipped MESSAGE and costs a repeat; and
+  /// [dictationPause] on the turn that answers a proposal, where the worst
+  /// case is an unauthorised entry in a health diary.
+  static const conversationPause = Duration(milliseconds: 1500);
+
+  /// The pause to use for a turn, given whether an answer could write.
+  ///
+  /// Public and named so the rule is testable and cannot be re-derived
+  /// differently at a second call site.
+  static Duration pauseForTurn({required bool answeringProposal}) =>
+      answeringProposal ? dictationPause : conversationPause;
+
   /// Listen once and return what was said.
   ///
   /// [onPartial] streams interim text so the composer fills in as the user
   /// speaks — dictation that shows nothing for six seconds feels broken.
+  ///
+  /// [pauseFor] is how long a silence ends the turn. Pick it with
+  /// [pauseForTurn]; the default is the safe, long one.
   Future<VoiceResult> listenOnce({
     Duration limit = const Duration(seconds: 30),
+    Duration pauseFor = dictationPause,
     void Function(String partial)? onPartial,
   }) async {
     var text = '';
     try {
       final started = await _engine.start(
         limit: limit,
+        pauseFor: pauseFor,
         onResult: (t, isFinal) {
           text = t;
           if (!isFinal) onPartial?.call(t);
