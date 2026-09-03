@@ -506,7 +506,14 @@ class PendingUploads extends Table {
       integer().withDefault(const Constant(0)).clientDefault(() => 0)();
   TextColumn get lastError => text().nullable()();
 
-  IntColumn get createdAt => integer()();
+  /// SAFE BY CONSTRUCTION, not by convention. PowerSync creates this table
+  /// with every column nullable and no defaults, so a non-nullable Dart column
+  /// that an insert omits reads back as NULL and the generated mapper's `!`
+  /// throws — the bug that killed chat history (#154). `bucket`, `local_path`
+  /// and `remote_path` are required parameters of the generated companion, so
+  /// they cannot be omitted; this one gets a client default so the same is true
+  /// of a future writer that forgets it.
+  IntColumn get createdAt => integer().clientDefault(() => 0)();
 
   @override
   Set<Column> get primaryKey => {id};

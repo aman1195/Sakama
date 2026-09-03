@@ -1969,7 +1969,7 @@
             "nullable": false,
             "customConstraints": null,
             "default_dart": null,
-            "default_client_dart": null,
+            "default_client_dart": "() => 0",
             "dsl_features": []
           }
         ],

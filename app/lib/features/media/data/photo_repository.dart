@@ -61,7 +61,16 @@ class PhotoRepository {
   /// Returns null with no signed-in user. A photo cannot be filed under
   /// "nobody": there is no path that would satisfy the policy, so queueing one
   /// would guarantee a permanent failure instead of an obvious refusal.
-  String? pathFor({required String? userId}) =>
+  ///
+  /// PRIVATE, because every call mints a NEW uuid. A public version invited
+  /// the reasonable-looking `final p = pathFor(...); enqueue(...)`, which
+  /// stores one path on the row and uploads to another — a permanently broken
+  /// image and an orphaned object. [enqueue] returns the path it actually
+  /// used; that is the only way to obtain one.
+  @visibleForTesting
+  String? pathForTesting({required String? userId}) => _pathFor(userId: userId);
+
+  String? _pathFor({required String? userId}) =>
       (userId == null || userId.isEmpty) ? null : '$userId/${_uuid.v4()}.jpg';
 
   /// Queue a captured photo for upload.
@@ -74,9 +83,19 @@ class PhotoRepository {
     required PhotoKind kind,
     required String? userId,
   }) async {
-    final remote = pathFor(userId: userId);
+    final remote = _pathFor(userId: userId);
     if (remote == null) {
       debugPrint('photo: not queued — no signed-in user to file it under');
+      return null;
+    }
+    // THE NAME PROMISES JPEG, SO CHECK IT. The object is uploaded as
+    // `image/jpeg`, and the bucket's allowlist validates that DECLARED type
+    // rather than the bytes (measured in #160) — so nothing server-side stops
+    // a HEIC straight from the picker being stored under a .jpg name as
+    // image/jpeg, where it renders for nobody. Two bytes of check here is the
+    // only place that promise can be kept.
+    if (!await _looksLikeJpeg(localPath)) {
+      debugPrint('photo: not queued — $localPath is not JPEG');
       return null;
     }
     await _db.into(_db.pendingUploads).insert(PendingUploadsCompanion.insert(
@@ -84,9 +103,24 @@ class PhotoRepository {
           bucket: kind.bucket,
           localPath: localPath,
           remotePath: remote,
-          createdAt: _now().millisecondsSinceEpoch,
+          createdAt: Value(_now().millisecondsSinceEpoch),
         ));
     return remote;
+  }
+
+  /// JPEG starts with the SOI marker FF D8. Cheap, and enough: this is a
+  /// contract check on our own capture path, not a defence against an attacker
+  /// who already controls the device.
+  Future<bool> _looksLikeJpeg(String path) async {
+    try {
+      final f = File(path);
+      if (!f.existsSync()) return false;
+      final head = await f.openRead(0, 2).expand((c) => c).toList();
+      return head.length == 2 && head[0] == 0xFF && head[1] == 0xD8;
+    } catch (e) {
+      debugPrint('photo: could not read $path: $e');
+      return false;
+    }
   }
 
   /// Everything still waiting, oldest first — the order they were taken.
@@ -115,6 +149,22 @@ class PhotoRepository {
     }
   }
 
+  /// After this many failures a photo is not "retrying", it is stuck.
+  ///
+  /// The counter existed but nothing read it, which made it a number rather
+  /// than a limit. A row whose upload can never succeed — a path that no
+  /// longer matches the signed-in user, a bucket that no longer exists —
+  /// would otherwise retry until the app was deleted.
+  static const maxAttempts = 8;
+
+  /// Photos worth trying again. The drainer reads THIS, not [pending].
+  Future<List<PendingUploadRow>> drainable() async =>
+      (await pending()).where((r) => r.attempts < maxAttempts).toList();
+
+  /// Photos that have given up, for the UI to explain rather than hide.
+  Future<List<PendingUploadRow>> stuck() async =>
+      (await pending()).where((r) => r.attempts >= maxAttempts).toList();
+
   /// Failed. Keep the row, record why, and count the attempt.
   Future<void> markFailed(PendingUploadRow row, Object error) =>
       (_db.update(_db.pendingUploads)..where((t) => t.id.equals(row.id))).write(
@@ -123,6 +173,34 @@ class PhotoRepository {
           lastError: Value(error.toString()),
         ),
       );
+
+  /// Drop every queued photo, files included.
+  ///
+  /// FOR AN IDENTITY CHANGE, and it belongs on the same signal as the
+  /// conversations, the memory and the sync receipts. A queued progress photo
+  /// is a picture of the DEPARTING user's body sitting on a shared device.
+  /// PowerSync's clear does not reach it — `clearLocal: false` deliberately
+  /// preserves local-only tables — so without this it survives into the next
+  /// person's session: visible in their queue, and impossible to upload or
+  /// remove, because the object path's first segment is the old uid and the
+  /// storage policy compares it against theirs. It would retry until the app
+  /// was deleted.
+  ///
+  /// The FILES go too. Dropping the rows alone would leave the images on disk
+  /// with nothing left pointing at them, which is worse: unreachable by the
+  /// owner and unreapable by us.
+  Future<void> clearAll() async {
+    for (final row in await pending()) {
+      try {
+        final f = File(row.localPath);
+        if (f.existsSync()) await f.delete();
+      } catch (e) {
+        // One stubborn file must not strand the rest of the wipe.
+        debugPrint('photo: could not delete departing user\'s file: $e');
+      }
+    }
+    await _db.delete(_db.pendingUploads).go();
+  }
 
   /// Give up on a photo whose file is gone.
   ///
