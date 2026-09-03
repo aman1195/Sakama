@@ -1,0 +1,90 @@
+-- A7: storage for photos, and the isolation that has to come with it.
+--
+-- Two buckets, because the two kinds of photo are not the same risk:
+--
+--   progress-photos — a person's body, taken to track their own change. This
+--                     is the most sensitive thing this app will ever hold.
+--                     Reached ONLY through short-lived signed URLs.
+--   meal-photos     — a plate of food, kept so the gallery can show what was
+--                     eaten. Still private, still per-user, but an ordinary
+--                     authenticated read is proportionate.
+--
+-- BOTH ARE PRIVATE. `public = false` on each. "Plain authenticated access" in
+-- the design note means "no signed-URL ceremony", NOT "anyone with the link".
+-- A public bucket in Supabase serves objects to the open internet with no
+-- token at all, which for either of these would be the whole database of a
+-- health app sitting on a guessable path.
+--
+-- THE PATH IS THE SECURITY BOUNDARY. Every object MUST be stored as
+--
+--     <user_id>/<anything>
+--
+-- because the policies below authorise on the first path segment. An object
+-- written anywhere else is unreachable by its own owner — deliberately. The
+-- client builds this path; there is no way to enforce a naming convention in
+-- Postgres beyond refusing what does not match, which is what these do.
+--
+-- Nothing here is on the PowerSync publication. Storage objects are not synced
+-- rows; the DEVICE keeps the local file and the row that points at it, and the
+-- upload rides the existing offline queue.
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values
+  ('progress-photos', 'progress-photos', false, 10485760,
+   array['image/jpeg', 'image/png', 'image/webp']),
+  ('meal-photos', 'meal-photos', false, 10485760,
+   array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do nothing;
+
+-- A size ceiling and a MIME allowlist are not decoration. Without them a
+-- bucket is an unmetered file host attached to a free tier, and an upload of
+-- text/html served back to a browser is a stored-XSS primitive. 10 MB is
+-- generous for a 1200px JPEG at ~85% (typically well under 1 MB) and leaves
+-- room for an unresized image from a future camera.
+
+-- storage.objects already has RLS enabled by Supabase. These policies are
+-- ADDITIVE, and their shape mirrors every user table in this project:
+-- the owner, and nobody else, for each of the four verbs separately.
+--
+-- `(storage.foldername(name))[1]` is the first path segment. Compared as text
+-- against auth.uid()::text because the path is a string, not a uuid.
+
+do $$
+declare
+  b text;
+begin
+  foreach b in array array['progress-photos', 'meal-photos'] loop
+    execute format($f$
+      create policy %L on storage.objects
+        for select to authenticated
+        using (bucket_id = %L and (storage.foldername(name))[1] = (select auth.uid())::text);
+    $f$, b || ': read own', b);
+
+    execute format($f$
+      create policy %L on storage.objects
+        for insert to authenticated
+        with check (bucket_id = %L and (storage.foldername(name))[1] = (select auth.uid())::text);
+    $f$, b || ': write own', b);
+
+    execute format($f$
+      create policy %L on storage.objects
+        for update to authenticated
+        using (bucket_id = %L and (storage.foldername(name))[1] = (select auth.uid())::text)
+        with check (bucket_id = %L and (storage.foldername(name))[1] = (select auth.uid())::text);
+    $f$, b || ': update own', b, b);
+
+    execute format($f$
+      create policy %L on storage.objects
+        for delete to authenticated
+        using (bucket_id = %L and (storage.foldername(name))[1] = (select auth.uid())::text);
+    $f$, b || ': delete own', b);
+  end loop;
+end $$;
+
+-- DELETE IS THE USER'S, and it matters more here than on a row. A photo of
+-- someone's body that they cannot remove is worse than one they never took,
+-- and A10 (account deletion) has to be able to empty these buckets. Objects
+-- are NOT cascaded by `on delete cascade` from auth.users the way table rows
+-- are — storage.objects has no FK to the user — so deletion must be explicit
+-- in the deletion flow. Written here so the next person finds it before they
+-- assume the cascade covers it.
