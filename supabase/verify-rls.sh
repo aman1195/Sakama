@@ -367,6 +367,99 @@ else
   echo
 fi
 
+# --- 5. storage buckets ------------------------------------------------------
+#
+# A photo of someone's body is the most sensitive thing this app holds, and the
+# object path IS the boundary: policies authorise on the first path segment, so
+# an object at `<other-user-id>/x.jpg` must be unreachable and unwritable.
+#
+# Checked as a client experiences it, through the Storage REST API with a real
+# user JWT — the same reasoning as the table checks above. A policy that reads
+# correctly in SQL and is not enforced fails here.
+
+BUCKETS=(progress-photos meal-photos)
+PIXEL_B64='/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a
+HBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAA
+AAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q=='
+
+echo "5. storage isolation"
+if [ -z "${JWT2:-}" ]; then
+  skip "storage: second account not set — cannot prove two users are isolated"
+else
+  for b in "${BUCKETS[@]}"; do
+    # a) the bucket must NOT be world-readable. No token at all.
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
+      "$SAKAMA_URL/storage/v1/object/public/$b/$USER_ID/probe.jpg")"
+    if [ "$code" = "400" ] || [ "$code" = "404" ] || [ "$code" = "403" ]; then
+      ok "$b: not served publicly (HTTP $code with no token)"
+    else
+      bad "$b: PUBLIC PATH RETURNED $code — objects reachable with no auth"
+    fi
+
+    # b) the owner can write under their own prefix.
+    printf '%s' "$PIXEL_B64" | base64 --decode > /tmp/sakama-rls-probe.jpg 2>/dev/null
+    up="$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 -X POST \
+      "$SAKAMA_URL/storage/v1/object/$b/$USER_ID/rls-probe.jpg" \
+      -H "Authorization: Bearer $JWT" -H "apikey: $SAKAMA_ANON_KEY" \
+      -H "Content-Type: image/jpeg" -H "x-upsert: true" \
+      --data-binary @/tmp/sakama-rls-probe.jpg)"
+    if [ "$up" = "200" ]; then
+      ok "$b: owner can upload under their own prefix"
+    else
+      bad "$b: owner upload failed (HTTP $up) — the feature does not work"
+      continue
+    fi
+
+    # c) the owner can read it back. THIS STEP IS LOAD-BEARING, not a courtesy:
+    #    a denied read returns "Object not found", exactly like an object that
+    #    was never there. Without proving the object EXISTS first, step (d)
+    #    passing would be indistinguishable from a bucket that simply does not
+    #    work — the same vacuous green an empty table gives.
+    mine_read="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
+      "$SAKAMA_URL/storage/v1/object/$b/$USER_ID/rls-probe.jpg" \
+      -H "Authorization: Bearer $JWT" -H "apikey: $SAKAMA_ANON_KEY")"
+    if [ "$mine_read" = "200" ]; then
+      ok "$b: owner reads it back — the object provably exists"
+    else
+      bad "$b: owner cannot read their own upload (HTTP $mine_read) — the next check would be meaningless"
+      continue
+    fi
+
+    # d) THE ONE THAT MATTERS. The second user must not read that same path.
+    other="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
+      "$SAKAMA_URL/storage/v1/object/$b/$USER_ID/rls-probe.jpg" \
+      -H "Authorization: Bearer $JWT2" -H "apikey: $SAKAMA_ANON_KEY")"
+    if [ "$other" = "200" ]; then
+      bad "$b: SECOND USER READ THE FIRST USER'S PHOTO"
+    else
+      ok "$b: second user cannot read it, on a path the owner just read (HTTP $other)"
+    fi
+
+    # e) and must not be able to plant a file in someone else's folder.
+    #    Asserted on the BODY, not the status: Supabase wraps storage errors in
+    #    HTTP 400 whatever the cause, so the code alone cannot tell an RLS
+    #    denial from a malformed request. The body says which.
+    forge="$(curl -s --max-time 30 -X POST \
+      "$SAKAMA_URL/storage/v1/object/$b/$USER_ID/forged.jpg" \
+      -H "Authorization: Bearer $JWT2" -H "apikey: $SAKAMA_ANON_KEY" \
+      -H "Content-Type: image/jpeg" --data-binary @/tmp/sakama-rls-probe.jpg)"
+    if printf '%s' "$forge" | grep -q '"Key"'; then
+      bad "$b: SECOND USER WROTE INTO THE FIRST USER'S FOLDER"
+    elif printf '%s' "$forge" | grep -qi 'row-level security'; then
+      ok "$b: second user's write refused by RLS, and says so"
+    else
+      bad "$b: second user's write failed for an UNKNOWN reason — $forge"
+    fi
+
+    # f) clean up after ourselves.
+    curl -s -o /dev/null --max-time 20 -X DELETE \
+      "$SAKAMA_URL/storage/v1/object/$b/$USER_ID/rls-probe.jpg" \
+      -H "Authorization: Bearer $JWT" -H "apikey: $SAKAMA_ANON_KEY"
+  done
+  rm -f /tmp/sakama-rls-probe.jpg
+fi
+echo
+
 # --- result -----------------------------------------------------------------
 
 if [ "$SKIP" -gt 0 ]; then
