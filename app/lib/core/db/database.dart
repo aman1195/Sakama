@@ -491,8 +491,15 @@ class PendingUploads extends Table {
   /// Which bucket, so the drainer does not have to re-derive it from the kind.
   TextColumn get bucket => text()();
 
-  /// Absolute path on this device. Gone once uploaded.
-  TextColumn get localPath => text()();
+  /// The FILE NAME inside the app's photo directory — never an absolute path.
+  ///
+  /// iOS does not guarantee the application container path across an install
+  /// or an update, so a persisted absolute path can stop resolving while the
+  /// file is perfectly fine at the new location. Storing one would make
+  /// `dropIfFileMissing` reap every queued photo the first time a user takes
+  /// an App Store update before the queue drained. The directory is resolved
+  /// at read time, the same way sync_service resolves the database path.
+  TextColumn get localName => text()();
 
   /// `<user_id>/<name>` — the object path, which IS the security boundary
   /// server-side. Computed once at capture, so a later sign-in cannot

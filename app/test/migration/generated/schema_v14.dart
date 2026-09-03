@@ -1971,8 +1971,8 @@ class PendingUploads extends Table with TableInfo {
     requiredDuringInsert: true,
     $customConstraints: 'NOT NULL',
   );
-  late final GeneratedColumn<String> localPath = GeneratedColumn<String>(
-    'local_path',
+  late final GeneratedColumn<String> localName = GeneratedColumn<String>(
+    'local_name',
     aliasedName,
     false,
     type: DriftSqlType.string,
@@ -2016,7 +2016,7 @@ class PendingUploads extends Table with TableInfo {
   List<GeneratedColumn> get $columns => [
     id,
     bucket,
-    localPath,
+    localName,
     remotePath,
     attempts,
     lastError,
