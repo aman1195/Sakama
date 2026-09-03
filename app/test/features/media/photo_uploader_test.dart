@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sakama/core/db/database.dart';
 import 'package:sakama/features/media/data/photo_repository.dart';
 import 'package:sakama/features/media/data/photo_uploader.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show StorageException;
 
 /// The drainer is background work nobody asked for. It must move photos when
 /// it can, keep them when it cannot, and never put an error in front of
@@ -218,5 +219,81 @@ void main() {
     expect(await repo.pending(), isEmpty);
     expect(good1.existsSync(), isFalse);
     expect(good2.existsSync(), isFalse);
+  });
+
+  /// REVIEW FOUND THIS. The upload succeeds, the response is lost (backgrounded
+  /// app, dropped connection), and the retry sends the SAME path because it is
+  /// pinned on the row at capture. With the SDK default that second attempt is
+  /// a 409 — so a photo that genuinely uploaded burns every attempt, lands in
+  /// stuck(), and leaves its local copy on disk forever.
+  ///
+  /// Asserted on the ADAPTER, because the decision is invisible through the
+  /// PhotoStorage interface: the first version of this test used a fake that
+  /// threw 409 unconditionally, which proved only that the fake threw.
+  group('the options every upload goes out with', () {
+    test('uploads are idempotent, so a lost response can be retried', () {
+      expect(SupabasePhotoStorage.fileOptions.upsert, isTrue,
+          reason: 'the path is a fresh uuid, so the only object it can '
+              'overwrite is its own earlier upload');
+    });
+
+    test('the declared type is the one the bucket allows', () {
+      expect(SupabasePhotoStorage.fileOptions.contentType, 'image/jpeg');
+    });
+  });
+
+  /// A refusal and a dead network look identical to a catch-all.
+  group('permanent failures are set aside, not retried', () {
+    test('a 403 goes straight to stuck instead of burning eight attempts',
+        () async {
+      await queued();
+      storage.failWith = const StorageException('denied', statusCode: '403');
+
+      expect(await uploader().drain(), DrainOutcome.partial);
+      expect((await repo.stuck()).length, 1,
+          reason: 'the policy will refuse the same path every time');
+      expect(await repo.drainable(), isEmpty);
+    });
+
+    test('a transient failure still counts up one at a time', () async {
+      await queued();
+      storage.failWith = Exception('connection reset');
+
+      await uploader().drain();
+      expect((await repo.pending()).single.attempts, 1);
+      expect((await repo.drainable()).length, 1,
+          reason: 'a network blip must not give up on the photo');
+    });
+
+    test('isPermanent is about the status, not the wording', () {
+      expect(isPermanent(const StorageException('x', statusCode: '403')), isTrue);
+      expect(isPermanent(const StorageException('x', statusCode: '401')), isTrue);
+      expect(isPermanent(const StorageException('x', statusCode: '500')), isFalse);
+      expect(isPermanent(Exception('403 forbidden')), isFalse,
+          reason: 'a plain exception mentioning 403 is not a storage refusal');
+    });
+  });
+
+  /// The one irreversible line in the file, which review found unpinned.
+  group('the cross-account branch', () {
+    test('deletes the local file, not just the row', () async {
+      final f = await queued();
+      uid = 'someone-else';
+
+      await uploader().drain();
+      expect(f.existsSync(), isFalse,
+          reason: 'it matches what clearAll would have done to the same file');
+    });
+
+    test('a longer uid does not match by prefix', () async {
+      // `u-1` must not claim a path under `u-10`. The trailing slash is the
+      // only thing standing between these two accounts.
+      await queued();
+      uid = 'u-10';
+
+      await uploader().drain();
+      expect(storage.uploaded, isEmpty,
+          reason: 'u-10 must not claim a path under u-1');
+    });
   });
 }

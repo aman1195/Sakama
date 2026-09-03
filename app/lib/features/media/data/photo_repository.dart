@@ -174,6 +174,20 @@ class PhotoRepository {
         ),
       );
 
+  /// Failed in a way that retrying cannot fix.
+  ///
+  /// Jumps straight to the limit rather than counting up to it. A policy
+  /// refusal on a path pinned at capture will be refused identically every
+  /// time, so seven more round trips buy nothing and hide the row in
+  /// "pending" while they happen.
+  Future<void> markPermanentlyFailed(PendingUploadRow row, Object error) =>
+      (_db.update(_db.pendingUploads)..where((t) => t.id.equals(row.id))).write(
+        PendingUploadsCompanion(
+          attempts: Value(maxAttempts),
+          lastError: Value(error.toString()),
+        ),
+      );
+
   /// Drop every queued photo, files included.
   ///
   /// FOR AN IDENTITY CHANGE, and it belongs on the same signal as the
