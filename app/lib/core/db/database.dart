@@ -467,6 +467,58 @@ class OffFoods extends Table {
 /// LOCAL-ONLY, and deliberately: it holds fragments of health data, and a
 /// diagnostic table is the last thing that should be shipped to a server. It
 /// is dropped on identity change alongside the conversations and memory.
+/// A photo waiting to reach storage.
+///
+/// WHY A QUEUE AND NOT JUST AN UPLOAD. Rule 1 is offline-first, and a photo is
+/// the one thing in this app that cannot be reconciled later by PowerSync:
+/// storage objects are not rows, so the sync engine knows nothing about them.
+/// Without a queue, taking a progress photo on a train would either block the
+/// screen or silently lose the picture.
+///
+/// LOCAL-ONLY, and it holds a FILE PATH rather than bytes. The image stays on
+/// disk in the app's support directory until it is safely uploaded — support,
+/// not temp, because iOS purges temp whenever it likes and that is exactly the
+/// window this table exists to cover.
+///
+/// Nothing here blocks logging. The weight or meal row is written and syncs on
+/// its own; the photo is a separate artefact that catches up. A photo that
+/// never uploads must never wedge anything, which is the lesson the sync
+/// receipts table was built from.
+@DataClassName('PendingUploadRow')
+class PendingUploads extends Table {
+  TextColumn get id => text()();
+
+  /// Which bucket, so the drainer does not have to re-derive it from the kind.
+  TextColumn get bucket => text()();
+
+  /// Absolute path on this device. Gone once uploaded.
+  TextColumn get localPath => text()();
+
+  /// `<user_id>/<name>` — the object path, which IS the security boundary
+  /// server-side. Computed once at capture, so a later sign-in cannot
+  /// silently retarget a queued photo at a different account.
+  TextColumn get remotePath => text()();
+
+  /// How many times we have tried, and why the last one failed. Kept so a
+  /// permanently broken upload is diagnosable rather than an invisible retry
+  /// loop.
+  IntColumn get attempts =>
+      integer().withDefault(const Constant(0)).clientDefault(() => 0)();
+  TextColumn get lastError => text().nullable()();
+
+  /// SAFE BY CONSTRUCTION, not by convention. PowerSync creates this table
+  /// with every column nullable and no defaults, so a non-nullable Dart column
+  /// that an insert omits reads back as NULL and the generated mapper's `!`
+  /// throws — the bug that killed chat history (#154). `bucket`, `local_path`
+  /// and `remote_path` are required parameters of the generated companion, so
+  /// they cannot be omitted; this one gets a client default so the same is true
+  /// of a future writer that forgets it.
+  IntColumn get createdAt => integer().clientDefault(() => 0)();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 @DataClassName('SyncFailureRow')
 class SyncFailures extends Table {
   TextColumn get id => text()();
@@ -496,7 +548,8 @@ class SyncFailures extends Table {
 @DriftDatabase(
     tables: [FoodLogs, Profiles, WaterLogs, WeightLogs, UserPlans, UserFoods, Meals,
       Workouts, TargetHistory,
-      ChatThreads, ChatMessages, MemoryFacts, Foods, OffFoods, SyncFailures])
+      ChatThreads, ChatMessages, MemoryFacts, Foods, OffFoods, SyncFailures,
+      PendingUploads])
 class SakamaDatabase extends _$SakamaDatabase {
   SakamaDatabase()
       : managedExternally = false,
@@ -543,6 +596,7 @@ class SakamaDatabase extends _$SakamaDatabase {
     'workouts': {'kind': "'strength'", 'sets': "'[]'", 'logged_via': "'manual'"},
     'user_plans': {'source': "'user_imported'", 'active': '0'},
     'user_foods': {'use_count': '0'},
+    'pending_uploads': {'attempts': '0'},
   };
 
   /// Backfill NULLs that should never have been written. Idempotent and cheap:
@@ -575,7 +629,7 @@ class SakamaDatabase extends _$SakamaDatabase {
   final bool managedExternally;
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => managedExternally
@@ -687,6 +741,14 @@ class SakamaDatabase extends _$SakamaDatabase {
               // Receipts for writes the server refused (#148 follow-up).
               // Local-only, additive — no existing row is touched.
               await m.createTable(syncFailures);
+            }
+            if (from < 14) {
+              // A7: photos waiting to reach storage. LOCAL-ONLY — in
+              // production PowerSync creates it; this Drift DDL path runs in
+              // plain-Drift mode (tests). Additive — no existing row is
+              // touched, and an interrupted upload queue costs a re-upload,
+              // never a lost log.
+              await m.createTable(pendingUploads);
             }
           },
         );

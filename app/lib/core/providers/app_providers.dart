@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../settings/status_colour_pref.dart';
 import '../../features/coach/data/memory_extractor.dart';
+import '../../features/media/data/photo_repository.dart';
 import '../../features/coach/data/memory_repository.dart';
 import '../../features/coach/data/vita_service.dart';
 import '../../features/foods/data/food_repository.dart';
@@ -85,8 +86,22 @@ final authServiceProvider = Provider<AuthService>((ref) {
     // data and follow the same rule as the conversations and the memory.
     final failures = await ref.read(syncFailureRepositoryProvider.future);
     await wipe('sync receipts', failures.clear);
+    // Queued photos are the MOST sensitive thing on this list: a pending
+    // progress photo is a picture of the departing user's body, still on disk.
+    // PowerSync's clear cannot reach it (clearLocal:false preserves local-only
+    // tables on purpose), and it could not be uploaded or removed by whoever
+    // signs in next — the object path's first segment is the old uid, and the
+    // storage policy compares it against theirs. Files go with the rows.
+    final photos = await ref.read(photoRepositoryProvider.future);
+    await wipe('queued photos', photos.clearAll);
   };
   return auth;
+});
+
+/// Photos waiting to reach storage (A7).
+final photoRepositoryProvider = FutureProvider<PhotoRepository>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return PhotoRepository(db);
 });
 
 /// The one database handle the UI reads (offline-first, CLAUDE.md rule 1).
