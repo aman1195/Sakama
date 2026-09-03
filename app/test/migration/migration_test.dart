@@ -15,6 +15,7 @@ import 'generated/schema_v9.dart' as v9;
 import 'generated/schema_v10.dart' as v10;
 import 'generated/schema_v11.dart' as v11;
 import 'generated/schema_v12.dart' as v12;
+import 'generated/schema_v13.dart' as v13;
 
 /// The migration harness required by docs/MOBILE.md and docs/REVIEW.md §6.1:
 /// a bad on-device migration destroys user data irrecoverably, so every schema
@@ -504,13 +505,44 @@ void main() {
     await db.close();
   });
 
-  test('database schema matches the committed v13 snapshot', () async {
+  test('v13 -> v14 adds pending_uploads AND preserves all user data', () async {
+    final schema = await verifier.schemaAt(13);
+    final v13Db = v13.DatabaseAtV13(schema.newConnection());
+    await v13Db.customStatement(
+      "INSERT INTO food_logs (id, date, meal, name, grams, serving_label, "
+      "serving_qty, energy_kcal, protein_g, carb_g, fat_g, logged_via, "
+      "created_at, updated_at) VALUES ('fl','2026-09-03','lunch','dal',225,"
+      "'katori',1.5,180,9,22,6,'recent',1,1)");
+    await v13Db.customStatement(
+      "INSERT INTO chat_threads (id, title, created_at, updated_at, "
+      "summarized_up_to) VALUES ('t1','Yesterday',1,1,0)");
+    await v13Db.close();
+
+    final db = SakamaDatabase.withExecutor(schema.newConnection());
+    await verifier.migrateAndValidate(db, 14);
+
+    // A photo queue is additive. Nothing it touches may cost a food log or a
+    // conversation — the two things this app has already lost once each.
+    final log = await db.select(db.foodLogs).getSingle();
+    expect(log.name, 'dal');
+    expect(log.loggedVia, 'recent');
+
+    final thread = await db.select(db.chatThreads).getSingle();
+    expect(thread.title, 'Yesterday');
+    expect(thread.summarizedUpTo, 0,
+        reason: 'the column whose NULL killed chat history stays 0');
+
+    expect(await db.select(db.pendingUploads).get(), isEmpty);
+    await db.close();
+  });
+
+  test('database schema matches the committed v14 snapshot', () async {
     // Creates a fresh db from SakamaDatabase's Dart definitions and diffs it
-    // against drift_schemas/drift_schema_v13.json. Fails if the code drifts
+    // against drift_schemas/drift_schema_v14.json. Fails if the code drifts
     // from the committed snapshot without a new schema version + migration.
-    final connection = await verifier.startAt(13);
+    final connection = await verifier.startAt(14);
     final db = SakamaDatabase.withExecutor(connection);
-    await verifier.migrateAndValidate(db, 13);
+    await verifier.migrateAndValidate(db, 14);
     await db.close();
   });
 

@@ -163,6 +163,18 @@ const powersyncSchema = Schema([
     Column.text('payload'),
     Column.integer('created_at'),
   ]),
+  // Photos waiting to reach storage (A7). LOCAL-ONLY: it holds a device file
+  // path, which means nothing on any other device, and storage objects are not
+  // synced rows. Writing here produces no crud op, so a queued photo can never
+  // wedge the upload queue the way a rejected row once did.
+  Table.localOnly('pending_uploads', [
+    Column.text('bucket'),
+    Column.text('local_path'),
+    Column.text('remote_path'),
+    Column.integer('attempts'),
+    Column.text('last_error'),
+    Column.integer('created_at'),
+  ]),
   // Reference tables — LOCAL-ONLY: real SQLite tables PowerSync creates but
   // never syncs and never routes through the upload queue. They hold shipped
   // reference data, not per-user data, so there is no Supabase mirror and no
