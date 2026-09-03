@@ -90,6 +90,36 @@ create policy "meal-photos: delete own" on storage.objects
   for delete to authenticated
   using (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = (select auth.uid())::text);
 
+-- WHAT THE PATH CHECK ACTUALLY WITHSTANDS (probed against the live project,
+-- 2026-09-03, with the owner's own JWT aiming outside their prefix). Every one
+-- refused with "new row violates row-level security policy":
+--
+--   <victim>/x.jpg                 plain write into another user's folder
+--   <owner>extra/x.jpg             prefix smear — the segment must match whole
+--   <owner>/../<victim>/x.jpg      traversal
+--   /<victim>/x.jpg                leading slash
+--   rootlevel.jpg                  no folder at all (there is no bucket root)
+--
+-- and <owner>/ok.jpg wrote, so the check is not simply refusing everything.
+--
+-- THE MIME ALLOWLIST TRUSTS THE CLIENT'S HEADER, NOT THE BYTES. Measured:
+-- declaring `text/html` is refused ("mime type text/html is not supported"),
+-- but HTML bytes declared as `image/jpeg` are ACCEPTED. The allowlist still
+-- does the job it is here for — the object is served back as the declared,
+-- allowlisted type, so a browser will not execute it — but it is not
+-- validation. The client must re-encode images it uploads rather than trusting
+-- what the picker hands it.
+--
+-- ANONYMOUS IDENTITIES CAN UPLOAD. Anonymous sign-in is enabled, and an
+-- anonymous user IS `authenticated` with a real uid, so these policies admit
+-- them. That is intended: auth_service converts anonymous -> email in place
+-- with `updateUser`, KEEPING the uid, so photos taken before signup are not
+-- orphaned. The residual case is an anonymous identity that is never converted
+-- and then lost (reinstall): its objects are unreachable by anyone, including
+-- A10's deletion flow, because nobody can authenticate as that uid again. Body
+-- photos that no one can delete are a retention problem, not just a storage
+-- bill — worth a sweep policy before this ships to users.
+
 -- HOW A DENIAL LOOKS, because it is not what you expect and it decides whether
 -- a probe proves anything (measured against the live project, 2026-09-03):
 --
