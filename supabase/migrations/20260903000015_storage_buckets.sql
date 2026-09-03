@@ -48,38 +48,47 @@ on conflict (id) do nothing;
 --
 -- `(storage.foldername(name))[1]` is the first path segment. Compared as text
 -- against auth.uid()::text because the path is a string, not a uuid.
+--
+-- WRITTEN OUT LONGHAND, deliberately. The first version generated these in a
+-- `do $$ ... format() ... $$` loop over the two bucket names. It failed on the
+-- live database: `%L` renders a quoted LITERAL, and `create policy` needs an
+-- IDENTIFIER (`%I`). Eight plain statements cannot make that mistake, and a
+-- security boundary is the last place to save twenty lines by adding a layer
+-- of indirection between what is written and what runs.
 
-do $$
-declare
-  b text;
-begin
-  foreach b in array array['progress-photos', 'meal-photos'] loop
-    execute format($f$
-      create policy %L on storage.objects
-        for select to authenticated
-        using (bucket_id = %L and (storage.foldername(name))[1] = (select auth.uid())::text);
-    $f$, b || ': read own', b);
+create policy "progress-photos: read own" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'progress-photos' and (storage.foldername(name))[1] = (select auth.uid())::text);
 
-    execute format($f$
-      create policy %L on storage.objects
-        for insert to authenticated
-        with check (bucket_id = %L and (storage.foldername(name))[1] = (select auth.uid())::text);
-    $f$, b || ': write own', b);
+create policy "progress-photos: write own" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'progress-photos' and (storage.foldername(name))[1] = (select auth.uid())::text);
 
-    execute format($f$
-      create policy %L on storage.objects
-        for update to authenticated
-        using (bucket_id = %L and (storage.foldername(name))[1] = (select auth.uid())::text)
-        with check (bucket_id = %L and (storage.foldername(name))[1] = (select auth.uid())::text);
-    $f$, b || ': update own', b, b);
+create policy "progress-photos: update own" on storage.objects
+  for update to authenticated
+  using (bucket_id = 'progress-photos' and (storage.foldername(name))[1] = (select auth.uid())::text)
+  with check (bucket_id = 'progress-photos' and (storage.foldername(name))[1] = (select auth.uid())::text);
 
-    execute format($f$
-      create policy %L on storage.objects
-        for delete to authenticated
-        using (bucket_id = %L and (storage.foldername(name))[1] = (select auth.uid())::text);
-    $f$, b || ': delete own', b);
-  end loop;
-end $$;
+create policy "progress-photos: delete own" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'progress-photos' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+create policy "meal-photos: read own" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+create policy "meal-photos: write own" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+create policy "meal-photos: update own" on storage.objects
+  for update to authenticated
+  using (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = (select auth.uid())::text)
+  with check (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+create policy "meal-photos: delete own" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = (select auth.uid())::text);
 
 -- DELETE IS THE USER'S, and it matters more here than on a row. A photo of
 -- someone's body that they cannot remove is worse than one they never took,
