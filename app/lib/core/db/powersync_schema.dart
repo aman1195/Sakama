@@ -169,7 +169,7 @@ const powersyncSchema = Schema([
   // wedge the upload queue the way a rejected row once did.
   Table.localOnly('pending_uploads', [
     Column.text('bucket'),
-    Column.text('local_path'),
+    Column.text('local_name'),
     Column.text('remote_path'),
     Column.integer('attempts'),
     Column.text('last_error'),

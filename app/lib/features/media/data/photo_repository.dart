@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/db/database.dart';
@@ -43,13 +45,40 @@ const progressUrlTtl = Duration(minutes: 5);
 /// at capture time — never re-derived at upload time, when the signed-in
 /// account may have changed.
 class PhotoRepository {
-  PhotoRepository(this._db, {Uuid? uuid, DateTime Function()? now})
-      : _uuid = uuid ?? const Uuid(),
-        _now = now ?? DateTime.now;
+  PhotoRepository(
+    this._db, {
+    Uuid? uuid,
+    DateTime Function()? now,
+    Future<Directory> Function()? photoDir,
+  })  : _uuid = uuid ?? const Uuid(),
+        _now = now ?? DateTime.now,
+        _photoDir = photoDir ?? _defaultPhotoDir;
 
   final SakamaDatabase _db;
   final Uuid _uuid;
   final DateTime Function() _now;
+  final Future<Directory> Function() _photoDir;
+
+  /// Where queued photos live, resolved fresh every time.
+  ///
+  /// NEVER PERSISTED. iOS does not guarantee the application container path
+  /// across an install or an update, so a stored absolute path can stop
+  /// resolving while the file is fine at the new location. Rows hold a NAME;
+  /// this turns it into a file. Same reasoning as sync_service resolving the
+  /// database path at open rather than remembering it.
+  static Future<Directory> _defaultPhotoDir() async {
+    final dir = Directory(p.join((await getApplicationSupportDirectory()).path, 'photos'));
+    if (!dir.existsSync()) await dir.create(recursive: true);
+    return dir;
+  }
+
+  /// The file a queued row refers to, right now.
+  Future<File> fileFor(PendingUploadRow row) async =>
+      File(p.join((await _photoDir()).path, row.localName));
+
+  /// Where a newly captured photo should be written.
+  Future<File> newFileFor(String name) async =>
+      File(p.join((await _photoDir()).path, name));
 
   /// The object path for a new photo.
   ///
@@ -79,7 +108,7 @@ class PhotoRepository {
   /// on its row now and render from it later — the row and the object are
   /// written independently, and neither waits for the other.
   Future<String?> enqueue({
-    required String localPath,
+    required String localName,
     required PhotoKind kind,
     required String? userId,
   }) async {
@@ -94,14 +123,15 @@ class PhotoRepository {
     // a HEIC straight from the picker being stored under a .jpg name as
     // image/jpeg, where it renders for nobody. Two bytes of check here is the
     // only place that promise can be kept.
-    if (!await _looksLikeJpeg(localPath)) {
-      debugPrint('photo: not queued — $localPath is not JPEG');
+    final file = await newFileFor(localName);
+    if (!await _looksLikeJpeg(file)) {
+      debugPrint('photo: not queued — $localName is not JPEG');
       return null;
     }
     await _db.into(_db.pendingUploads).insert(PendingUploadsCompanion.insert(
           id: _uuid.v4(),
           bucket: kind.bucket,
-          localPath: localPath,
+          localName: localName,
           remotePath: remote,
           createdAt: Value(_now().millisecondsSinceEpoch),
         ));
@@ -111,14 +141,13 @@ class PhotoRepository {
   /// JPEG starts with the SOI marker FF D8. Cheap, and enough: this is a
   /// contract check on our own capture path, not a defence against an attacker
   /// who already controls the device.
-  Future<bool> _looksLikeJpeg(String path) async {
+  Future<bool> _looksLikeJpeg(File f) async {
     try {
-      final f = File(path);
       if (!f.existsSync()) return false;
       final head = await f.openRead(0, 2).expand((c) => c).toList();
       return head.length == 2 && head[0] == 0xFF && head[1] == 0xD8;
     } catch (e) {
-      debugPrint('photo: could not read $path: $e');
+      debugPrint('photo: could not read ${f.path}: $e');
       return false;
     }
   }
@@ -141,7 +170,7 @@ class PhotoRepository {
   Future<void> markDone(PendingUploadRow row) async {
     await (_db.delete(_db.pendingUploads)..where((t) => t.id.equals(row.id))).go();
     try {
-      final f = File(row.localPath);
+      final f = await fileFor(row);
       if (f.existsSync()) await f.delete();
     } catch (e) {
       // A leftover file costs disk. Failing here must not resurrect the row.
@@ -206,7 +235,7 @@ class PhotoRepository {
   Future<void> clearAll() async {
     for (final row in await pending()) {
       try {
-        final f = File(row.localPath);
+        final f = await fileFor(row);
         if (f.existsSync()) await f.delete();
       } catch (e) {
         // One stubborn file must not strand the rest of the wipe.
@@ -222,7 +251,7 @@ class PhotoRepository {
   /// forever is a loop with no exit. The row goes; the photo is genuinely
   /// lost, and pretending otherwise would show a queue that never drains.
   Future<bool> dropIfFileMissing(PendingUploadRow row) async {
-    if (File(row.localPath).existsSync()) return false;
+    if ((await fileFor(row)).existsSync()) return false;
     await (_db.delete(_db.pendingUploads)..where((t) => t.id.equals(row.id))).go();
     return true;
   }

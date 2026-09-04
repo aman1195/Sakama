@@ -1923,8 +1923,8 @@
             "dsl_features": []
           },
           {
-            "name": "local_path",
-            "getter_name": "localPath",
+            "name": "local_name",
+            "getter_name": "localName",
             "moor_type": "string",
             "nullable": false,
             "customConstraints": null,
@@ -2123,7 +2123,7 @@
       "sql": [
         {
           "dialect": "sqlite",
-          "sql": "CREATE TABLE IF NOT EXISTS \"pending_uploads\" (\"id\" TEXT NOT NULL, \"bucket\" TEXT NOT NULL, \"local_path\" TEXT NOT NULL, \"remote_path\" TEXT NOT NULL, \"attempts\" INTEGER NOT NULL DEFAULT 0, \"last_error\" TEXT NULL, \"created_at\" INTEGER NOT NULL, PRIMARY KEY (\"id\"));"
+          "sql": "CREATE TABLE IF NOT EXISTS \"pending_uploads\" (\"id\" TEXT NOT NULL, \"bucket\" TEXT NOT NULL, \"local_name\" TEXT NOT NULL, \"remote_path\" TEXT NOT NULL, \"attempts\" INTEGER NOT NULL DEFAULT 0, \"last_error\" TEXT NULL, \"created_at\" INTEGER NOT NULL, PRIMARY KEY (\"id\"));"
         }
       ]
     }

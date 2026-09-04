@@ -47,7 +47,7 @@ void main() {
 
   setUp(() async {
     db = SakamaDatabase.withExecutor(NativeDatabase.memory());
-    repo = PhotoRepository(db);
+    repo = PhotoRepository(db, photoDir: () async => tmp);
     storage = _FakeStorage();
     tmp = await Directory.systemTemp.createTemp('sakama-upload-test');
     uid = 'u-1';
@@ -68,7 +68,7 @@ void main() {
 
   Future<File> queued({PhotoKind kind = PhotoKind.meal, String name = 'p.jpg'}) async {
     final f = await aJpeg(name);
-    await repo.enqueue(localPath: f.path, kind: kind, userId: uid);
+    await repo.enqueue(localName: f.path.split('/').last, kind: kind, userId: uid);
     return f;
   }
 

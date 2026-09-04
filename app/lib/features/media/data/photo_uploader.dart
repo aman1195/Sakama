@@ -182,7 +182,7 @@ class PhotoUploader {
           await storage.upload(
             bucket: row.bucket,
             remotePath: row.remotePath,
-            file: File(row.localPath),
+            file: await repo.fileFor(row),
           );
           await repo.markDone(row);
         } catch (e) {

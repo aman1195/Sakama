@@ -15,7 +15,7 @@ void main() {
 
   setUp(() async {
     db = SakamaDatabase.withExecutor(NativeDatabase.memory());
-    repo = PhotoRepository(db);
+    repo = PhotoRepository(db, photoDir: () async => tmp);
     tmp = await Directory.systemTemp.createTemp('sakama-photo-test');
   });
   tearDown(() async {
@@ -24,6 +24,7 @@ void main() {
   });
 
   /// A real JPEG start-of-image marker, because enqueue now checks it.
+  /// Written into the photo directory, since rows hold NAMES not paths.
   Future<File> aFile([String name = 'p.jpg']) async {
     final f = File('${tmp.path}/$name');
     await f.writeAsBytes([0xFF, 0xD8, 0xFF, 0xE0]);
@@ -64,7 +65,7 @@ void main() {
         () async {
       final f = await aFile();
       final path =
-          await repo.enqueue(localPath: f.path, kind: PhotoKind.progress, userId: 'u-1');
+          await repo.enqueue(localName: f.path.split('/').last, kind: PhotoKind.progress, userId: 'u-1');
 
       expect(path, startsWith('u-1/'));
       final row = (await repo.pending()).single;
@@ -77,7 +78,7 @@ void main() {
     test('a signed-out capture is refused rather than queued', () async {
       final f = await aFile();
       final path =
-          await repo.enqueue(localPath: f.path, kind: PhotoKind.meal, userId: null);
+          await repo.enqueue(localName: f.path.split('/').last, kind: PhotoKind.meal, userId: null);
 
       expect(path, isNull);
       expect(await repo.pending(), isEmpty,
@@ -87,8 +88,8 @@ void main() {
     test('the two kinds go to different buckets', () async {
       final a = await aFile('a.jpg');
       final b = await aFile('b.jpg');
-      await repo.enqueue(localPath: a.path, kind: PhotoKind.progress, userId: 'u-1');
-      await repo.enqueue(localPath: b.path, kind: PhotoKind.meal, userId: 'u-1');
+      await repo.enqueue(localName: a.path.split('/').last, kind: PhotoKind.progress, userId: 'u-1');
+      await repo.enqueue(localName: b.path.split('/').last, kind: PhotoKind.meal, userId: 'u-1');
 
       final buckets = (await repo.pending()).map((r) => r.bucket).toSet();
       expect(buckets, {'progress-photos', 'meal-photos'});
@@ -96,14 +97,14 @@ void main() {
 
     test('oldest first — the order they were taken', () async {
       var t = DateTime(2026, 9, 3, 8);
-      final r = PhotoRepository(db, now: () => t);
+      final r = PhotoRepository(db, now: () => t, photoDir: () async => tmp);
       for (final n in ['first', 'second', 'third']) {
         final f = await aFile('$n.jpg');
-        await r.enqueue(localPath: f.path, kind: PhotoKind.meal, userId: 'u-1');
+        await r.enqueue(localName: f.path.split('/').last, kind: PhotoKind.meal, userId: 'u-1');
         t = t.add(const Duration(minutes: 1));
       }
       final order =
-          (await r.pending()).map((e) => e.localPath.split('/').last).toList();
+          (await r.pending()).map((e) => e.localName).toList();
       expect(order, ['first.jpg', 'second.jpg', 'third.jpg']);
     });
   });
@@ -111,7 +112,7 @@ void main() {
   group('draining', () {
     test('a success removes the row AND the local file', () async {
       final f = await aFile();
-      await repo.enqueue(localPath: f.path, kind: PhotoKind.meal, userId: 'u-1');
+      await repo.enqueue(localName: f.path.split('/').last, kind: PhotoKind.meal, userId: 'u-1');
 
       await repo.markDone((await repo.pending()).single);
 
@@ -123,7 +124,7 @@ void main() {
     test('a failure KEEPS the row and the file, and counts the attempt',
         () async {
       final f = await aFile();
-      await repo.enqueue(localPath: f.path, kind: PhotoKind.progress, userId: 'u-1');
+      await repo.enqueue(localName: f.path.split('/').last, kind: PhotoKind.progress, userId: 'u-1');
 
       await repo.markFailed((await repo.pending()).single, 'no network');
 
@@ -137,7 +138,7 @@ void main() {
     test('attempts accumulate, so a stuck upload is visible not invisible',
         () async {
       final f = await aFile();
-      await repo.enqueue(localPath: f.path, kind: PhotoKind.meal, userId: 'u-1');
+      await repo.enqueue(localName: f.path.split('/').last, kind: PhotoKind.meal, userId: 'u-1');
       for (var i = 0; i < 3; i++) {
         await repo.markFailed((await repo.pending()).single, 'still offline');
       }
@@ -147,7 +148,7 @@ void main() {
     test('a photo whose file is gone is dropped, not retried forever',
         () async {
       final f = await aFile();
-      await repo.enqueue(localPath: f.path, kind: PhotoKind.meal, userId: 'u-1');
+      await repo.enqueue(localName: f.path.split('/').last, kind: PhotoKind.meal, userId: 'u-1');
       await f.delete();
 
       expect(await repo.dropIfFileMissing((await repo.pending()).single), isTrue);
@@ -157,7 +158,7 @@ void main() {
 
     test('a photo whose file is present is NOT dropped', () async {
       final f = await aFile();
-      await repo.enqueue(localPath: f.path, kind: PhotoKind.meal, userId: 'u-1');
+      await repo.enqueue(localName: f.path.split('/').last, kind: PhotoKind.meal, userId: 'u-1');
 
       expect(await repo.dropIfFileMissing((await repo.pending()).single), isFalse);
       expect((await repo.pending()).length, 1);
@@ -166,7 +167,7 @@ void main() {
     test('deleting the row survives a file that will not delete', () async {
       // markDone must not resurrect the row because cleanup failed.
       final f = await aFile();
-      await repo.enqueue(localPath: f.path, kind: PhotoKind.meal, userId: 'u-1');
+      await repo.enqueue(localName: f.path.split('/').last, kind: PhotoKind.meal, userId: 'u-1');
       final row = (await repo.pending()).single;
       await f.delete(); // gone before markDone tries
 
@@ -203,7 +204,7 @@ void main() {
     // redden it. The real guard is test/db/sync_contract_test.dart, which
     // checks the publication, RLS and stream expectations per table.
     final f = await aFile();
-    await repo.enqueue(localPath: f.path, kind: PhotoKind.progress, userId: 'u-1');
+    await repo.enqueue(localName: f.path.split('/').last, kind: PhotoKind.progress, userId: 'u-1');
     expect((await repo.pending()).length, 1);
   });
 
@@ -216,8 +217,8 @@ void main() {
     test('clearAll drops the rows AND the files', () async {
       final a = await aFile('a.jpg');
       final b = await aFile('b.jpg');
-      await repo.enqueue(localPath: a.path, kind: PhotoKind.progress, userId: 'A');
-      await repo.enqueue(localPath: b.path, kind: PhotoKind.meal, userId: 'A');
+      await repo.enqueue(localName: a.path.split('/').last, kind: PhotoKind.progress, userId: 'A');
+      await repo.enqueue(localName: b.path.split('/').last, kind: PhotoKind.meal, userId: 'A');
 
       await repo.clearAll();
 
@@ -232,8 +233,8 @@ void main() {
         () async {
       final a = await aFile('a.jpg');
       final b = await aFile('b.jpg');
-      await repo.enqueue(localPath: a.path, kind: PhotoKind.progress, userId: 'A');
-      await repo.enqueue(localPath: b.path, kind: PhotoKind.progress, userId: 'A');
+      await repo.enqueue(localName: a.path.split('/').last, kind: PhotoKind.progress, userId: 'A');
+      await repo.enqueue(localName: b.path.split('/').last, kind: PhotoKind.progress, userId: 'A');
       await a.delete(); // already gone when clearAll reaches it
 
       await repo.clearAll();
@@ -255,7 +256,7 @@ void main() {
       await heic.writeAsBytes([0x00, 0x00, 0x00, 0x18]); // HEIC-ish, not FF D8
       expect(
           await repo.enqueue(
-              localPath: heic.path, kind: PhotoKind.meal, userId: 'u-1'),
+              localName: heic.path.split('/').last, kind: PhotoKind.meal, userId: 'u-1'),
           isNull);
       expect(await repo.pending(), isEmpty);
     });
@@ -263,7 +264,7 @@ void main() {
     test('a file that does not exist is refused', () async {
       expect(
           await repo.enqueue(
-              localPath: '${tmp.path}/nope.jpg', kind: PhotoKind.meal, userId: 'u-1'),
+              localName: 'nope.jpg', kind: PhotoKind.meal, userId: 'u-1'),
           isNull);
       expect(await repo.pending(), isEmpty);
     });
@@ -281,7 +282,7 @@ void main() {
 
     test('a photo past the limit stops being drainable', () async {
       final f = await aFile();
-      await repo.enqueue(localPath: f.path, kind: PhotoKind.meal, userId: 'u-1');
+      await repo.enqueue(localName: f.path.split('/').last, kind: PhotoKind.meal, userId: 'u-1');
       for (var i = 0; i < 8; i++) {
         await repo.markFailed((await repo.pending()).single, 'offline');
       }
@@ -295,7 +296,7 @@ void main() {
 
     test('a photo below the limit is still drainable', () async {
       final f = await aFile();
-      await repo.enqueue(localPath: f.path, kind: PhotoKind.meal, userId: 'u-1');
+      await repo.enqueue(localName: f.path.split('/').last, kind: PhotoKind.meal, userId: 'u-1');
       await repo.markFailed((await repo.pending()).single, 'offline');
 
       expect((await repo.drainable()).length, 1);
