@@ -128,6 +128,18 @@ class PhotoRepository {
       debugPrint('photo: not queued — $localName is not JPEG');
       return null;
     }
+    // ALREADY QUEUED? Hand back the path it already has.
+    //
+    // A double-tap on save would otherwise make two rows for one file, and the
+    // pair degrades badly: whichever uploads first deletes the file, the other
+    // becomes an orphan, and until it is reaped the queue count is wrong. A
+    // unique index would answer this by THROWING at capture, which is worse —
+    // the user did nothing wrong. Returning the existing path makes a second
+    // tap a no-op, which is what they meant.
+    final already = await (_db.select(_db.pendingUploads)
+          ..where((t) => t.localName.equals(localName)))
+        .getSingleOrNull();
+    if (already != null) return already.remotePath;
     await _db.into(_db.pendingUploads).insert(PendingUploadsCompanion.insert(
           id: _uuid.v4(),
           bucket: kind.bucket,

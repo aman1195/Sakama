@@ -303,4 +303,32 @@ void main() {
       expect(await repo.stuck(), isEmpty);
     });
   });
+
+  /// A double-tap on save would otherwise make two rows for one file: whichever
+  /// uploads first deletes it, the other becomes an orphan, and until it is
+  /// reaped the queue count is wrong.
+  group('queueing the same file twice', () {
+    test('returns the path it already has, and adds no second row', () async {
+      final f = await aFile();
+      final first = await repo.enqueue(
+          localName: f.path.split('/').last, kind: PhotoKind.progress, userId: 'u-1');
+      final second = await repo.enqueue(
+          localName: f.path.split('/').last, kind: PhotoKind.progress, userId: 'u-1');
+
+      expect(second, first,
+          reason: 'the second tap is a no-op, which is what the user meant');
+      expect((await repo.pending()).length, 1);
+    });
+
+    test('a different file still queues normally', () async {
+      final a = await aFile('a.jpg');
+      final b = await aFile('b.jpg');
+      await repo.enqueue(
+          localName: a.path.split('/').last, kind: PhotoKind.meal, userId: 'u-1');
+      await repo.enqueue(
+          localName: b.path.split('/').last, kind: PhotoKind.meal, userId: 'u-1');
+
+      expect((await repo.pending()).length, 2);
+    });
+  });
 }
