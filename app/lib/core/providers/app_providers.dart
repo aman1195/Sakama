@@ -12,6 +12,9 @@ import '../settings/status_colour_pref.dart';
 import '../../features/coach/data/memory_extractor.dart';
 import '../../features/media/data/photo_repository.dart';
 import '../../features/media/data/photo_uploader.dart';
+import '../../features/reminders/data/reminder_scheduler.dart';
+import '../../features/reminders/data/reminder_store.dart';
+import '../../features/reminders/data/reminder_sync.dart';
 import '../../features/coach/data/memory_repository.dart';
 import '../../features/coach/data/vita_service.dart';
 import '../../features/foods/data/food_repository.dart';
@@ -95,6 +98,10 @@ final authServiceProvider = Provider<AuthService>((ref) {
     // storage policy compares it against theirs. Files go with the rows.
     final photos = await ref.read(photoRepositoryProvider.future);
     await wipe('queued photos', photos.clearAll);
+    // A reminder is a statement about a diary that is no longer theirs. The
+    // next person on this device must not inherit someone else's day.
+    final reminders = await ref.read(reminderSyncProvider.future);
+    await wipe('reminders', reminders.clear);
   };
   return auth;
 });
@@ -116,6 +123,15 @@ final photoUploaderProvider = FutureProvider<PhotoUploader>((ref) async {
     currentUserId: () => ref.read(currentUserIdProvider),
   );
 });
+
+/// Reminder settings, scheduling, and the thing that keeps them equal.
+final reminderStoreProvider = Provider<ReminderStore>((ref) => ReminderStore());
+final reminderSchedulerProvider =
+    Provider<ReminderScheduler>((ref) => LocalNotificationScheduler());
+final reminderSyncProvider = FutureProvider<ReminderSync>((ref) async =>
+    ReminderSync(
+        store: ref.watch(reminderStoreProvider),
+        scheduler: ref.watch(reminderSchedulerProvider)));
 
 /// The one database handle the UI reads (offline-first, CLAUDE.md rule 1).
 /// Overridden with an in-memory instance in widget tests.
