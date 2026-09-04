@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../settings/status_colour_pref.dart';
 import '../../features/coach/data/memory_extractor.dart';
 import '../../features/media/data/photo_repository.dart';
+import '../../features/media/data/photo_uploader.dart';
 import '../../features/coach/data/memory_repository.dart';
 import '../../features/coach/data/vita_service.dart';
 import '../../features/foods/data/food_repository.dart';
@@ -102,6 +103,18 @@ final authServiceProvider = Provider<AuthService>((ref) {
 final photoRepositoryProvider = FutureProvider<PhotoRepository>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return PhotoRepository(db);
+});
+
+/// Uploads queued photos, and signs links for the sensitive ones.
+final photoUploaderProvider = FutureProvider<PhotoUploader>((ref) async {
+  final repo = await ref.watch(photoRepositoryProvider.future);
+  return PhotoUploader(
+    repo: repo,
+    storage: SupabasePhotoStorage(),
+    // Read per drain, not captured here, so a photo uploads as whoever is
+    // signed in at the time rather than whoever was when this was built.
+    currentUserId: () => ref.read(currentUserIdProvider),
+  );
 });
 
 /// The one database handle the UI reads (offline-first, CLAUDE.md rule 1).

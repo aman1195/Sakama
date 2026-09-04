@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/config/update_required_screen.dart';
 import '../core/providers/app_providers.dart';
 import '../core/widgets/date_rollover_observer.dart';
+import '../features/media/presentation/photo_drain_observer.dart';
 import '../features/onboarding/application/target_recorder.dart';
 import 'router.dart';
 import 'theme.dart';
@@ -43,8 +44,13 @@ class _SakamaAppState extends ConsumerState<SakamaApp> {
         // the dashboard, targets and active-plan day type never sit stale.
         // TargetRecorder sits INSIDE the rollover observer because it must see
         // the new day before it decides what to record for it.
-        return DateRolloverObserver(
-          child: TargetRecorder(child: child ?? const SizedBox.shrink()),
+        // The photo drain sits OUTSIDE the rollover observer: it has nothing
+        // to do with what day it is, and it must keep running while the app is
+        // in whatever state a returning user left it in.
+        return PhotoDrainObserver(
+          child: DateRolloverObserver(
+            child: TargetRecorder(child: child ?? const SizedBox.shrink()),
+          ),
         );
       },
     );
